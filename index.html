@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baby Steps Piano Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Urbanist:wght@500;700&family=JetBrains+Mono:wght@500&display=swap"
+    rel="stylesheet" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png?v=20260212b" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png?v=20260212b" />
+  <link rel="stylesheet" href="./styles.css?v=20260212c" />
+</head>
+
+<body>
+  <main class="app-shell">
+    <header class="studio-nav">
+      <div class="studio-brand">
+        <img class="studio-brand-mark" src="./assets/baby-steps-icon.png?v=20260212b" alt="Baby Steps app icon" />
+        <div class="studio-brand-copy">
+          <p class="eyebrow">Baby Steps</p>
+          <h1>Piano Studio</h1>
+        </div>
+      </div>
+      <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="workspace mode">
+        <button class="mode-pill active" data-mode-target="compose" role="tab" aria-selected="true">Compose</button>
+        <button class="mode-pill" data-mode-target="practice" role="tab" aria-selected="false">Practice</button>
+        <button class="mode-pill" data-mode-target="coach" role="tab" aria-selected="false">Coach</button>
+        <button class="mode-pill" data-mode-target="theory" role="tab" aria-selected="false">Theory</button>
+      </div>
+    </header>
+
+    <div id="gameOverlay" class="game-overlay is-hidden">
+      <div class="game-modal">
+        <h2 id="gameTitle">Cadence Challenge</h2>
+        <p id="gameInstructions">Listen to the target. Play the resolution.</p>
+        <div id="gameFeedback" class="game-feedback"></div>
+        <div class="game-controls">
+          <p class="game-hint">Press Esc to close challenge.</p>
+        </div>
+      </div>
+    </div>
+
+    <section class="console" data-mode="compose practice theory">
+      <header class="console-head">
+        <div>
+          <p class="eyebrow">Baby Steps Piano Companion</p>
+          <h2>Practice real musical ideas with instant visual and audio feedback.</h2>
+          <p class="console-description">Explore chords, cadences, progressions, scales, voicings, and theory in any key while the keyboard shows exactly what to play.</p>
+        </div>
+      </header>
+
+      <div id="keyboard" class="keyboard" aria-label="visual piano keyboard"></div>
+      <p id="audioStatus" class="audio-status">Audio: waiting for first interaction to initialize piano samples.</p>
+      <div class="highlight-window-control">
+        <label for="highlightWindowStart">Highlight Window</label>
+        <div id="highlightWindowTrack" class="highlight-window-track" aria-hidden="true">
+          <div id="highlightWindowGlow" class="highlight-window-glow"></div>
+        </div>
+        <input id="highlightWindowStart" class="visually-hidden-input" type="range" min="48" max="71" step="1" value="55" />
+        <span id="highlightWindowLabel" class="window-label">G3 to G4</span>
+        <p class="window-keyboard-hint">Keyboard map: A W S E D F I J O K P L ;</p>
+      </div>
+
+      <div class="key-center-launch">
+        <button id="openKeyCenterBtn" class="btn-tonal" type="button">Open Key Center</button>
+      </div>
+
+      <div class="table-header">
+        <strong id="chordTableTitle">Chords in C Major</strong>
+        <button id="playPaletteRowBtn">Play Diatonic 7th Row</button>
+      </div>
+      <div class="table-wrap">
+        <table class="chord-table">
+          <thead>
+            <tr id="chordTableHead"></tr>
+          </thead>
+          <tbody id="chordTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="top-controls compact">
+        <label>Hold (sec)<input id="voiceLengthInput" type="number" min="0.4" max="4" step="0.1" value="1.7" /></label>
+        <label>Tone<input id="toneInput" type="range" min="20" max="95" value="62" /></label>
+      </div>
+
+      <div class="quick-actions">
+        <button id="playChordBtn" class="btn-primary">Play Chord</button>
+        <button id="randomChordBtn" class="btn-tonal">Random Chord Quiz</button>
+      </div>
+    </section>
+    <div id="keyCenterDrawerBackdrop" class="drawer-backdrop" hidden></div>
+    <aside id="keyCenterDrawer" class="key-center-drawer" aria-hidden="true">
+      <div class="key-center-drawer-head">
+        <h3>Key Center</h3>
+        <button id="closeKeyCenterBtn" class="btn-ghost" type="button">Close</button>
+      </div>
+      <p class="key-center-drawer-copy">Set the tonal center. This drives the chord table, progression, cadence, and concept views.</p>
+      <div class="drawer-sections">
+        <section class="drawer-section" data-mode="compose practice coach">
+          <label class="drawer-field-label">Root Center</label>
+          <div id="rootBtnGroup" class="btn-group-12"></div>
+        </section>
+
+        <section class="drawer-section" data-mode="compose practice">
+          <div class="control-panel">
+            <div class="control-group full-width">
+              <label>Chord Quality</label>
+              <div id="qualityBtnGroup" class="btn-group-wrap"></div>
+            </div>
+
+            <div class="control-row">
+              <div class="control-group">
+                <label>Inversion</label>
+                <div id="inversionBtnGroup" class="btn-group-row"></div>
+              </div>
+              <div class="control-group">
+                <label>Progression context</label>
+                <select id="progressionSelect" class="context-select"></select>
+              </div>
+              <div class="control-group">
+                <label>Cadence context</label>
+                <select id="cadenceSelect" class="context-select"></select>
+              </div>
+              <div class="control-group">
+                <label>Key Context</label>
+                <select id="keySelect" class="context-select"></select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="drawer-section" data-mode="compose practice">
+          <div class="progression-header">
+            <strong>Progression</strong>
+            <div class="action-group">
+              <button id="playProgressionBtn" class="btn-primary">Play Progression</button>
+            </div>
+          </div>
+          <div class="progression-strip" id="progressionStrip"></div>
+        </section>
+
+        <section class="drawer-section" data-mode="compose practice">
+          <div class="progression-header">
+            <strong>Cadence</strong>
+            <div class="action-group">
+              <button id="playCadenceBtn" class="btn-primary">Play Cadence</button>
+              <button id="explainCadenceBtn" class="btn-tonal">Explain Cadence</button>
+              <button id="startCadenceGameBtn" class="btn-accent">Cadence Challenge</button>
+            </div>
+          </div>
+          <div class="progression-strip" id="cadenceStrip"></div>
+          <p id="chordDisplay" class="output"></p>
+          <div id="progressionOutput" class="agent-output"></div>
+        </section>
+
+        <section class="drawer-section" data-mode="compose practice">
+          <h4>Concept Lab</h4>
+          <div class="form-grid drawer-form-grid">
+            <label>Concept
+              <select id="conceptSelect"></select>
+            </label>
+            <label>Key
+              <select id="conceptKeySelect"></select>
+            </label>
+            <label>Variant
+              <select id="conceptVariantSelect"></select>
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="conceptPlayBtn" class="btn-primary">Play Concept</button>
+            <button id="conceptExplainBtn" class="btn-tonal">Explain Concept</button>
+          </div>
+          <div id="conceptOutput" class="agent-output">Choose a concept and experiment in any key.</div>
+        </section>
+
+        <section class="drawer-section" data-mode="compose practice">
+          <h4>Interactive Glossary + Symbols</h4>
+          <div class="form-grid drawer-form-grid">
+            <label>Search
+              <input id="glossarySearchInput" type="text" placeholder="ex: tritone, sus4, cadence, voicing" />
+            </label>
+            <label>Category
+              <select id="glossaryCategorySelect">
+                <option value="all">All</option>
+                <option value="term">Terms</option>
+                <option value="symbol">Symbols</option>
+              </select>
+            </label>
+            <label>Entries
+              <select id="glossaryEntrySelect"></select>
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="glossaryPlayBtn" class="btn-tonal">Play Example</button>
+          </div>
+          <div id="glossaryOutput" class="agent-output">Select an entry to see definition, emotional color, and practical use.</div>
+        </section>
+      </div>
+    </aside>
+
+    <section class="panel-grid">
+      <article class="panel" data-mode="practice">
+        <h2>Arpeggios + Fingering</h2>
+        <div class="form-grid">
+          <label>Note<select id="arpRootSelect"></select></label>
+          <label>Shape<select id="arpTypeSelect"></select></label>
+          <label>Hand
+            <select id="handSelect">
+              <option value="right">Right Hand</option>
+              <option value="left">Left Hand</option>
+            </select>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="playArpBtn" class="btn-tonal">Play Arpeggio</button>
+          <button id="showFingeringBtn" class="btn-ghost">Show Fingering</button>
+        </div>
+        <div id="arpOutput" class="agent-output"></div>
+      </article>
+
+      <article class="panel" data-mode="practice">
+        <h2>Scales Studio</h2>
+        <div class="form-grid">
+          <label>Tonic<select id="scaleRootSelect"></select></label>
+          <label>Scale<select id="scaleTypeSelect"></select></label>
+          <label>Tempo (BPM)<input id="tempoInput" type="number" min="40" max="220" value="90" /></label>
+        </div>
+        <div class="button-row">
+          <button id="playScaleBtn" class="btn-tonal">Play Scale</button>
+          <button id="scalePracticeBtn" class="btn-ghost">Generate Practice Plan</button>
+        </div>
+        <div id="scaleOutput" class="agent-output"></div>
+      </article>
+
+      <article class="panel wide panel-feature" data-mode="compose coach">
+        <h2>AI Piano Coach</h2>
+        <label>
+          Ask the coach
+          <textarea id="coachInput" rows="4"
+            placeholder="Explain why this progression works and give me practical voicings + ADHD-friendly drill."></textarea>
+        </label>
+        <div class="button-row">
+          <button id="coachAskBtn" class="btn-primary">Ask Coach</button>
+          <button id="coachUseContextBtn" class="btn-tonal">Use Current Selections</button>
+        </div>
+        <div id="coachOutput" class="agent-output">Coach is ready.</div>
+      </article>
+
+      <article class="panel wide lesson" data-mode="practice coach">
+        <h2>Progress + Personalized Sequence</h2>
+        <div class="stats-grid">
+          <div><strong id="statSessions">0</strong><span>Sessions</span></div>
+          <div><strong id="statStreak">0</strong><span>Day Streak</span></div>
+          <div><strong id="statChords">0</strong><span>Chord Reps</span></div>
+          <div><strong id="statScales">0</strong><span>Scale Reps</span></div>
+          <div><strong id="statArps">0</strong><span>Arpeggio Reps</span></div>
+          <div><strong id="statProgressions">0</strong><span>Progressions</span></div>
+        </div>
+        <div class="button-row">
+          <button id="completeSessionBtn" type="button" class="btn-tonal">Mark Session Complete</button>
+          <button id="resetProgressBtn" type="button" class="btn-danger"
+            onclick="window.hardResetProgress && window.hardResetProgress()">Reset Progress</button>
+        </div>
+        <div id="nextSequence" class="agent-output"></div>
+      </article>
+
+      <article class="panel wide lesson" data-mode="practice">
+        <h2>Adult ADHD Lesson Tracks</h2>
+        <div class="lesson-cards" id="lessonCards"></div>
+      </article>
+
+      <article class="panel wide theory-course" data-mode="theory">
+        <h2>Theory Course Studio</h2>
+        <p class="theory-intro">Topic-based modules with audio lesson support, infographic explainers, embedded video, and lesson progress tracking.</p>
+
+        <div class="theory-grid">
+          <aside class="theory-sidebar">
+            <label>Track
+              <select id="theoryTrackSelect"></select>
+            </label>
+            <details class="theory-advanced">
+              <summary>Generate Custom Pack</summary>
+              <div class="theory-pack-builder">
+                <label>Pack Topic
+                  <select id="theoryPackTopicSelect">
+                    <option value="progressions">Progressions</option>
+                    <option value="cadences">Cadences</option>
+                    <option value="voicings">Voicings</option>
+                    <option value="rhythm">Rhythm & Timing</option>
+                    <option value="ear-training">Ear Training</option>
+                    <option value="improvisation">Improvisation</option>
+                  </select>
+                </label>
+                <label>Level
+                  <select id="theoryPackLevelSelect">
+                    <option value="noob">Noob</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="pro">Pro</option>
+                  </select>
+                </label>
+                <label>Pack Size
+                  <select id="theoryPackSizeSelect">
+                    <option value="1">Single lesson</option>
+                    <option value="3">3 lessons</option>
+                    <option value="4">4 lessons</option>
+                    <option value="5">5 lessons</option>
+                  </select>
+                </label>
+                <button id="theoryGeneratePackBtn" class="btn-primary" type="button">Generate Lesson Pack</button>
+                <div id="theoryPackStatus" class="agent-output"></div>
+              </div>
+            </details>
+            <div id="theoryLessonList" class="theory-lesson-list"></div>
+            <div id="theoryProgressSummary" class="agent-output"></div>
+          </aside>
+
+          <section class="theory-main">
+            <div class="theory-lesson-head">
+              <h3 id="theoryLessonTitle">Select a lesson</h3>
+              <p id="theoryLessonDesc"></p>
+            </div>
+
+            <div class="button-row">
+              <button id="theoryPlayAudioBtn" class="btn-tonal">Play Lesson Audio</button>
+              <button id="theoryStopAudioBtn" class="btn-ghost">Stop Audio</button>
+            </div>
+
+            <div class="theory-guided-path">
+              <h4>Guided Lesson Path</h4>
+              <div id="theoryLessonObjective" class="agent-output"></div>
+              <div id="theoryLessonSteps" class="agent-output"></div>
+              <div id="theoryLessonPass" class="agent-output"></div>
+              <div class="button-row">
+                <button id="theoryStartLessonBtn" class="btn-primary" type="button">Start Lesson</button>
+                <button id="theoryPlayExampleBtn" class="btn-tonal" type="button">Play Example</button>
+                <button id="theoryLogAttemptBtn" class="btn-ghost" type="button">Log My Attempt</button>
+                <button id="theoryCheckPassBtn" class="btn-primary" type="button">Check Pass</button>
+              </div>
+              <div id="theoryGuidedStatus" class="agent-output">Press Start Lesson to load the exact drill and pass criteria.</div>
+              <div id="theoryHistoryFun" class="agent-output"></div>
+              <div id="theorySongLinks" class="agent-output"></div>
+            </div>
+
+            <details class="theory-advanced">
+              <summary>Advanced Lesson Tools</summary>
+              <div class="form-grid theory-audio-row">
+                <label>NotebookLM Audio URL
+                  <input id="theoryAudioUrlInput" type="url" placeholder="https://...mp3" />
+                </label>
+                <div class="theory-audio-actions">
+                  <button id="theorySaveAudioUrlBtn" class="btn-ghost" type="button">Save Audio URL</button>
+                </div>
+              </div>
+
+              <div class="button-row">
+                <button id="theoryEditLessonBtn" class="btn-ghost" type="button">Edit Generated Lesson</button>
+                <button id="theoryDeleteLessonBtn" class="btn-ghost" type="button">Delete Generated Lesson</button>
+              </div>
+
+              <div id="theoryEditPanel" class="theory-edit-panel" hidden>
+                <label>Lesson Title
+                  <input id="theoryEditTitleInput" type="text" />
+                </label>
+                <label>Description
+                  <textarea id="theoryEditDescInput" rows="3"></textarea>
+                </label>
+                <label>Narration Script
+                  <textarea id="theoryEditNarrationInput" rows="4"></textarea>
+                </label>
+                <label>Infographic Tokens (comma-separated)
+                  <input id="theoryEditTokensInput" type="text" placeholder="Tonic, Dominant, Resolution" />
+                </label>
+                <label>Video URL
+                  <input id="theoryEditVideoUrlInput" type="url" placeholder="https://www.youtube.com/watch?v=..." />
+                </label>
+                <label>Resources (one per line as Label|URL)
+                  <textarea id="theoryEditResourcesInput" rows="4" placeholder="Berklee Jazz Basics|https://..."></textarea>
+                </label>
+                <div class="button-row">
+                  <button id="theorySaveLessonBtn" class="btn-primary" type="button">Save Lesson</button>
+                  <button id="theoryCancelEditBtn" class="btn-ghost" type="button">Cancel</button>
+                </div>
+              </div>
+            </details>
+
+            <div id="theoryInfographic" class="theory-infographic"></div>
+            <div class="theory-video-wrap">
+              <iframe id="theoryVideoFrame" title="theory lesson video" loading="lazy" allowfullscreen></iframe>
+            </div>
+            <div id="theoryResources" class="agent-output"></div>
+          </section>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="./theory.js?v=20260210a"></script>
+  <script src="./node_modules/tone/build/Tone.js"></script>
+  <script src="./node_modules/@rnbo/js/dist/rnbo.webaudio.js"></script>
+  <script src="./app.js?v=20260212p"></script>
+</body>
+
+</html>

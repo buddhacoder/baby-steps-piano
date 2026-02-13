@@ -1,0 +1,24 @@
+{
+  "name": "baby-steps-piano-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ADHD-friendly adult piano learning app with AI coach and progress tracking",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check app.js",
+    "audio:build-chords": "node scripts/build-dcd-chord-pack.mjs",
+    "video:studio": "remotion studio remotion/index.js",
+    "video:render": "remotion render remotion/index.js BabyStepsPromo out/baby-steps-promo.mp4 --codec=h264"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.421",
+    "@rnbo/js": "^1.4.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.421",
+    "tone": "^15.1.22"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2"
+  }
+}
