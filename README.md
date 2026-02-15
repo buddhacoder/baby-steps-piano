@@ -11,6 +11,7 @@ ADHD-friendly adult piano learner web app with:
 The canonical music engine setup is documented here:
 
 - `MUSIC_ENGINE.md`
+- `AI_AGENT_HANDOFF.md` (full project handoff + milestone execution plan for another coding agent)
 
 Current production baseline:
 
