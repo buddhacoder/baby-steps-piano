@@ -12,7 +12,7 @@
     rel="stylesheet" />
   <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png?v=20260212b" />
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png?v=20260212b" />
-  <link rel="stylesheet" href="./styles.css?v=20260212c" />
+  <link rel="stylesheet" href="./styles.css?v=20260214e" />
 </head>
 
 <body>
@@ -25,12 +25,17 @@
           <h1>Piano Studio</h1>
         </div>
       </div>
-      <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="workspace mode">
-        <button class="mode-pill active" data-mode-target="compose" role="tab" aria-selected="true">Compose</button>
-        <button class="mode-pill" data-mode-target="practice" role="tab" aria-selected="false">Practice</button>
-        <button class="mode-pill" data-mode-target="coach" role="tab" aria-selected="false">Coach</button>
-        <button class="mode-pill" data-mode-target="theory" role="tab" aria-selected="false">Theory</button>
-      </div>
+      <button id="openKeyCenterBtn" class="key-center-nav-btn" type="button" aria-label="Open Key Center panel">
+        <span class="key-center-rail-icon">
+          <img src="./assets/baby-steps-icon.png?v=20260212b" alt="" aria-hidden="true" />
+        </span>
+        <span class="key-center-nav-label">Key Center</span>
+        <span class="key-center-rail-glyph" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+      </button>
     </header>
 
     <div id="gameOverlay" class="game-overlay is-hidden">
@@ -54,25 +59,35 @@
       </header>
 
       <div id="keyboard" class="keyboard" aria-label="visual piano keyboard"></div>
-      <p id="audioStatus" class="audio-status">Audio: waiting for first interaction to initialize piano samples.</p>
       <div class="highlight-window-control">
-        <label for="highlightWindowStart">Highlight Window</label>
         <div id="highlightWindowTrack" class="highlight-window-track" aria-hidden="true">
           <div id="highlightWindowGlow" class="highlight-window-glow"></div>
         </div>
-        <input id="highlightWindowStart" class="visually-hidden-input" type="range" min="48" max="71" step="1" value="55" />
+        <input id="highlightWindowStart" class="visually-hidden-input" type="range" min="48" max="71" step="1" value="55" aria-label="Highlight Window" />
         <span id="highlightWindowLabel" class="window-label">G3 to G4</span>
-        <p class="window-keyboard-hint">Keyboard map: A W S E D F I J O K P L ;</p>
-      </div>
-
-      <div class="key-center-launch">
-        <button id="openKeyCenterBtn" class="btn-tonal" type="button">Open Key Center</button>
+        <p id="windowKeyboardHint" class="window-keyboard-hint">Keyboard map: A:C4 W:C#4 S:D4 E:D#4 D:E4 F:F4 I:F#4 J:G4 O:G#4 K:A4 P:A#4 L:B4 ;:C5</p>
       </div>
 
       <div class="table-header">
         <strong id="chordTableTitle">Chords in C Major</strong>
-        <button id="playPaletteRowBtn">Play Diatonic 7th Row</button>
+        <div id="paletteTabSwitch" class="palette-tab-switch" role="tablist" aria-label="Palette tabs">
+          <button class="palette-tab active" data-palette-tab="chords" role="tab" aria-selected="true" type="button">Chords</button>
+          <button class="palette-tab" data-palette-tab="scales" role="tab" aria-selected="false" type="button">Scales</button>
+          <button class="palette-tab" data-palette-tab="arpeggios" role="tab" aria-selected="false" type="button">Arpeggios</button>
+          <button class="palette-tab" data-palette-tab="modes" role="tab" aria-selected="false" type="button">Modes</button>
+          <button class="palette-tab" data-palette-tab="pentatonic" role="tab" aria-selected="false" type="button">Pentatonic</button>
+          <button class="palette-tab" data-palette-tab="color" role="tab" aria-selected="false" type="button">Color</button>
+          <button class="palette-tab" data-palette-tab="secondary" role="tab" aria-selected="false" type="button">Secondary</button>
+          <button class="palette-tab" data-palette-tab="borrowed" role="tab" aria-selected="false" type="button">Borrowed</button>
+          <button class="palette-tab" data-palette-tab="substitution" role="tab" aria-selected="false" type="button">Substitution</button>
+          <button class="palette-tab" data-palette-tab="cadences" role="tab" aria-selected="false" type="button">Cadences</button>
+        </div>
+        <label id="exploreHarmonyControl" class="explore-harmony-control">
+          <input id="exploreHarmonyCheckbox" type="checkbox" />
+          Explore Harmony
+        </label>
       </div>
+      <p id="exploreTensionLabel" class="explore-tension-label is-hidden"></p>
       <div class="table-wrap">
         <table class="chord-table">
           <thead>
@@ -84,12 +99,6 @@
 
       <div class="top-controls compact">
         <label>Hold (sec)<input id="voiceLengthInput" type="number" min="0.4" max="4" step="0.1" value="1.7" /></label>
-        <label>Tone<input id="toneInput" type="range" min="20" max="95" value="62" /></label>
-      </div>
-
-      <div class="quick-actions">
-        <button id="playChordBtn" class="btn-primary">Play Chord</button>
-        <button id="randomChordBtn" class="btn-tonal">Random Chord Quiz</button>
       </div>
     </section>
     <div id="keyCenterDrawerBackdrop" class="drawer-backdrop" hidden></div>
@@ -100,6 +109,30 @@
       </div>
       <p class="key-center-drawer-copy">Set the tonal center. This drives the chord table, progression, cadence, and concept views.</p>
       <div class="drawer-sections">
+        <section class="drawer-section drawer-global-controls">
+          <h4>Session Controls</h4>
+          <div class="tempo-hud" aria-label="Global tempo controls">
+            <span class="tempo-hud-label">BPM</span>
+            <button id="tempoMinusBtn" type="button" class="tempo-hud-btn" aria-label="Decrease BPM">-</button>
+            <span id="tempoValue" class="tempo-hud-value">80</span>
+            <button id="tempoPlusBtn" type="button" class="tempo-hud-btn" aria-label="Increase BPM">+</button>
+            <label class="subdivision-label" for="subdivisionSelect">Subdivision</label>
+            <select id="subdivisionSelect" class="subdivision-select">
+              <option value="1">Quarter</option>
+              <option value="0.5" selected>Eighth</option>
+              <option value="0.25">Sixteenth</option>
+              <option value="0.3333333333333333">Eighth Triplet</option>
+              <option value="0.16666666666666666">Sixteenth Triplet</option>
+            </select>
+          </div>
+          <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="workspace mode">
+            <button class="mode-pill active" data-mode-target="compose" role="tab" aria-selected="true">Compose</button>
+            <button class="mode-pill" data-mode-target="practice" role="tab" aria-selected="false">Practice</button>
+            <button class="mode-pill" data-mode-target="coach" role="tab" aria-selected="false">Coach</button>
+            <button class="mode-pill" data-mode-target="theory" role="tab" aria-selected="false">Theory</button>
+          </div>
+        </section>
+
         <section class="drawer-section" data-mode="compose practice coach">
           <label class="drawer-field-label">Root Center</label>
           <div id="rootBtnGroup" class="btn-group-12"></div>
@@ -199,6 +232,68 @@
           </div>
           <div id="glossaryOutput" class="agent-output">Select an entry to see definition, emotional color, and practical use.</div>
         </section>
+
+        <section class="drawer-section repertoire-section" data-mode="compose practice theory">
+          <h4>Repertoire &amp; Studies</h4>
+          <p class="repertoire-intro">Tap a featured item to start, or browse the full library below.</p>
+          <div id="repertoireFeatured" class="repertoire-featured" role="list"></div>
+          <div id="repertoireFilterChips" class="repertoire-filter-chips" role="group" aria-label="Repertoire filters"></div>
+          <label class="drawer-field-label" for="repertoireSearchInput">Search</label>
+          <input id="repertoireSearchInput" type="text" placeholder="Find by title, source, or tags" />
+          <div id="repertoireList" class="repertoire-list" role="list"></div>
+          <div id="repertoireTransport" class="repertoire-transport is-hidden">
+            <div class="repertoire-selected">
+              <strong id="repertoireSelectedTitle">Select a repertoire item</strong>
+              <span id="repertoireSelectedMeta"></span>
+            </div>
+            <div class="button-row repertoire-transport-row">
+              <button id="repertoirePlayPauseBtn" type="button" class="btn-primary">Play</button>
+              <button id="repertoireStopBtn" type="button" class="btn-tonal">Stop</button>
+              <label class="repertoire-toggle"><input id="repertoireLoopToggle" type="checkbox" checked /> Loop</label>
+            </div>
+            <div class="repertoire-loop-controls">
+              <label>Loop A
+                <input id="repertoireLoopStart" type="range" min="0" max="64" step="1" value="0" />
+              </label>
+              <label>Loop B
+                <input id="repertoireLoopEnd" type="range" min="1" max="64" step="1" value="16" />
+              </label>
+              <p id="repertoireLoopLabel" class="repertoire-loop-label">Loop: 0 to 16 beats</p>
+            </div>
+            <div class="repertoire-toggle-grid">
+              <label class="repertoire-toggle"><input id="repertoireMuteMelodyToggle" type="checkbox" /> Mute melody</label>
+              <label class="repertoire-toggle"><input id="repertoireOnlyChordsToggle" type="checkbox" /> Only chords</label>
+              <label class="repertoire-toggle"><input id="repertoireMetronomeToggle" type="checkbox" /> Metronome</label>
+            </div>
+            <div class="repertoire-actions">
+              <button id="repertoireShowChordsBtn" type="button" class="btn-tonal">Show chords in this key</button>
+              <button id="repertoireSuggestedBtn" type="button" class="btn-tonal">Suggested scales</button>
+              <button id="repertoireOpenExerciseBtn" type="button" class="btn-tonal">Open related exercise</button>
+            </div>
+            <div id="repertoireSuggestions" class="repertoire-suggestions"></div>
+          </div>
+          <div id="repertoireInfoModal" class="repertoire-info-modal is-hidden" aria-live="polite"></div>
+        </section>
+
+        <section class="drawer-section exercise-section">
+          <h4>Guided Exercises</h4>
+          <div id="exerciseInstruction" class="exercise-instruction" aria-live="polite"></div>
+          <div class="exercise-actions">
+            <button id="playRelatedStudyBtn" type="button" class="btn-tonal is-hidden">Play Related Study</button>
+          </div>
+          <div id="exerciseList" class="exercise-list">
+            <button type="button" class="btn-tonal" data-ex="power">Power of Resolution</button>
+            <button type="button" class="btn-tonal" data-ex="tension">Tension Ladder</button>
+            <button type="button" class="btn-tonal" data-ex="secondary">Secondary Spotlight</button>
+            <button type="button" class="btn-tonal" data-ex="borrowed">Borrowed Mood Shift</button>
+            <button type="button" class="btn-tonal" data-ex="tritone">Tritone Surprise</button>
+            <button type="button" class="btn-tonal" data-ex="ii-v-i">ii–V–I Builder</button>
+            <button type="button" class="btn-tonal" data-ex="modal">Modal Color Contrast</button>
+            <button type="button" class="btn-tonal" data-ex="whole">Whole Tone Atmosphere</button>
+            <button type="button" class="btn-tonal" data-ex="arpeggio">Arpeggio Architecture</button>
+            <button type="button" class="btn-tonal" data-ex="cadence">Cadence Lab</button>
+          </div>
+        </section>
       </div>
     </aside>
 
@@ -227,7 +322,6 @@
         <div class="form-grid">
           <label>Tonic<select id="scaleRootSelect"></select></label>
           <label>Scale<select id="scaleTypeSelect"></select></label>
-          <label>Tempo (BPM)<input id="tempoInput" type="number" min="40" max="220" value="90" /></label>
         </div>
         <div class="button-row">
           <button id="playScaleBtn" class="btn-tonal">Play Scale</button>
@@ -238,6 +332,14 @@
 
       <article class="panel wide panel-feature" data-mode="compose coach">
         <h2>AI Piano Coach</h2>
+        <div class="coach-thread-row">
+          <label class="coach-thread-select-wrap">
+            Conversation
+            <select id="coachThreadSelect"></select>
+          </label>
+          <button id="coachNewThreadBtn" class="btn-ghost" type="button">New Thread</button>
+        </div>
+        <div id="coachMessages" class="coach-messages" aria-live="polite"></div>
         <label>
           Ask the coach
           <textarea id="coachInput" rows="4"
@@ -247,7 +349,14 @@
           <button id="coachAskBtn" class="btn-primary">Ask Coach</button>
           <button id="coachUseContextBtn" class="btn-tonal">Use Current Selections</button>
         </div>
-        <div id="coachOutput" class="agent-output">Coach is ready.</div>
+        <div id="coachStatus" class="coach-status">Coach provider: checking...</div>
+        <div id="coachOutput" class="agent-output coach-meta-output">Coach is ready.</div>
+        <section class="coach-lesson-stack-wrap" aria-label="Lesson stack">
+          <div class="coach-lesson-stack-head">
+            <h3>Lesson Stack</h3>
+          </div>
+          <div id="coachLessonStack" class="coach-lesson-stack"></div>
+        </section>
       </article>
 
       <article class="panel wide lesson" data-mode="practice coach">
@@ -399,9 +508,10 @@
   </main>
 
   <script src="./theory.js?v=20260210a"></script>
+  <script src="./data/repertoire.seed.js?v=20260214a"></script>
   <script src="./node_modules/tone/build/Tone.js"></script>
   <script src="./node_modules/@rnbo/js/dist/rnbo.webaudio.js"></script>
-  <script src="./app.js?v=20260212p"></script>
+  <script src="./app.js?v=20260214e"></script>
 </body>
 
 </html>

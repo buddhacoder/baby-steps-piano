@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baby Steps Live Delta Prototype</title>
+  <style>
+    :root {
+      --bg: #e9eef8;
+      --panel: rgba(255, 255, 255, 0.86);
+      --line: rgba(68, 96, 145, 0.24);
+      --text: #1a2947;
+      --muted: #5a6f97;
+      --blue: #2f74eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 10% -20%, rgba(98, 145, 223, 0.22), transparent 70%),
+        var(--bg);
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      padding: 16px;
+      display: grid;
+      grid-auto-rows: min-content;
+      gap: 12px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .group {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.7);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .group h2 {
+      margin: 0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #405a88;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f7faff;
+      color: #34527f;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+    }
+    button.primary {
+      background: linear-gradient(180deg, #4e8ffb, #2d72ea);
+      border-color: rgba(34, 76, 153, 0.62);
+      color: #fff;
+    }
+    .status {
+      font-size: 12px;
+      color: #55709f;
+      border: 1px dashed rgba(71,101,153,0.35);
+      border-radius: 8px;
+      padding: 8px;
+      background: rgba(255,255,255,0.58);
+      white-space: pre-wrap;
+    }
+    main {
+      padding: 10px;
+      height: 100vh;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .tiny {
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <h1>Live Delta Prototype</h1>
+    <p>This uses the real app as baseline and applies reversible overlays/tweaks. No fake rebuild HTML.</p>
+
+    <div class="group">
+      <h2>Target</h2>
+      <button id="openLocal" class="primary">Load Real App (localhost:4010)</button>
+      <button id="reloadBaseline">Reload Baseline</button>
+      <p class="tiny">If localhost is down, it falls back to <code>/index.html</code>.</p>
+    </div>
+
+    <div class="group">
+      <h2>Prototype Presets</h2>
+      <button id="presetMinimal">Preset A: Minimal Focus (less clutter)</button>
+      <button id="presetHeader">Preset B: Cleaner Hero Copy</button>
+      <button id="presetDrawer">Preset C: Repertoire-first Drawer</button>
+      <button id="clearPatches">Clear All Patches</button>
+    </div>
+
+    <div class="group">
+      <h2>Why This Method</h2>
+      <p class="tiny">Because it starts from your exact current app UI, it always matches production baseline. We only patch deltas.</p>
+      <div id="status" class="status">Waiting for app frame...</div>
+    </div>
+  </aside>
+
+  <main>
+    <iframe id="appFrame" src="/index.html" title="Baby Steps app"></iframe>
+  </main>
+
+  <script>
+    const frame = document.getElementById('appFrame');
+    const statusEl = document.getElementById('status');
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function frameDoc() {
+      try {
+        return frame.contentDocument || frame.contentWindow.document;
+      } catch {
+        return null;
+      }
+    }
+
+    function withDoc(mutator) {
+      const doc = frameDoc();
+      if (!doc) {
+        setStatus('Cannot access frame document. Use same-origin URL (localhost:4010).');
+        return;
+      }
+      mutator(doc);
+    }
+
+    function clearPatches(doc) {
+      doc.querySelectorAll('[data-proto-hidden="1"]').forEach((el) => {
+        el.style.display = '';
+        el.removeAttribute('data-proto-hidden');
+      });
+      const banner = doc.getElementById('protoBanner');
+      if (banner) banner.remove();
+      setStatus('Patches cleared. Baseline visible.');
+    }
+
+    function applyProtoBanner(doc, text) {
+      let banner = doc.getElementById('protoBanner');
+      if (!banner) {
+        banner = doc.createElement('div');
+        banner.id = 'protoBanner';
+        banner.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;padding:8px 10px;border-radius:10px;border:1px solid rgba(52,93,154,.35);background:rgba(255,255,255,.92);font:700 12px/1.2 Avenir Next, sans-serif;color:#34517f;box-shadow:0 10px 24px rgba(20,39,73,.16);';
+        doc.body.appendChild(banner);
+      }
+      banner.textContent = text;
+    }
+
+    function hideIfExists(doc, selector) {
+      const node = doc.querySelector(selector);
+      if (!node) return false;
+      node.style.display = 'none';
+      node.setAttribute('data-proto-hidden', '1');
+      return true;
+    }
+
+    document.getElementById('openLocal').addEventListener('click', () => {
+      frame.src = 'http://127.0.0.1:4010/';
+      setStatus('Loading localhost app...');
+    });
+
+    document.getElementById('reloadBaseline').addEventListener('click', () => {
+      frame.src = frame.src;
+      setStatus('Reloaded frame baseline.');
+    });
+
+    document.getElementById('presetMinimal').addEventListener('click', () => withDoc((doc) => {
+      clearPatches(doc);
+      hideIfExists(doc, '.panel-grid');
+      hideIfExists(doc, '#coachOutput');
+      applyProtoBanner(doc, 'Preset A: Minimal Focus');
+      setStatus('Applied Preset A (focus on keyboard + palette).');
+    }));
+
+    document.getElementById('presetHeader').addEventListener('click', () => withDoc((doc) => {
+      clearPatches(doc);
+      const head = doc.querySelector('.console-head h2');
+      const desc = doc.querySelector('.console-head .console-description');
+      if (head) head.textContent = 'Learn music theory by hearing and seeing it in action.';
+      if (desc) desc.textContent = 'Experiment with concepts here, then recreate them confidently on your real piano.';
+      applyProtoBanner(doc, 'Preset B: Cleaner Hero Copy');
+      setStatus('Applied Preset B (copy-only delta on real app).');
+    }));
+
+    document.getElementById('presetDrawer').addEventListener('click', () => withDoc((doc) => {
+      clearPatches(doc);
+      const sections = Array.from(doc.querySelectorAll('#keyCenterDrawer .drawer-section'));
+      sections.forEach((section) => {
+        const heading = section.querySelector('h4');
+        if (!heading) return;
+        const text = heading.textContent.trim();
+        const keep = ['Repertoire & Studies', 'Guided Exercises', 'Session Controls', 'Concept Lab'].includes(text);
+        if (!keep) {
+          section.style.display = 'none';
+          section.setAttribute('data-proto-hidden', '1');
+        }
+      });
+      applyProtoBanner(doc, 'Preset C: Repertoire-first Drawer');
+      setStatus('Applied Preset C (drawer content-priority prototype).');
+    }));
+
+    document.getElementById('clearPatches').addEventListener('click', () => withDoc((doc) => {
+      clearPatches(doc);
+    }));
+
+    frame.addEventListener('load', () => {
+      const ok = !!frameDoc();
+      setStatus(ok
+        ? 'Frame loaded. Ready to apply delta presets.'
+        : 'Frame loaded but inaccessible. Use localhost to allow same-origin patching.');
+    });
+  </script>
+</body>
+</html>

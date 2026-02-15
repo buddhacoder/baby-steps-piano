@@ -1,0 +1,58 @@
+{
+  "default": {
+    "swing": 0,
+    "feel": "straight",
+    "bassPattern": ["root", "fifth", "root", "approach"],
+    "chordVoicing": "close",
+    "metronomeAccent": [1, 0, 0, 0]
+  },
+  "bossa": {
+    "swing": 0,
+    "feel": "straight",
+    "bassPattern": ["root", "rest", "fifth", "rest"],
+    "chordVoicing": "shell",
+    "metronomeAccent": [1, 0, 1, 0]
+  },
+  "gospel": {
+    "swing": 0,
+    "feel": "straight",
+    "bassPattern": ["root", "walkup", "fifth", "walkdown"],
+    "chordVoicing": "open",
+    "metronomeAccent": [1, 0, 0, 1]
+  },
+  "jazz_swing": {
+    "swing": 0.16,
+    "feel": "swing",
+    "bassPattern": ["root", "fifth", "approach", "root"],
+    "chordVoicing": "shell",
+    "metronomeAccent": [1, 0, 1, 0]
+  },
+  "blues_shuffle": {
+    "swing": 0.2,
+    "feel": "shuffle",
+    "bassPattern": ["root", "fifth", "sixth", "flat_seventh"],
+    "chordVoicing": "close",
+    "metronomeAccent": [1, 0, 0, 0]
+  },
+  "pop": {
+    "swing": 0,
+    "feel": "straight",
+    "bassPattern": ["root", "rest", "root", "rest"],
+    "chordVoicing": "open",
+    "metronomeAccent": [1, 0, 0, 0]
+  },
+  "rock": {
+    "swing": 0,
+    "feel": "straight",
+    "bassPattern": ["root", "fifth", "root", "fifth"],
+    "chordVoicing": "close",
+    "metronomeAccent": [1, 0, 0, 0]
+  },
+  "neo_soul": {
+    "swing": 0,
+    "feel": "laid_back",
+    "bassPattern": ["root", "rest", "approach", "rest"],
+    "chordVoicing": "shell",
+    "metronomeAccent": [1, 0, 0, 1]
+  }
+}

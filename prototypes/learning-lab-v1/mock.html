@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baby Steps Learning Lab Mockups</title>
+  <style>
+    :root {
+      --bg: #e9eef8;
+      --panel: rgba(255, 255, 255, 0.86);
+      --panel-strong: rgba(255, 255, 255, 0.96);
+      --line: rgba(70, 95, 140, 0.24);
+      --text: #18253f;
+      --muted: #60739a;
+      --blue: #2f74eb;
+      --blue-soft: rgba(47, 116, 235, 0.14);
+      --green: #24a56a;
+      --green-soft: rgba(36, 165, 106, 0.14);
+      --amber: #c28f0a;
+      --amber-soft: rgba(194, 143, 10, 0.14);
+      --danger: #d04f63;
+      --danger-soft: rgba(208, 79, 99, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 28px;
+      background:
+        radial-gradient(1200px 520px at 10% 0%, rgba(108, 148, 222, 0.24), transparent 70%),
+        radial-gradient(800px 460px at 90% 8%, rgba(93, 129, 220, 0.2), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Avenir Next", "SF Pro Text", "Segoe UI", sans-serif;
+      display: grid;
+      gap: 26px;
+      justify-content: center;
+    }
+
+    .screen {
+      width: 1500px;
+      min-height: 900px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 24px 52px rgba(26, 45, 80, 0.16);
+      background: linear-gradient(165deg, rgba(255,255,255,0.72), rgba(243,248,255,0.94));
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f5d26f, #dbb44b);
+      border: 1px solid rgba(63, 84, 130, 0.2);
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 36px;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .brand p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: var(--panel-strong);
+      color: #355079;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .pill.active {
+      background: linear-gradient(180deg, #4f8ffc, #2c71e9);
+      color: white;
+      border-color: rgba(29, 76, 167, 0.55);
+    }
+
+    .objective {
+      margin: 16px 22px 0;
+      border: 1px solid rgba(56, 90, 153, 0.28);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(243,249,255,0.95), rgba(235,244,255,0.9));
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 18px;
+      padding: 16px 18px;
+    }
+
+    .objective h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .objective p {
+      margin: 0;
+      color: #45608d;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    .steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-content: flex-start;
+    }
+
+    .step {
+      border: 1px solid rgba(64, 96, 154, 0.26);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #35507b;
+      background: var(--panel-strong);
+    }
+
+    .step.done {
+      background: var(--green-soft);
+      border-color: rgba(34, 144, 93, 0.32);
+      color: #1e6f48;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1.75fr 1fr;
+      gap: 16px;
+      padding: 16px 22px 22px;
+    }
+
+    .workspace {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px;
+      background: var(--panel);
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 12px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: white;
+      color: #3f5a88;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .chip.active {
+      color: white;
+      background: linear-gradient(180deg, #4f8ffc, #2b71e8);
+      border-color: rgba(28, 74, 169, 0.65);
+    }
+
+    .chip.good {
+      background: var(--green-soft);
+      border-color: rgba(31, 136, 87, 0.3);
+      color: #206746;
+    }
+
+    .keyboard {
+      border: 1px solid rgba(72, 96, 139, 0.24);
+      border-radius: 14px;
+      background: #f8fbff;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(24, 1fr);
+      gap: 3px;
+      height: 170px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .key {
+      border-radius: 0 0 7px 7px;
+      background: white;
+      border: 1px solid rgba(74, 97, 136, 0.2);
+      height: 100%;
+      position: relative;
+    }
+
+    .key.black {
+      position: absolute;
+      width: calc((100% / 24) * 0.7);
+      height: 56%;
+      margin-left: calc((100% / 24) * -0.35);
+      background: linear-gradient(180deg, #1d2b4a, #0f182b);
+      border: 1px solid rgba(9, 15, 28, 0.8);
+      border-radius: 0 0 5px 5px;
+      z-index: 3;
+    }
+
+    .key.active {
+      background: linear-gradient(180deg, #c9dcff, #9bc2ff);
+      border-color: rgba(48, 110, 214, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(32, 84, 173, 0.25);
+    }
+
+    .window {
+      position: absolute;
+      left: 22%;
+      width: 35%;
+      top: 8px;
+      bottom: 8px;
+      border: 2px dashed rgba(54, 113, 219, 0.64);
+      border-radius: 10px;
+      box-shadow: 0 0 16px rgba(54, 113, 219, 0.2);
+      z-index: 4;
+    }
+
+    .table {
+      border: 1px solid rgba(72, 98, 140, 0.26);
+      border-radius: 14px;
+      overflow: hidden;
+      background: white;
+    }
+
+    .thead, .tr {
+      display: grid;
+      grid-template-columns: 240px repeat(8, 1fr);
+      min-height: 54px;
+    }
+
+    .thead {
+      background: #dce7fb;
+      border-bottom: 1px solid rgba(66, 93, 137, 0.24);
+      font-weight: 800;
+      color: #304d79;
+    }
+
+    .cell {
+      border-right: 1px solid rgba(72, 98, 140, 0.18);
+      border-bottom: 1px solid rgba(72, 98, 140, 0.18);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      color: #223652;
+      font-size: 14px;
+      text-align: center;
+      padding: 4px;
+    }
+
+    .rowhead {
+      background: #e8f0ff;
+      font-weight: 800;
+      color: #34507d;
+    }
+
+    .cell.active {
+      background: var(--blue-soft);
+      color: #1f4e9a;
+      box-shadow: inset 0 0 0 2px rgba(52, 111, 214, 0.34);
+    }
+
+    .cell.resolve {
+      background: var(--green-soft);
+      color: #236e49;
+      box-shadow: inset 0 0 0 2px rgba(35, 150, 96, 0.34);
+    }
+
+    .confetti {
+      font-size: 18px;
+      color: #18a567;
+      letter-spacing: 4px;
+    }
+
+    .side {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .card {
+      border: 1px solid rgba(74, 100, 146, 0.2);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.9);
+      display: grid;
+      gap: 8px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+      color: #2b466d;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 13px;
+      color: #516892;
+      line-height: 1.35;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(63, 93, 143, 0.3);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #355381;
+      background: #f6f9ff;
+      width: max-content;
+    }
+
+    .cta.primary {
+      background: linear-gradient(180deg, #4f8ffc, #2b71e8);
+      color: white;
+      border-color: rgba(23, 69, 158, 0.65);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid rgba(73, 102, 151, 0.25);
+      background: #f8fbff;
+      color: #435b87;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .meter {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(64, 95, 144, 0.18);
+      overflow: hidden;
+      border: 1px solid rgba(62, 93, 141, 0.24);
+    }
+
+    .meter > span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, #2f74eb, #5fa2ff);
+    }
+
+    .heat {
+      height: 68px;
+      border: 1px solid rgba(74, 102, 146, 0.22);
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, rgba(42, 108, 214, 0.16), rgba(42, 108, 214, 0.02)),
+        repeating-linear-gradient(90deg, rgba(49, 82, 133, 0.08), rgba(49, 82, 133, 0.08) 1px, transparent 1px, transparent 30px);
+      position: relative;
+    }
+
+    .heat:before {
+      content: "";
+      position: absolute;
+      left: 12%;
+      top: 16%;
+      width: 65%;
+      height: 45%;
+      border-radius: 999px;
+      border: 2px dashed rgba(35, 114, 223, 0.5);
+      box-shadow: 0 0 18px rgba(35, 114, 223, 0.18);
+    }
+
+    .title-note {
+      font-size: 12px;
+      color: #6b7fa4;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <section class="screen" id="screen-1">
+    <header class="nav">
+      <div class="brand">
+        <div class="logo">BS</div>
+        <div>
+          <p>Learning Lab Draft</p>
+          <h1>Start Concept: Functional Harmony</h1>
+        </div>
+      </div>
+      <div class="nav-right">
+        <div class="pill active">Learning Lab</div>
+        <div class="pill">Free Explore</div>
+        <div class="pill">Repertoire</div>
+      </div>
+    </header>
+
+    <section class="objective">
+      <div>
+        <h2>Objective: Hear why V7 resolves to I</h2>
+        <p>Outcome: Student can identify tension/release, then play it on real piano in 3 keys with minimal hand movement.</p>
+      </div>
+      <div class="steps">
+        <span class="step">Step 1 Hear Demo</span>
+        <span class="step">Step 2 See Motion</span>
+        <span class="step">Step 3 Try on Piano</span>
+        <span class="step">Step 4 Self Check</span>
+        <span class="step">Step 5 Transpose</span>
+      </div>
+    </section>
+
+    <section class="content">
+      <article class="workspace">
+        <div class="row">
+          <span class="chip active">Chords</span>
+          <span class="chip">Scales</span>
+          <span class="chip">Arpeggios</span>
+          <span class="chip">Cadences</span>
+          <span class="chip">Secondary</span>
+          <span class="chip">Borrowed</span>
+          <span class="chip">Substitution</span>
+        </div>
+        <div class="row">
+          <span class="chip">Key: C</span>
+          <span class="chip">BPM: 78</span>
+          <span class="chip">Subdivision: Eighth</span>
+          <span class="chip">Exercise: Power of Resolution</span>
+        </div>
+        <div class="keyboard">
+          <div class="window"></div>
+          <div class="key active"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key active"></div><div class="key"></div>
+          <div class="key"></div><div class="key"></div><div class="key active"></div><div class="key"></div><div class="key"></div><div class="key"></div>
+          <div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div>
+          <div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div>
+          <div class="key black" style="left: calc((100%/24)*1.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*2.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*4.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*5.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*6.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*8.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*9.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*11.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*12.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*13.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*15.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*16.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*18.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*19.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*20.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*22.5)"></div>
+        </div>
+
+        <div class="table">
+          <div class="thead">
+            <div class="cell rowhead">Chord Quality</div>
+            <div class="cell">1</div><div class="cell">2</div><div class="cell">3</div><div class="cell">4</div>
+            <div class="cell">5</div><div class="cell">6</div><div class="cell">7</div><div class="cell">8</div>
+          </div>
+          <div class="tr">
+            <div class="cell rowhead">Triad</div>
+            <div class="cell active">C</div><div class="cell">Dm</div><div class="cell">Em</div><div class="cell">F</div>
+            <div class="cell">G</div><div class="cell">Am</div><div class="cell">Bdim</div><div class="cell resolve">C</div>
+          </div>
+          <div class="tr">
+            <div class="cell rowhead">7th</div>
+            <div class="cell">Cmaj7</div><div class="cell">Dm7</div><div class="cell">Em7</div><div class="cell">Fmaj7</div>
+            <div class="cell">G7</div><div class="cell">Am7</div><div class="cell">Bm7b5</div><div class="cell">Cmaj7</div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="side">
+        <div class="card">
+          <h3>Instructor Panel</h3>
+          <p>Why it works: Dominant has strong pull because 3rd and 7th resolve by semitone into tonic chord tones.</p>
+          <span class="badge">Theory Focus: Dominant function</span>
+        </div>
+        <div class="card">
+          <h3>Transfer Prompt</h3>
+          <p>Play G7 -> C on your real piano, then transpose to F and D. Keep top voice moving by smallest step.</p>
+          <div class="split">
+            <span class="cta">Watch Demo</span>
+            <span class="cta primary">Mark Attempt</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Progress Checkpoint</h3>
+          <p>Complete 3 keys with clean resolution timing.</p>
+          <div class="meter"><span style="width: 58%"></span></div>
+          <span class="title-note">2 of 3 keys complete</span>
+        </div>
+      </aside>
+    </section>
+  </section>
+
+  <section class="screen" id="screen-2">
+    <header class="nav">
+      <div class="brand">
+        <div class="logo">BS</div>
+        <div>
+          <p>Learning Lab Draft</p>
+          <h1>Step 2: See Voice Movement</h1>
+        </div>
+      </div>
+      <div class="nav-right">
+        <div class="pill active">Learning Lab</div>
+        <div class="pill">Free Explore</div>
+      </div>
+    </header>
+
+    <section class="objective">
+      <div>
+        <h2>Visual Compare: Previous chord vs New chord</h2>
+        <p>Removed tones fade red, new tones pulse green while holding. This makes finger movement obvious before release.</p>
+      </div>
+      <div class="steps">
+        <span class="step done">Step 1 Hear Demo</span>
+        <span class="step">Step 2 See Motion</span>
+        <span class="step">Step 3 Try on Piano</span>
+      </div>
+    </section>
+
+    <section class="content">
+      <article class="workspace">
+        <div class="row">
+          <span class="chip active">Cadences</span>
+          <span class="chip">Secondary</span>
+          <span class="chip">Borrowed</span>
+          <span class="chip">Substitution</span>
+          <span class="chip">Color</span>
+        </div>
+        <div class="row">
+          <span class="chip">Current: V7 -> I</span>
+          <span class="chip good">Motion Overlay ON</span>
+          <span class="chip">Hold to inspect movement</span>
+        </div>
+
+        <div class="keyboard">
+          <div class="window" style="left: 30%; width: 41%"></div>
+          <div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div>
+          <div class="key active" style="background: var(--danger-soft)"></div>
+          <div class="key active" style="background: var(--green-soft)"></div>
+          <div class="key active"></div><div class="key"></div><div class="key active"></div><div class="key"></div>
+          <div class="key"></div><div class="key"></div><div class="key"></div><div class="key active"></div><div class="key"></div><div class="key"></div>
+          <div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div>
+          <div class="key black" style="left: calc((100%/24)*8.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*10.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*12.5)"></div>
+          <div class="key black" style="left: calc((100%/24)*14.5)"></div>
+        </div>
+
+        <div class="table">
+          <div class="thead">
+            <div class="cell rowhead">Cadence Type</div>
+            <div class="cell">Authentic</div><div class="cell">Plagal</div><div class="cell">Half</div><div class="cell">Deceptive</div>
+            <div class="cell">Backdoor</div><div class="cell">ii-V-I</div><div class="cell">vi-ii-V-I</div><div class="cell">Turnaround</div>
+          </div>
+          <div class="tr">
+            <div class="cell rowhead">Cadences</div>
+            <div class="cell active">V7 -> I</div><div class="cell">IV -> I</div><div class="cell">ii -> V</div><div class="cell">V -> vi</div>
+            <div class="cell">bVII7 -> I</div><div class="cell">ii-V-I</div><div class="cell">vi-ii-V-I</div><div class="cell resolve">I-VI7-ii-V</div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="side">
+        <div class="card">
+          <h3>Motion Legend</h3>
+          <p><strong>Red</strong>: tones omitted from previous chord.</p>
+          <p><strong>Green</strong>: tones newly introduced in current chord.</p>
+          <p><strong>Blue</strong>: shared tones stay anchored.</p>
+        </div>
+        <div class="card">
+          <h3>A/B Compare</h3>
+          <div class="split">
+            <span class="cta">Play V7 -> I</span>
+            <span class="cta">Play bII7 -> I</span>
+          </div>
+          <p>Hear two paths to the same destination and compare emotional difference.</p>
+        </div>
+        <div class="card">
+          <h3>Teacher Note</h3>
+          <p>Do not chase all notes. Keep two guide tones smooth, then add color tones after consistency.</p>
+        </div>
+      </aside>
+    </section>
+  </section>
+
+  <section class="screen" id="screen-3">
+    <header class="nav">
+      <div class="brand">
+        <div class="logo">BS</div>
+        <div>
+          <p>Learning Lab Draft</p>
+          <h1>Step 3: Transfer to Real Piano</h1>
+        </div>
+      </div>
+      <div class="nav-right">
+        <div class="pill active">Learning Lab</div>
+        <div class="pill">Free Explore</div>
+      </div>
+    </header>
+
+    <section class="objective">
+      <div>
+        <h2>Transfer Task: Recreate with both hands</h2>
+        <p>Goal: Match voicing and rhythm from demo, then transpose to 2 additional keys.</p>
+      </div>
+      <div class="steps">
+        <span class="step done">Step 1 Hear Demo</span>
+        <span class="step done">Step 2 See Motion</span>
+        <span class="step">Step 3 Try on Piano</span>
+        <span class="step">Step 4 Self Check</span>
+      </div>
+    </section>
+
+    <section class="content">
+      <article class="workspace">
+        <div class="row">
+          <span class="chip active">Practice Loop</span>
+          <span class="chip">Countdown: 3-2-1</span>
+          <span class="chip">Bars: 4</span>
+          <span class="chip">Key set: C, F, D</span>
+        </div>
+        <div class="row">
+          <span class="chip">Now Attempting: F major</span>
+          <span class="chip good">Auto Re-demo if missed</span>
+        </div>
+
+        <div class="heat"></div>
+
+        <div class="table">
+          <div class="thead">
+            <div class="cell rowhead">Checkpoint</div>
+            <div class="cell">Timing</div><div class="cell">Shape</div><div class="cell">Root</div><div class="cell">Guide Tones</div>
+            <div class="cell">Dynamic</div><div class="cell">Pedal</div><div class="cell">Transpose</div><div class="cell">Pass</div>
+          </div>
+          <div class="tr">
+            <div class="cell rowhead">Attempt 1</div>
+            <div class="cell">Good</div><div class="cell">Good</div><div class="cell">Good</div><div class="cell">Needs work</div>
+            <div class="cell">Good</div><div class="cell">Not used</div><div class="cell">C only</div><div class="cell">No</div>
+          </div>
+          <div class="tr">
+            <div class="cell rowhead">Attempt 2</div>
+            <div class="cell">Good</div><div class="cell">Good</div><div class="cell">Good</div><div class="cell">Good</div>
+            <div class="cell">Good</div><div class="cell">Good</div><div class="cell">C + F</div><div class="cell">Almost</div>
+          </div>
+          <div class="tr">
+            <div class="cell rowhead">Attempt 3</div>
+            <div class="cell resolve">Good</div><div class="cell resolve">Good</div><div class="cell resolve">Good</div><div class="cell resolve">Good</div>
+            <div class="cell resolve">Good</div><div class="cell resolve">Good</div><div class="cell resolve">C + F + D</div><div class="cell resolve">Pass</div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="side">
+        <div class="card">
+          <h3>What to listen for</h3>
+          <p>1) Chord attacks land together.</p>
+          <p>2) Resolution sounds settled, not rushed.</p>
+          <p>3) Top voice stays smooth through changes.</p>
+        </div>
+        <div class="card">
+          <h3>On-your-piano script</h3>
+          <p>Left hand: root + 7th shell. Right hand: 3rd + 5th + 9th color. Repeat in next key.</p>
+          <span class="cta primary">Log Attempt</span>
+        </div>
+        <div class="card">
+          <h3>Session Progress</h3>
+          <div class="meter"><span style="width: 74%"></span></div>
+          <span class="title-note">Learning Lab Path 3 of 4 complete</span>
+        </div>
+      </aside>
+    </section>
+  </section>
+
+  <section class="screen" id="screen-4">
+    <header class="nav">
+      <div class="brand">
+        <div class="logo">BS</div>
+        <div>
+          <p>Learning Lab Draft</p>
+          <h1>Anchor Concepts to Repertoire</h1>
+        </div>
+      </div>
+      <div class="nav-right">
+        <div class="pill">Learning Lab</div>
+        <div class="pill active">Repertoire</div>
+      </div>
+    </header>
+
+    <section class="objective">
+      <div>
+        <h2>Apply concept inside real musical context</h2>
+        <p>Pick a safe licensed study, hear it in your key, and jump to related palettes for focused concept drills.</p>
+      </div>
+      <div class="steps">
+        <span class="step">Pick piece</span>
+        <span class="step">Hear loop</span>
+        <span class="step">Open related concept</span>
+        <span class="step">Transfer to piano</span>
+      </div>
+    </section>
+
+    <section class="content">
+      <article class="workspace">
+        <div class="row">
+          <span class="chip active">Featured</span>
+          <span class="chip">Classical</span>
+          <span class="chip">Blues</span>
+          <span class="chip">Gospel</span>
+          <span class="chip">Bossa</span>
+          <span class="chip">Pop</span>
+          <span class="chip">Rock</span>
+          <span class="chip">Studies</span>
+        </div>
+
+        <div class="split" style="grid-template-columns: 1.2fr 1fr; gap: 12px;">
+          <div class="card" style="margin:0;">
+            <h3>Selected: Bach Prelude in C (PD)</h3>
+            <p>Tags: arpeggios, cadence, secondary dominants, voice leading</p>
+            <div class="row">
+              <span class="cta primary">Play Loop</span>
+              <span class="cta">Pause</span>
+              <span class="cta">Stop</span>
+              <span class="badge">Loop 0-16 beats</span>
+            </div>
+            <div class="row">
+              <span class="chip">Key: D</span>
+              <span class="chip">BPM: 72</span>
+              <span class="chip">Only chords</span>
+              <span class="chip">Mute melody</span>
+            </div>
+          </div>
+          <div class="card" style="margin:0;">
+            <h3>License + Attribution</h3>
+            <p>Provider: Mutopia</p>
+            <p>License: Public-Domain</p>
+            <p>Attribution: Mutopia edition metadata linked in source info.</p>
+            <span class="badge">Verify jurisdiction for commercial release</span>
+          </div>
+        </div>
+
+        <div class="table">
+          <div class="thead">
+            <div class="cell rowhead">Suggested Next</div>
+            <div class="cell">Cadences</div><div class="cell">Arpeggios</div><div class="cell">Scales</div><div class="cell">Modes</div>
+            <div class="cell">Secondary</div><div class="cell">Borrowed</div><div class="cell">Substitution</div><div class="cell">Exercises</div>
+          </div>
+          <div class="tr">
+            <div class="cell rowhead">From Tags</div>
+            <div class="cell active">Authentic cadence</div><div class="cell active">Triad root pos</div><div class="cell">Major</div><div class="cell">Mixolydian</div>
+            <div class="cell resolve">Secondary row sweep</div><div class="cell">Borrowed row sweep</div><div class="cell">Tritone compare</div><div class="cell resolve">Arpeggio Architecture</div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="side">
+        <div class="card">
+          <h3>Learning outcome this week</h3>
+          <p>Student can identify cadential gravity in repertoire and reproduce it in 3 keys on real piano.</p>
+        </div>
+        <div class="card">
+          <h3>AI Coach framing</h3>
+          <p>"Explain where dominant pull appears in this piece and give a 10-minute transfer drill."</p>
+          <span class="cta">Ask Coach with Context</span>
+        </div>
+        <div class="card">
+          <h3>Completion Moment</h3>
+          <p>When final resolve lands, trigger green glow + music confetti on the resolving cell.</p>
+          <div class="confetti">* * * music notes * * *</div>
+        </div>
+      </aside>
+    </section>
+  </section>
+</body>
+</html>

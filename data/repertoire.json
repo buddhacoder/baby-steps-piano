@@ -1,0 +1,508 @@
+[
+  {
+    "id": "bach-prelude-c-major",
+    "title": "Prelude in C Major (BWV 846)",
+    "composerOrSource": "J.S. Bach / Mutopia",
+    "genre": "classical",
+    "tags": ["arpeggios", "cadence", "secondary_dominants", "voice_leading"],
+    "difficulty": 3,
+    "defaultKey": "C",
+    "defaultBpm": 68,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "midi_file",
+      "source": {
+        "provider": "mutopia",
+        "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV846/wtk1-prelude1/",
+        "licenseSpdx": "Public-Domain",
+        "attribution": {
+          "text": "Mutopia Project: Das Wohltemperierte Clavier I, Praeludium I (Mutopia-2011/09/12-5)",
+          "link": "https://www.mutopiaproject.org/ftp/BachJS/BWV846/wtk1-prelude1/wtk1-prelude1.rdf"
+        },
+        "notes": "Mutopia metadata marks this edition as Public Domain."
+      },
+      "midi": {
+        "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV846/wtk1-prelude1/wtk1-prelude1.mid",
+        "ppq": 480,
+        "tracks": ["piano", "melody"]
+      }
+    },
+    "lessonLinks": [
+      { "tab": "Arpeggios", "focus": "Triad motion", "action": "play_row", "payload": { "row": "Triad (Root Position)" } },
+      { "tab": "Cadences", "focus": "Authentic cadence", "action": "play_cell", "payload": { "row": "Cadences", "col": "Authentic (V7→I)" } }
+    ],
+    "ui": {
+      "description": "Arpeggiated texture for hearing functional gravity and voice-leading.",
+      "section": "Public Domain Classics",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "beethoven-ode-to-joy",
+    "title": "Ode to Joy Theme",
+    "composerOrSource": "L. van Beethoven / Mutopia",
+    "genre": "classical",
+    "tags": ["major_scale", "cadence", "phrase_structure"],
+    "difficulty": 1,
+    "defaultKey": "C",
+    "defaultBpm": 84,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "midi_file",
+      "source": {
+        "provider": "mutopia",
+        "url": "https://www.mutopiaproject.org/ftp/BeethovenLv/ode/",
+        "licenseSpdx": "Public-Domain",
+        "attribution": {
+          "text": "Mutopia Project: Ode to Joy (Mutopia-2009/08/05-528)",
+          "link": "https://www.mutopiaproject.org/ftp/BeethovenLv/ode/ode.rdf"
+        },
+        "notes": "Mutopia metadata marks this edition as Public Domain."
+      },
+      "midi": {
+        "url": "https://www.mutopiaproject.org/ftp/BeethovenLv/ode/ode.mid",
+        "ppq": 480,
+        "tracks": ["piano", "melody"]
+      }
+    },
+    "lessonLinks": [
+      { "tab": "Scales", "focus": "Major scale fluency", "action": "play_row", "payload": { "row": "Major" } },
+      { "tab": "Cadences", "focus": "Phrase endings", "action": "play_cell", "payload": { "row": "Cadences", "col": "Plagal (IV→I)" } }
+    ],
+    "ui": {
+      "description": "Simple melodic contour for scale-degree awareness and cadence hearing.",
+      "section": "Public Domain Classics",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "chopin-prelude-e-minor",
+    "title": "Prelude in E Minor (Op.28 No.4)",
+    "composerOrSource": "F. Chopin / Mutopia",
+    "genre": "classical",
+    "tags": ["harmonic_minor", "modal_mixture", "cadence", "borrowed_chords"],
+    "difficulty": 3,
+    "defaultKey": "E",
+    "defaultBpm": 56,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "midi_file",
+      "source": {
+        "provider": "mutopia",
+        "url": "https://www.mutopiaproject.org/ftp/ChopinFF/O28/Chop-28-4/",
+        "licenseSpdx": "Public-Domain",
+        "attribution": {
+          "text": "Mutopia Project: Prelude Op.28 No.4 (Mutopia-2016/10/28-468)",
+          "link": "https://www.mutopiaproject.org/ftp/ChopinFF/O28/Chop-28-4/Chop-28-4.rdf"
+        },
+        "notes": "Mutopia metadata marks this edition as Public Domain."
+      },
+      "midi": {
+        "url": "https://www.mutopiaproject.org/ftp/ChopinFF/O28/Chop-28-4/Chop-28-4.mid",
+        "ppq": 480,
+        "tracks": ["piano", "melody"]
+      }
+    },
+    "lessonLinks": [
+      { "tab": "Scales", "focus": "Harmonic minor color", "action": "play_row", "payload": { "row": "Harmonic Minor" } },
+      { "tab": "Borrowed", "focus": "Modal interchange", "action": "play_row", "payload": { "row": "Borrowed" } }
+    ],
+    "ui": {
+      "description": "Slow harmonic tension-and-release study with expressive voice-leading.",
+      "section": "Public Domain Classics",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "debussy-clair-de-lune-excerpt",
+    "title": "Clair de Lune Excerpt",
+    "composerOrSource": "C. Debussy / Mutopia",
+    "genre": "classical",
+    "tags": ["color", "modal_mixture", "whole_tone", "cadence"],
+    "difficulty": 4,
+    "defaultKey": "D",
+    "defaultBpm": 64,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 24 },
+    "arrangement": {
+      "type": "midi_file",
+      "source": {
+        "provider": "mutopia",
+        "url": "https://www.mutopiaproject.org/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/",
+        "licenseSpdx": "Public-Domain",
+        "attribution": {
+          "text": "Mutopia Project: Suite Bergamasque: Clair de Lune (Mutopia-2010/12/21-1778)",
+          "link": "https://www.mutopiaproject.org/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.rdf"
+        },
+        "notes": "Mutopia metadata marks this edition as Public Domain."
+      },
+      "midi": {
+        "url": "https://www.mutopiaproject.org/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.mid",
+        "ppq": 480,
+        "tracks": ["piano", "melody"]
+      }
+    },
+    "lessonLinks": [
+      { "tab": "Color", "focus": "Whole-tone color", "action": "play_row", "payload": { "row": "Whole Tone" } },
+      { "tab": "Borrowed", "focus": "Color borrowing", "action": "play_row", "payload": { "row": "Borrowed" } }
+    ],
+    "ui": {
+      "description": "Color-rich harmony for expressive rubato and sonority control.",
+      "section": "Public Domain Classics",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "joplin-maple-leaf-rag",
+    "title": "Maple Leaf Rag",
+    "composerOrSource": "Scott Joplin / Mutopia",
+    "genre": "early_jazz",
+    "tags": ["early_jazz", "syncopation", "cadence", "secondary_dominants"],
+    "difficulty": 4,
+    "defaultKey": "A",
+    "defaultBpm": 92,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "midi_file",
+      "source": {
+        "provider": "mutopia",
+        "url": "https://www.mutopiaproject.org/ftp/JoplinS/maple/",
+        "licenseSpdx": "Public-Domain",
+        "attribution": {
+          "text": "Mutopia Project: Maple Leaf Rag (Mutopia-2011/11/13-23)",
+          "link": "https://www.mutopiaproject.org/ftp/JoplinS/maple/maple.rdf"
+        },
+        "notes": "Mutopia metadata marks this edition as Public Domain."
+      },
+      "midi": {
+        "url": "https://www.mutopiaproject.org/ftp/JoplinS/maple/maple.mid",
+        "ppq": 480,
+        "tracks": ["piano", "melody"]
+      }
+    },
+    "lessonLinks": [
+      { "tab": "Cadences", "focus": "Turnaround cadence", "action": "play_cell", "payload": { "row": "Jazz Cadences", "col": "I–VI7–ii–V" } },
+      { "tab": "Secondary", "focus": "Applied dominant movement", "action": "play_row", "payload": { "row": "Secondary Dominant" } }
+    ],
+    "ui": {
+      "description": "Early jazz/ragtime syncopation and stride-like left-hand patterns.",
+      "section": "Early Jazz PD",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "twelve-bar-blues-form",
+    "title": "12-Bar Blues Form Study",
+    "composerOrSource": "Internal style study",
+    "genre": "blues",
+    "tags": ["blues_scale", "dom7", "cadence", "mixolydian"],
+    "difficulty": 2,
+    "defaultKey": "C",
+    "defaultBpm": 96,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 48 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "Original progression arrangement authored for this app."
+      },
+      "progression": [
+        { "chord": "C7", "beats": 4, "style": "blues_shuffle", "voicing": "close" },
+        { "chord": "F7", "beats": 4, "style": "blues_shuffle", "voicing": "close" },
+        { "chord": "C7", "beats": 4, "style": "blues_shuffle", "voicing": "close" },
+        { "chord": "G7", "beats": 4, "style": "blues_shuffle", "voicing": "close" },
+        { "chord": "F7", "beats": 4, "style": "blues_shuffle", "voicing": "close" },
+        { "chord": "C7", "beats": 4, "style": "blues_shuffle", "voicing": "close" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Pentatonic", "focus": "Blues scale", "action": "play_row", "payload": { "row": "Blues" } },
+      { "tab": "Cadences", "focus": "Backdoor color", "action": "play_cell", "payload": { "row": "Dominant Colors", "col": "Backdoor" } }
+    ],
+    "ui": {
+      "description": "Core blues loop for timing, call-response, and dominant function.",
+      "section": "Traditional Forms",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "gospel-walkup-study",
+    "title": "Gospel Walk-up Study",
+    "composerOrSource": "Internal style study",
+    "genre": "gospel",
+    "tags": ["secondary_dominants", "cadence", "modal_mixture", "ii_v_i"],
+    "difficulty": 3,
+    "defaultKey": "C",
+    "defaultBpm": 78,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "Original progression arrangement authored for this app."
+      },
+      "progression": [
+        { "chord": "Cmaj7", "beats": 2, "style": "gospel", "voicing": "open" },
+        { "chord": "E7", "beats": 2, "style": "gospel", "voicing": "open" },
+        { "chord": "Am7", "beats": 2, "style": "gospel", "voicing": "open" },
+        { "chord": "D7", "beats": 2, "style": "gospel", "voicing": "open" },
+        { "chord": "G7", "beats": 4, "style": "gospel", "voicing": "open" },
+        { "chord": "Cmaj7", "beats": 4, "style": "gospel", "voicing": "open" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Secondary", "focus": "Applied dominants", "action": "play_row", "payload": { "row": "Secondary Dominant" } },
+      { "tab": "Cadences", "focus": "vi-ii-V-I chain", "action": "play_cell", "payload": { "row": "Jazz Cadences", "col": "vi–ii–V–I" } }
+    ],
+    "ui": {
+      "description": "Church-style walk-up tensions resolving into warm tonic color.",
+      "section": "Traditional Forms",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "folk-hymn-cadence-study",
+    "title": "Folk Hymn Cadence Study",
+    "composerOrSource": "Internal style study",
+    "genre": "gospel",
+    "tags": ["cadence", "plagal", "authentic", "major_scale"],
+    "difficulty": 1,
+    "defaultKey": "G",
+    "defaultBpm": 72,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "No external melody included; cadence-focused harmonic study."
+      },
+      "progression": [
+        { "chord": "Gmaj7", "beats": 4, "style": "gospel", "voicing": "open" },
+        { "chord": "Cmaj7", "beats": 4, "style": "gospel", "voicing": "open" },
+        { "chord": "Gmaj7", "beats": 4, "style": "gospel", "voicing": "open" },
+        { "chord": "D7", "beats": 2, "style": "gospel", "voicing": "open" },
+        { "chord": "Gmaj7", "beats": 2, "style": "gospel", "voicing": "open" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Cadences", "focus": "Plagal and authentic close", "action": "play_row", "payload": { "row": "Cadences" } },
+      { "tab": "Scales", "focus": "Major stability", "action": "play_row", "payload": { "row": "Major" } }
+    ],
+    "ui": {
+      "description": "Simple devotional cadence map for ear training and harmonic grounding.",
+      "section": "Traditional Forms",
+      "showInFeatured": false
+    }
+  },
+  {
+    "id": "bossa-ii-v-i-study",
+    "title": "Bossa ii–V–I Study",
+    "composerOrSource": "Internal style study",
+    "genre": "bossa",
+    "tags": ["ii_v_i", "maj7", "bossa", "cadence"],
+    "difficulty": 2,
+    "defaultKey": "C",
+    "defaultBpm": 108,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "Original progression arrangement authored for this app."
+      },
+      "progression": [
+        { "chord": "Dm7", "beats": 4, "style": "bossa", "voicing": "shell" },
+        { "chord": "G7", "beats": 4, "style": "bossa", "voicing": "shell" },
+        { "chord": "Cmaj7", "beats": 4, "style": "bossa", "voicing": "shell" },
+        { "chord": "A7", "beats": 4, "style": "bossa", "voicing": "shell" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Cadences", "focus": "ii–V–I", "action": "play_cell", "payload": { "row": "Jazz Cadences", "col": "ii–V–I" } },
+      { "tab": "Modes", "focus": "Mixolydian over V", "action": "play_row", "payload": { "row": "Mixolydian" } }
+    ],
+    "ui": {
+      "description": "Syncopated ii–V–I comping loop with bossa-style pulse.",
+      "section": "Style Studies",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "jazz-turnaround-study",
+    "title": "Jazz Turnaround Study",
+    "composerOrSource": "Internal style study",
+    "genre": "study",
+    "tags": ["turnaround", "secondary_dominants", "ii_v_i", "dom7"],
+    "difficulty": 3,
+    "defaultKey": "F",
+    "defaultBpm": 120,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "Original progression arrangement authored for this app."
+      },
+      "progression": [
+        { "chord": "Fmaj7", "beats": 4, "style": "jazz_swing", "voicing": "shell" },
+        { "chord": "D7", "beats": 4, "style": "jazz_swing", "voicing": "shell" },
+        { "chord": "Gm7", "beats": 4, "style": "jazz_swing", "voicing": "shell" },
+        { "chord": "C7", "beats": 4, "style": "jazz_swing", "voicing": "shell" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Cadences", "focus": "I–VI7–ii–V", "action": "play_cell", "payload": { "row": "Jazz Cadences", "col": "I–VI7–ii–V" } },
+      { "tab": "Secondary", "focus": "Secondary dominants", "action": "play_row", "payload": { "row": "Secondary Dominant" } }
+    ],
+    "ui": {
+      "description": "Classic turnaround gravity with strong dominant pull.",
+      "section": "Style Studies",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "pop-i-v-vi-iv-study",
+    "title": "Pop I–V–vi–IV Study",
+    "composerOrSource": "Internal style study",
+    "genre": "pop",
+    "tags": ["pop_loop", "cadence", "major_scale"],
+    "difficulty": 1,
+    "defaultKey": "C",
+    "defaultBpm": 96,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "Original progression arrangement authored for this app."
+      },
+      "progression": [
+        { "chord": "Cmaj7", "beats": 4, "style": "pop", "voicing": "open" },
+        { "chord": "G", "beats": 4, "style": "pop", "voicing": "open" },
+        { "chord": "Am7", "beats": 4, "style": "pop", "voicing": "open" },
+        { "chord": "Fmaj7", "beats": 4, "style": "pop", "voicing": "open" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Cadences", "focus": "Deceptive pull", "action": "play_cell", "payload": { "row": "Cadences", "col": "Deceptive (V→vi)" } },
+      { "tab": "Scales", "focus": "Major framework", "action": "play_row", "payload": { "row": "Major" } }
+    ],
+    "ui": {
+      "description": "Contemporary pop loop to practice pocket and harmonic memory.",
+      "section": "Style Studies",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "rock-mixolydian-study",
+    "title": "Rock Mixolydian Study",
+    "composerOrSource": "Internal style study",
+    "genre": "rock",
+    "tags": ["mixolydian", "modal_rock", "borrowed_chords", "cadence"],
+    "difficulty": 2,
+    "defaultKey": "D",
+    "defaultBpm": 112,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 12 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "Original progression arrangement authored for this app."
+      },
+      "progression": [
+        { "chord": "D", "beats": 4, "style": "rock", "voicing": "close" },
+        { "chord": "C", "beats": 4, "style": "rock", "voicing": "close" },
+        { "chord": "G", "beats": 4, "style": "rock", "voicing": "close" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Modes", "focus": "Mixolydian mode", "action": "play_row", "payload": { "row": "Mixolydian" } },
+      { "tab": "Borrowed", "focus": "bVII color", "action": "play_row", "payload": { "row": "Borrowed" } }
+    ],
+    "ui": {
+      "description": "Modal rock loop emphasizing bVII motion and riff-ready harmony.",
+      "section": "Style Studies",
+      "showInFeatured": true
+    }
+  },
+  {
+    "id": "neo-soul-tritone-study",
+    "title": "Neo-soul Tritone Study",
+    "composerOrSource": "Internal style study",
+    "genre": "study",
+    "tags": ["tritone_sub", "dom7_colors", "ii_v_i", "altered"],
+    "difficulty": 4,
+    "defaultKey": "C",
+    "defaultBpm": 74,
+    "loop": { "enabled": true, "startBeat": 0, "endBeat": 16 },
+    "arrangement": {
+      "type": "chord_progression",
+      "source": {
+        "provider": "internal",
+        "url": "",
+        "licenseSpdx": "CC0-1.0",
+        "attribution": {
+          "text": "Baby Steps internal original progression study",
+          "link": ""
+        },
+        "notes": "Original progression arrangement authored for this app."
+      },
+      "progression": [
+        { "chord": "Dm7", "beats": 4, "style": "neo_soul", "voicing": "shell" },
+        { "chord": "Db7", "beats": 4, "style": "neo_soul", "voicing": "shell" },
+        { "chord": "Cmaj7", "beats": 4, "style": "neo_soul", "voicing": "shell" },
+        { "chord": "A7", "beats": 4, "style": "neo_soul", "voicing": "shell" }
+      ]
+    },
+    "lessonLinks": [
+      { "tab": "Substitution", "focus": "Tritone substitution", "action": "play_cell", "payload": { "row": "Dominant Substitution", "col": "Substitution" } },
+      { "tab": "Cadences", "focus": "Dominant colors", "action": "play_cell", "payload": { "row": "Dominant Colors", "col": "Tritone Sub" } }
+    ],
+    "ui": {
+      "description": "Color-rich dominant substitutions with smooth neo-soul pacing.",
+      "section": "Style Studies",
+      "showInFeatured": true
+    }
+  }
+]

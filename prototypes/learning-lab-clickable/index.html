@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baby Steps Learning Lab Prototype</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="proto-shell">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-icon">BS</div>
+        <div>
+          <p class="kicker">Clickable Prototype</p>
+          <h1>Baby Steps Learning Lab</h1>
+        </div>
+      </div>
+      <nav class="topnav" aria-label="Main mode">
+        <button class="topnav-btn active" data-mode="lab">Learning Lab</button>
+        <button class="topnav-btn" data-mode="explore">Free Explore</button>
+        <button class="topnav-btn" data-mode="repertoire">Repertoire</button>
+      </nav>
+    </header>
+
+    <section class="objective" id="objectiveCard">
+      <div>
+        <p class="kicker" id="objectiveKicker">Concept Objective</p>
+        <h2 id="objectiveTitle">Hear why V7 resolves to I</h2>
+        <p id="objectiveCopy">Outcome: understand tension/release and transfer it to your real piano in 3 keys.</p>
+      </div>
+      <div class="steps" id="stepsRow" role="tablist" aria-label="Lab steps">
+        <button class="step-btn active" data-step="0">1 Hear</button>
+        <button class="step-btn" data-step="1">2 See</button>
+        <button class="step-btn" data-step="2">3 Transfer</button>
+        <button class="step-btn" data-step="3">4 Anchor</button>
+      </div>
+    </section>
+
+    <main class="layout">
+      <section class="workspace" aria-label="Interactive workspace">
+        <div class="workspace-head">
+          <div class="palette-tabs" id="paletteTabs">
+            <button class="chip active" data-tab="chords">Chords</button>
+            <button class="chip" data-tab="scales">Scales</button>
+            <button class="chip" data-tab="arpeggios">Arpeggios</button>
+            <button class="chip" data-tab="cadences">Cadences</button>
+            <button class="chip" data-tab="secondary">Secondary</button>
+            <button class="chip" data-tab="borrowed">Borrowed</button>
+            <button class="chip" data-tab="substitution">Substitution</button>
+          </div>
+          <div class="session-pills" id="sessionPills"></div>
+        </div>
+
+        <div class="keyboard" id="keyboard" aria-label="Keyboard visualization"></div>
+
+        <div class="table-wrap">
+          <table class="concept-table" id="conceptTable">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+          <div class="table-footer">
+            <p id="tableStatus">Tip: click a row label or column label to run the sequence.</p>
+            <button id="simulatePlay" class="btn">Simulate Playback</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="sidepanel" aria-label="Guidance panel">
+        <article class="card" id="guideCard">
+          <h3>Instructor Panel</h3>
+          <p id="guideCopy">Why it works: dominant function pulls strongly into tonic because semitone voice-leading wants to resolve.</p>
+          <span class="badge" id="guideBadge">Theory Focus: Dominant Function</span>
+        </article>
+
+        <article class="card">
+          <h3>Transfer Prompt</h3>
+          <p id="transferCopy">Play G7 -> C on your piano, then transpose to F and D while keeping the top voice smooth.</p>
+          <div class="btn-row">
+            <button class="btn" id="watchDemoBtn">Watch Demo</button>
+            <button class="btn btn-primary" id="markAttemptBtn">Log Attempt</button>
+          </div>
+          <div class="meter"><span id="attemptMeter"></span></div>
+          <p class="tiny" id="attemptMeta">Attempts logged: 0</p>
+        </article>
+
+        <article class="card" id="repertoireCard">
+          <h3>Repertoire Anchors</h3>
+          <div class="featured-grid" id="featuredGrid"></div>
+          <div class="subcard" id="repDetail">
+            <p class="tiny">Select a featured item above.</p>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="suggestedBtn">Suggested Concepts</button>
+            <button class="btn" id="playStudyBtn">Play Related Study</button>
+          </div>
+          <div id="suggestions" class="suggestions"></div>
+        </article>
+      </aside>
+    </main>
+  </div>
+
+  <template id="confettiTemplate">
+    <span class="confetti">♪</span>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>

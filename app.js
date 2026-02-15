@@ -3,6 +3,11 @@ const DEGREE_TO_SEMITONE = [0, 2, 4, 5, 7, 9, 11];
 const ROMAN = ["I", "ii", "iii", "IV", "V", "vi", "vii°"];
 const PROGRESS_STORAGE_KEY = "baby-steps-progress-v1";
 const LEGACY_PROGRESS_KEYS = ["baby-steps-progress", "baby-steps-progress-v0"];
+const COACH_THREADS_STORAGE_KEY = "baby-steps-coach-threads-v1";
+const COACH_LESSON_STACK_STORAGE_KEY = "baby-steps-coach-lesson-stack-v1";
+const COACH_MAX_CONTEXT_MESSAGES = 14;
+const COACH_MAX_ARTIFACT_ATTEMPTS = 320;
+const COACH_MASTERY_CORRECT_TARGET = 5;
 const STANDARD_WHITE_KEY_MM = 23.5;
 const STANDARD_BLACK_KEY_MM = 13.7;
 const STANDARD_BLACK_TO_WHITE_WIDTH_RATIO = STANDARD_BLACK_KEY_MM / STANDARD_WHITE_KEY_MM;
@@ -90,11 +95,190 @@ const SCALE_FAMILIES = {
   }
 };
 
+const SCALE_PATTERN_LIBRARY = {
+  major: {
+    label: "Major",
+    intervals: [0, 2, 4, 5, 7, 9, 11]
+  },
+  naturalMinor: {
+    label: "Natural Minor",
+    intervals: [0, 2, 3, 5, 7, 8, 10]
+  },
+  harmonicMinor: {
+    label: "Harmonic Minor",
+    intervals: [0, 2, 3, 5, 7, 8, 11]
+  },
+  melodicMinor: {
+    label: "Melodic Minor",
+    intervals: [0, 2, 3, 5, 7, 9, 11]
+  }
+};
+
+const LEGACY_SCALE_TYPE_TO_PATTERN = {
+  "major (classical)": "major",
+  "natural minor (classical)": "naturalMinor",
+  "major bebop (jazz)": "major",
+  "mixolydian (jazz/blues)": "major",
+  "minor blues (blues)": "naturalMinor"
+};
+
+const SUBDIVISION_OPTIONS = [
+  { label: "Quarter", value: 1 },
+  { label: "Eighth", value: 0.5 },
+  { label: "Sixteenth", value: 0.25 },
+  { label: "Eighth Triplet", value: 1 / 3 },
+  { label: "Sixteenth Triplet", value: 1 / 6 }
+];
+
 const PROGRESSIONS = {
   "I-vi-IV-V (Pop)": [0, 5, 3, 4],
   "ii-V-I (Jazz)": [1, 4, 0],
   "12-Bar Blues (I-IV-V)": [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4],
   "i-iv-VII-III (Minor cinematic)": [0, 3, 6, 2]
+};
+
+const MAJOR_KEY_TRIAD_QUALITIES = ["major", "minor", "minor", "major", "major", "minor", "diminished"];
+const MAJOR_KEY_SEVENTH_QUALITIES = ["maj7", "min7", "min7", "maj7", "dom7", "min7", "m7b5"];
+const ARPEGGIO_TRIAD_ROWS = [
+  { name: "Triad (Root Position)", inversionIndex: 0 },
+  { name: "Triad (1st Inversion)", inversionIndex: 1 },
+  { name: "Triad (2nd Inversion)", inversionIndex: 2 }
+];
+const SCALES_PALETTE_ROWS = [
+  { id: "major", name: "Major", intervals: SCALE_PATTERN_LIBRARY.major.intervals },
+  { id: "naturalMinor", name: "Natural Minor", intervals: SCALE_PATTERN_LIBRARY.naturalMinor.intervals },
+  { id: "harmonicMinor", name: "Harmonic Minor", intervals: SCALE_PATTERN_LIBRARY.harmonicMinor.intervals },
+  { id: "melodicMinor", name: "Melodic Minor", intervals: SCALE_PATTERN_LIBRARY.melodicMinor.intervals }
+];
+const MODES_PALETTE_ROWS = [
+  { id: "dorian", name: "Dorian", intervals: [0, 2, 3, 5, 7, 9, 10] },
+  { id: "phrygian", name: "Phrygian", intervals: [0, 1, 3, 5, 7, 8, 10] },
+  { id: "lydian", name: "Lydian", intervals: [0, 2, 4, 6, 7, 9, 11] },
+  { id: "mixolydian", name: "Mixolydian", intervals: [0, 2, 4, 5, 7, 9, 10] }
+];
+const PENTATONIC_PALETTE_ROWS = [
+  { id: "majorPent", name: "Major Pentatonic", intervals: [0, 2, 4, 7, 9] },
+  { id: "minorPent", name: "Minor Pentatonic", intervals: [0, 3, 5, 7, 10] },
+  { id: "blues", name: "Blues", intervals: [0, 3, 5, 6, 7, 10] }
+];
+const COLOR_PALETTE_ROWS = [
+  { id: "wholeTone", name: "Whole Tone", intervals: [0, 2, 4, 6, 8, 10] },
+  { id: "diminishedHW", name: "Diminished (Half-Whole)", intervals: [0, 1, 3, 4, 6, 7, 9, 10] },
+  { id: "diminishedWH", name: "Diminished (Whole-Half)", intervals: [0, 2, 3, 5, 6, 8, 9, 11] },
+  { id: "harmonicMajor", name: "Harmonic Major", intervals: [0, 2, 4, 5, 7, 8, 11] }
+];
+const HARMONIC_PALETTE_TABS = ["secondary", "borrowed", "substitution", "cadences"];
+const ENHARMONIC_FLAT_MAP = {
+  "C#": "Db",
+  "D#": "Eb",
+  "F#": "Gb",
+  "G#": "Ab",
+  "A#": "Bb"
+};
+const PALETTE_SCALAR_COLUMN_DEGREES = [1, 2, 3, 4, 5, 6, 7, 8];
+const EXPLORATION_HOLD_THRESHOLD_MS = 450;
+const EXPLORATION_CYCLE_MS = 900;
+const TENSION_LEVEL_LABELS = ["Low", "Medium", "High", "Extreme"];
+const DOMINANT_TENSION_PATTERNS = [
+  [0, 2, 4, 5, 7, 9, 10],      // Mixolydian
+  [0, 2, 4, 6, 7, 9, 10],      // Lydian dominant
+  [0, 1, 3, 4, 6, 7, 9, 10],   // Half-whole diminished
+  [0, 1, 3, 4, 6, 8, 10]       // Altered
+];
+const COACH_CADENCE_QUIZ_OPTIONS = [
+  { id: "authentic", label: "Authentic (V -> I)" },
+  { id: "plagal", label: "Plagal (IV -> I)" },
+  { id: "half", label: "Half (... -> V)" },
+  { id: "deceptive", label: "Deceptive (V -> vi)" }
+];
+const COACH_CADENCE_LABEL_BY_ID = Object.freeze({
+  authentic: "Authentic (V -> I)",
+  plagal: "Plagal (IV -> I)",
+  half: "Half (... -> V)",
+  deceptive: "Deceptive (V -> vi)"
+});
+const FLAT_TO_SHARP = {
+  Db: "C#",
+  Eb: "D#",
+  Gb: "F#",
+  Ab: "G#",
+  Bb: "A#"
+};
+const REPERTOIRE_DATA_URL = "./data/repertoire.json";
+const REPERTOIRE_STYLES_DATA_URL = "./data/repertoire_styles.json";
+const REPERTOIRE_CACHE_DB_NAME = "baby-steps-repertoire-cache-v1";
+const REPERTOIRE_CACHE_STORE = "midi-events";
+const REPERTOIRE_MIDI_PROXY_ENDPOINT = "/api/repertoire/midi";
+const REPERTOIRE_SCHEDULE_LOOKAHEAD_SECONDS = 0.45;
+const REPERTOIRE_SCHEDULER_INTERVAL_MS = 70;
+const REPERTOIRE_LEAD_SECONDS = 0.02;
+const REPERTOIRE_FILTER_OPTIONS = [
+  { id: "all", label: "All", genres: [] },
+  { id: "classical", label: "Classical", genres: ["classical"] },
+  { id: "early_jazz", label: "Early Jazz PD", genres: ["early_jazz"] },
+  { id: "blues", label: "Blues", genres: ["blues"] },
+  { id: "gospel", label: "Gospel", genres: ["gospel"] },
+  { id: "bossa", label: "Bossa", genres: ["bossa"] },
+  { id: "pop", label: "Pop", genres: ["pop"] },
+  { id: "rock", label: "Rock", genres: ["rock"] },
+  { id: "study", label: "Studies", genres: ["study"] }
+];
+const REPERTOIRE_TAG_TO_ACTIONS = {
+  ii_v_i: [{ tab: "Cadences", action: "play_cell", payload: { row: "Jazz Cadences", col: "ii–V–I" } }],
+  tritone_sub: [{ tab: "Substitution", action: "play_cell", payload: { row: "Dominant Substitution", col: "Substitution" } }],
+  borrowed_chords: [{ tab: "Borrowed", action: "play_row", payload: { row: "Borrowed" } }],
+  secondary_dominants: [{ tab: "Secondary", action: "play_row", payload: { row: "Secondary Dominant" } }],
+  blues_scale: [{ tab: "Pentatonic", action: "play_row", payload: { row: "Blues" } }],
+  mixolydian: [{ tab: "Modes", action: "play_row", payload: { row: "Mixolydian" } }],
+  diminished: [{ tab: "Color", action: "play_row", payload: { row: "Diminished (Half-Whole)" } }],
+  whole_tone: [{ tab: "Color", action: "play_row", payload: { row: "Whole Tone" } }],
+  harmonic_minor: [{ tab: "Scales", action: "play_row", payload: { row: "Harmonic Minor" } }],
+  cadence: [{ tab: "Cadences", action: "play_row", payload: { row: "Cadences" } }],
+  modal_mixture: [{ tab: "Borrowed", action: "play_row", payload: { row: "Borrowed" } }]
+};
+const EXERCISE_RELATED_REPERTOIRE = {
+  power: "folk-hymn-cadence-study",
+  tension: "neo-soul-tritone-study",
+  secondary: "gospel-walkup-study",
+  borrowed: "rock-mixolydian-study",
+  tritone: "neo-soul-tritone-study",
+  "ii-v-i": "bossa-ii-v-i-study",
+  modal: "rock-mixolydian-study",
+  whole: "debussy-clair-de-lune-excerpt",
+  arpeggio: "bach-prelude-c-major",
+  cadence: "twelve-bar-blues-form"
+};
+const TAB_NAME_TO_ID = {
+  chords: "chords",
+  scales: "scales",
+  arpeggios: "arpeggios",
+  modes: "modes",
+  pentatonic: "pentatonic",
+  color: "color",
+  secondary: "secondary",
+  borrowed: "borrowed",
+  substitution: "substitution",
+  cadences: "cadences",
+  Chords: "chords",
+  Scales: "scales",
+  Arpeggios: "arpeggios",
+  Modes: "modes",
+  Pentatonic: "pentatonic",
+  Color: "color",
+  Secondary: "secondary",
+  Borrowed: "borrowed",
+  Substitution: "substitution",
+  Cadences: "cadences"
+};
+const REPERTOIRE_TAG_TO_EXERCISE = {
+  cadence: "cadence",
+  ii_v_i: "ii-v-i",
+  tritone_sub: "tritone",
+  borrowed_chords: "borrowed",
+  secondary_dominants: "secondary",
+  mixolydian: "modal",
+  whole_tone: "whole",
+  arpeggios: "arpeggio"
 };
 
 const CADENCES = {
@@ -585,6 +769,8 @@ const defaultProgress = {
   progressionReps: 0,
   arpeggioReps: 0,
   scaleReps: 0,
+  conceptMastery: {},
+  artifactAttempts: [],
   theoryCompletedLessons: {},
   theoryAudioByLesson: {},
   theoryCustomLessons: {},
@@ -598,7 +784,55 @@ let el = {};
 const appState = {
   root: "C",
   quality: "major",
-  inversion: "root position"
+  inversion: "root position",
+  paletteTab: "chords",
+  exploreHarmonyEnabled: false,
+  isExploring: false,
+  exploreLevel: 0,
+  exploreTimers: [],
+  exploreStartTime: 0,
+  tempoBpm: 80,
+  subdivision: 0.5
+};
+const repertoireState = {
+  items: [],
+  stylePresets: {},
+  filteredGenre: "all",
+  searchQuery: "",
+  selectedId: "",
+  selectedItem: null,
+  isPlaying: false,
+  isPaused: false,
+  loopEnabled: true,
+  loopStartBeat: 0,
+  loopEndBeat: 16,
+  playheadBeat: 0,
+  playStartAudioTime: 0,
+  scheduleCursorBeat: 0,
+  scheduleCursorAudioTime: 0,
+  schedulerTimerId: null,
+  prepared: null,
+  preparedById: new Map(),
+  metronomeEnabled: false,
+  muteMelody: false,
+  onlyChords: false,
+  infoItemId: "",
+  activeExerciseId: "",
+  activeItemExerciseId: "",
+  suggestionEntries: [],
+  metronomeCursorBeat: -1,
+  listSnapshot: [],
+  hasLoaded: false,
+  loadError: "",
+  midiMemoryCache: new Map(),
+  dbPromise: null
+};
+const coachState = {
+  threads: [],
+  activeThreadId: "",
+  isStreaming: false,
+  lessonStack: [],
+  quizSessions: {}
 };
 
 let audioCtx;
@@ -648,6 +882,12 @@ let lastChordPaletteSelectionAtMs = null;
 let audioUnlockBound = false;
 let keyCenterBackdropHideTimer = null;
 const typingHeldMidiByCode = new Map();
+let activePatternRunId = 0;
+const patternUiTimerIds = new Set();
+let paletteSequenceToken = 0;
+let activeExploreChordContext = null;
+const guidedExerciseUiTimers = new Set();
+const scheduledFallbackNoteTimers = new Set();
 let progress = loadProgress();
 const theoryState = {
   trackId: "",
@@ -675,9 +915,6 @@ function init() {
     progressionSelect: byId("progressionSelect"),
     cadenceSelect: byId("cadenceSelect"),
     voiceLengthInput: byId("voiceLengthInput"),
-    toneInput: byId("toneInput"),
-    playChordBtn: byId("playChordBtn"),
-    randomChordBtn: byId("randomChordBtn"),
     playProgressionBtn: byId("playProgressionBtn"),
     playCadenceBtn: byId("playCadenceBtn"),
     explainCadenceBtn: byId("explainCadenceBtn"),
@@ -690,11 +927,18 @@ function init() {
     closeKeyCenterBtn: byId("closeKeyCenterBtn"),
     keyCenterDrawer: byId("keyCenterDrawer"),
     keyCenterDrawerBackdrop: byId("keyCenterDrawerBackdrop"),
+    tempoMinusBtn: byId("tempoMinusBtn"),
+    tempoPlusBtn: byId("tempoPlusBtn"),
+    tempoValue: byId("tempoValue"),
+    subdivisionSelect: byId("subdivisionSelect"),
     keyboard: byId("keyboard"),
+    paletteTabSwitch: byId("paletteTabSwitch"),
+    exploreHarmonyControl: byId("exploreHarmonyControl"),
+    exploreHarmonyCheckbox: byId("exploreHarmonyCheckbox"),
+    exploreTensionLabel: byId("exploreTensionLabel"),
     chordTableTitle: byId("chordTableTitle"),
     chordTableHead: byId("chordTableHead"),
     chordTableBody: byId("chordTableBody"),
-    playPaletteRowBtn: byId("playPaletteRowBtn"),
     progressionStrip: byId("progressionStrip"),
     cadenceStrip: byId("cadenceStrip"),
     chordDisplay: byId("chordDisplay"),
@@ -704,6 +948,7 @@ function init() {
     highlightWindowTrack: byId("highlightWindowTrack"),
     highlightWindowGlow: byId("highlightWindowGlow"),
     highlightWindowLabel: byId("highlightWindowLabel"),
+    windowKeyboardHint: byId("windowKeyboardHint"),
     arpRootSelect: byId("arpRootSelect"),
     arpTypeSelect: byId("arpTypeSelect"),
     handSelect: byId("handSelect"),
@@ -712,7 +957,6 @@ function init() {
     arpOutput: byId("arpOutput"),
     scaleRootSelect: byId("scaleRootSelect"),
     scaleTypeSelect: byId("scaleTypeSelect"),
-    tempoInput: byId("tempoInput"),
     playScaleBtn: byId("playScaleBtn"),
     scalePracticeBtn: byId("scalePracticeBtn"),
     scaleOutput: byId("scaleOutput"),
@@ -720,7 +964,12 @@ function init() {
     coachInput: byId("coachInput"),
     coachAskBtn: byId("coachAskBtn"),
     coachUseContextBtn: byId("coachUseContextBtn"),
+    coachThreadSelect: byId("coachThreadSelect"),
+    coachNewThreadBtn: byId("coachNewThreadBtn"),
+    coachMessages: byId("coachMessages"),
+    coachStatus: byId("coachStatus"),
     coachOutput: byId("coachOutput"),
+    coachLessonStack: byId("coachLessonStack"),
     lessonCards: byId("lessonCards"),
     statSessions: byId("statSessions"),
     statStreak: byId("statStreak"),
@@ -743,6 +992,30 @@ function init() {
     glossaryEntrySelect: byId("glossaryEntrySelect"),
     glossaryPlayBtn: byId("glossaryPlayBtn"),
     glossaryOutput: byId("glossaryOutput"),
+    repertoireFeatured: byId("repertoireFeatured"),
+    repertoireFilterChips: byId("repertoireFilterChips"),
+    repertoireSearchInput: byId("repertoireSearchInput"),
+    repertoireList: byId("repertoireList"),
+    repertoireTransport: byId("repertoireTransport"),
+    repertoireSelectedTitle: byId("repertoireSelectedTitle"),
+    repertoireSelectedMeta: byId("repertoireSelectedMeta"),
+    repertoirePlayPauseBtn: byId("repertoirePlayPauseBtn"),
+    repertoireStopBtn: byId("repertoireStopBtn"),
+    repertoireLoopToggle: byId("repertoireLoopToggle"),
+    repertoireLoopStart: byId("repertoireLoopStart"),
+    repertoireLoopEnd: byId("repertoireLoopEnd"),
+    repertoireLoopLabel: byId("repertoireLoopLabel"),
+    repertoireMuteMelodyToggle: byId("repertoireMuteMelodyToggle"),
+    repertoireOnlyChordsToggle: byId("repertoireOnlyChordsToggle"),
+    repertoireMetronomeToggle: byId("repertoireMetronomeToggle"),
+    repertoireShowChordsBtn: byId("repertoireShowChordsBtn"),
+    repertoireSuggestedBtn: byId("repertoireSuggestedBtn"),
+    repertoireOpenExerciseBtn: byId("repertoireOpenExerciseBtn"),
+    repertoireSuggestions: byId("repertoireSuggestions"),
+    repertoireInfoModal: byId("repertoireInfoModal"),
+    exerciseInstruction: byId("exerciseInstruction"),
+    playRelatedStudyBtn: byId("playRelatedStudyBtn"),
+    exerciseList: byId("exerciseList"),
     theoryTrackSelect: byId("theoryTrackSelect"),
     theoryPackTopicSelect: byId("theoryPackTopicSelect"),
     theoryPackLevelSelect: byId("theoryPackLevelSelect"),
@@ -796,9 +1069,12 @@ function init() {
   populateSelect(el.qualitySelect, Object.keys(CHORDS));
   populateSelect(el.inversionSelect, ["root position", "1st inversion", "2nd inversion"]);
   populateSelect(el.arpTypeSelect, Object.keys(ARP_TYPES));
-  populateSelect(el.scaleTypeSelect, Object.keys(SCALE_FAMILIES));
+  populateScaleTypeSelect();
 
   initializeCompanionPanels();
+  syncTempoControls();
+  renderTempoControls();
+  syncExploreHarmonyControls();
 
   updateButtonActiveState(el.rootBtnGroup, appState.root);
   updateButtonActiveState(el.qualityBtnGroup, appState.quality);
@@ -809,19 +1085,28 @@ function init() {
   if (el.cadenceSelect) el.cadenceSelect.value = "Authentic (V-I)";
 
   renderKeyboard();
-  renderChordTable();
+  renderPaletteTabButtons();
+  renderActivePaletteTable();
+  updateExploreHarmonyUi();
   renderProgressionStrip();
   renderCadenceStrip();
   renderLessonTracks();
   renderTheoryContent();
   renderProgress();
+  syncRepertoireControlState();
   updateHighlightWindowLabel();
+  updateWindowKeyboardHint();
   updateHighlightWindowLine();
   bindAudioUnlock();
   void ensureAudio({ resume: false });
   void ensureChordAssetManifest();
   updateAudioStatusText();
   bindEvents();
+  renderRepertoireFeatured();
+  renderRepertoireFilterChips();
+  renderRepertoireList();
+  updateExerciseRelatedStudyButton();
+  void initRepertoire();
   initModeSwitch();
   setMode("compose");
 }
@@ -860,7 +1145,7 @@ function updateButtonActiveState(container, activeValue) {
 
 function playCurrentChord() {
   const midi = buildChordMidi(appState.root, appState.quality, appState.inversion, 3);
-  playMidiNotes(midi, { hold: getHoldSeconds(), asChord: true, restrictToWindow: true });
+  playMidiNotes(midi, { hold: getHoldSeconds(), asChord: true, restrictToWindow: false });
   el.chordDisplay.textContent = `${appState.root}${CHORDS[appState.quality].short} | ${appState.inversion} | Notes: ${midi.map(midiToNoteName).join(" - ")}`;
   trackRep("chords", `${appState.root} ${appState.quality}`);
 
@@ -880,6 +1165,75 @@ function populateSelect(selectEl, options) {
   });
 }
 
+function clampTempoBpm(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return appState.tempoBpm;
+  return Math.max(30, Math.min(240, Math.round(numeric)));
+}
+
+function normalizeSubdivision(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return appState.subdivision;
+  const matched = SUBDIVISION_OPTIONS.find((option) => Math.abs(option.value - numeric) < 1e-6);
+  return matched ? matched.value : appState.subdivision;
+}
+
+function getStepSeconds() {
+  return (60 / appState.tempoBpm) * appState.subdivision;
+}
+
+function setTempoBpm(nextTempo) {
+  appState.tempoBpm = clampTempoBpm(nextTempo);
+  renderTempoControls();
+  if (repertoireState.isPlaying) {
+    alignRepertoirePlaybackClock();
+  }
+}
+
+function setSubdivision(nextSubdivision) {
+  appState.subdivision = normalizeSubdivision(nextSubdivision);
+  renderTempoControls();
+}
+
+function renderTempoControls() {
+  if (el.tempoValue) {
+    el.tempoValue.textContent = String(appState.tempoBpm);
+  }
+  if (el.subdivisionSelect) {
+    el.subdivisionSelect.value = String(appState.subdivision);
+  }
+  if (repertoireState.selectedItem) {
+    updateRepertoireTransportSummary();
+  }
+}
+
+function syncTempoControls() {
+  setTempoBpm(appState.tempoBpm);
+  setSubdivision(appState.subdivision);
+}
+
+function populateScaleTypeSelect() {
+  if (!el.scaleTypeSelect) return;
+  el.scaleTypeSelect.innerHTML = "";
+  Object.entries(SCALE_PATTERN_LIBRARY).forEach(([value, meta]) => {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = meta.label;
+    el.scaleTypeSelect.appendChild(opt);
+  });
+  el.scaleTypeSelect.value = "major";
+}
+
+function resolveScalePatternKey(rawType) {
+  if (!rawType) return "major";
+  if (SCALE_PATTERN_LIBRARY[rawType]) return rawType;
+  return LEGACY_SCALE_TYPE_TO_PATTERN[rawType] || "major";
+}
+
+function scalePatternLabel(patternKey) {
+  return SCALE_PATTERN_LIBRARY[patternKey]?.label || SCALE_PATTERN_LIBRARY.major.label;
+}
+
 function getSelectedCadenceName() {
   if (el.cadenceSelect?.value) return el.cadenceSelect.value;
   return Object.keys(CADENCES)[0];
@@ -890,11 +1244,97 @@ function setRootContext(root) {
   if (el.keySelect) el.keySelect.value = root;
   if (el.conceptKeySelect) el.conceptKeySelect.value = root;
   updateButtonActiveState(el.rootBtnGroup, appState.root);
-  renderChordTable();
+  renderActivePaletteTable();
   renderProgressionStrip();
   renderCadenceStrip();
   renderPersonalizedSequence();
-  markChordTableCell(appState.root, appState.quality);
+  if (repertoireState.selectedItem) {
+    updateRepertoireTransportSummary();
+    renderRepertoireSuggestions();
+  }
+  if (appState.paletteTab === "chords") {
+    markChordTableCell(appState.root, appState.quality);
+  }
+}
+
+function renderPaletteTabButtons() {
+  if (!el.paletteTabSwitch) return;
+  const tabs = el.paletteTabSwitch.querySelectorAll("button[data-palette-tab]");
+  tabs.forEach((btn) => {
+    const isActive = btn.dataset.paletteTab === appState.paletteTab;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+}
+
+function syncExploreHarmonyControls() {
+  if (el.exploreHarmonyCheckbox) {
+    el.exploreHarmonyCheckbox.checked = Boolean(appState.exploreHarmonyEnabled);
+  }
+}
+
+function updateExploreHarmonyUi() {
+  const isChordsTab = appState.paletteTab === "chords";
+  if (el.exploreHarmonyControl) {
+    el.exploreHarmonyControl.classList.toggle("is-hidden", !isChordsTab);
+  }
+  if (el.exploreTensionLabel) {
+    if (!isChordsTab || !appState.isExploring) {
+      el.exploreTensionLabel.classList.add("is-hidden");
+      el.exploreTensionLabel.textContent = "";
+    }
+  }
+}
+
+function setExploreTensionLabel(level) {
+  if (!el.exploreTensionLabel) return;
+  const safeLevel = Math.max(0, Math.min(TENSION_LEVEL_LABELS.length - 1, Number(level) || 0));
+  el.exploreTensionLabel.textContent = `Tension Level: ${TENSION_LEVEL_LABELS[safeLevel]}`;
+  el.exploreTensionLabel.classList.remove("is-hidden");
+}
+
+function clearExploreTensionLabel() {
+  if (!el.exploreTensionLabel) return;
+  el.exploreTensionLabel.textContent = "";
+  el.exploreTensionLabel.classList.add("is-hidden");
+}
+
+function setPaletteTab(tab) {
+  if (!["chords", "scales", "arpeggios", "modes", "pentatonic", "color", ...HARMONIC_PALETTE_TABS].includes(tab)) return;
+  appState.paletteTab = tab;
+  stopHarmonyExploration({ withResolution: false, clearLabel: true });
+  cancelPaletteSequence();
+  renderPaletteTabButtons();
+  renderActivePaletteTable();
+  updateExploreHarmonyUi();
+}
+
+function renderActivePaletteTable() {
+  if (appState.paletteTab === "scales") {
+    renderScalarPaletteTable("scales");
+    return;
+  }
+  if (appState.paletteTab === "arpeggios") {
+    renderArpeggioTable();
+    return;
+  }
+  if (appState.paletteTab === "modes") {
+    renderScalarPaletteTable("modes");
+    return;
+  }
+  if (appState.paletteTab === "pentatonic") {
+    renderScalarPaletteTable("pentatonic");
+    return;
+  }
+  if (appState.paletteTab === "color") {
+    renderScalarPaletteTable("color");
+    return;
+  }
+  if (isHarmonicPaletteTab(appState.paletteTab)) {
+    renderHarmonicPaletteTable(appState.paletteTab);
+    return;
+  }
+  renderChordTable();
 }
 
 function openKeyCenterDrawer() {
@@ -929,27 +1369,40 @@ function closeKeyCenterDrawer() {
 }
 
 function bindEvents() {
-  el.playChordBtn.addEventListener("click", () => {
-    playCurrentChord();
-  });
+  if (el.tempoMinusBtn) {
+    el.tempoMinusBtn.addEventListener("click", () => {
+      setTempoBpm(appState.tempoBpm - 1);
+    });
+  }
 
-  el.randomChordBtn.addEventListener("click", () => {
-    const root = randomOf(NOTES);
-    const quality = randomOf(Object.keys(CHORDS));
-    const inversion = randomOf(["root position", "1st inversion", "2nd inversion"]);
-    appState.root = root;
-    appState.quality = quality;
-    appState.inversion = inversion;
-    updateButtonActiveState(el.rootBtnGroup, appState.root);
-    updateButtonActiveState(el.qualityBtnGroup, appState.quality);
-    updateButtonActiveState(el.inversionBtnGroup, appState.inversion);
-    const midi = buildChordMidi(root, quality, inversion, 3);
-    const hold = getHoldSeconds();
-    playMidiNotes(midi, { hold, asChord: true, highlightMs: getHighlightMs(hold), restrictToWindow: true });
-    markChordTableCell(root, quality);
-    el.chordDisplay.textContent = `Quiz reveal: ${root}${CHORDS[quality].short} (${inversion}) | ${midi.map(midiToNoteName).join(" - ")}`;
-    trackRep("chords", `${root} ${quality}`);
-  });
+  if (el.tempoPlusBtn) {
+    el.tempoPlusBtn.addEventListener("click", () => {
+      setTempoBpm(appState.tempoBpm + 1);
+    });
+  }
+
+  if (el.subdivisionSelect) {
+    el.subdivisionSelect.addEventListener("change", () => {
+      setSubdivision(Number(el.subdivisionSelect.value));
+    });
+  }
+
+  if (el.paletteTabSwitch) {
+    el.paletteTabSwitch.addEventListener("click", (event) => {
+      const tabButton = event.target.closest("button[data-palette-tab]");
+      if (!tabButton) return;
+      setPaletteTab(tabButton.dataset.paletteTab);
+    });
+  }
+
+  if (el.exploreHarmonyCheckbox) {
+    el.exploreHarmonyCheckbox.addEventListener("change", () => {
+      appState.exploreHarmonyEnabled = Boolean(el.exploreHarmonyCheckbox.checked);
+      if (!appState.exploreHarmonyEnabled) {
+        stopHarmonyExploration({ withResolution: false, clearLabel: true });
+      }
+    });
+  }
 
   el.playProgressionBtn.addEventListener("click", async () => {
     const progression = buildProgressionChords(el.keySelect.value, el.progressionSelect.value);
@@ -957,7 +1410,7 @@ function bindEvents() {
     for (let i = 0; i < progression.length; i += 1) {
       const step = progression[i];
       activateProgressionStep(i);
-      playMidiNotes(step.midi, { hold, asChord: true, restrictToWindow: true });
+      playMidiNotes(step.midi, { hold, asChord: true, restrictToWindow: false });
       await wait(Math.max(220, hold * 560));
     }
     clearProgressionStep();
@@ -973,7 +1426,7 @@ function bindEvents() {
       for (let i = 0; i < cadence.length; i += 1) {
         const step = cadence[i];
         activateCadenceStep(i);
-        playMidiNotes(step.midi, { hold, asChord: true, restrictToWindow: true });
+        playMidiNotes(step.midi, { hold, asChord: true, restrictToWindow: false });
         await wait(Math.max(220, hold * 560));
       }
       clearCadenceStep();
@@ -1022,16 +1475,6 @@ function bindEvents() {
       }
     });
   }
-
-  el.playPaletteRowBtn.addEventListener("click", async () => {
-    const sevenths = buildDiatonicSevenths(el.keySelect.value);
-    const hold = getHoldSeconds();
-    for (const chord of sevenths) {
-      markChordTableCell(chord.root, chord.quality);
-      playMidiNotes(chord.midi, { hold, asChord: true, highlightMs: getHighlightMs(hold, 500), restrictToWindow: true });
-      await wait(Math.max(220, hold * 460));
-    }
-  });
 
   el.keySelect.addEventListener("change", () => {
     setRootContext(el.keySelect.value);
@@ -1110,6 +1553,10 @@ function bindEvents() {
   });
 
   el.chordTableBody.addEventListener("pointerdown", (event) => {
+    if (appState.paletteTab !== "chords") return;
+    if (appState.isExploring) {
+      stopHarmonyExploration({ withResolution: false, clearLabel: true });
+    }
     const cell = event.target.closest("td[data-root]");
     if (!cell) return;
     event.preventDefault();
@@ -1121,7 +1568,7 @@ function bindEvents() {
     updateButtonActiveState(el.rootBtnGroup, appState.root);
     updateButtonActiveState(el.qualityBtnGroup, appState.quality);
     const midi = buildChordMidi(root, quality, "root position", 3);
-    const restrictedMidi = normalizeMidiCollection(limitMidiToHighlightWindow(midi));
+    const restrictedMidi = normalizeMidiCollection(midi);
     const previousRestrictedMidi = Array.isArray(lastRestrictedChordWindowMidi)
       ? lastRestrictedChordWindowMidi
       : [];
@@ -1133,17 +1580,48 @@ function bindEvents() {
       ? computeChordTransitionDiff(previousRestrictedMidi, restrictedMidi)
       : { removed: [], added: [] };
     markChordTableCell(root, quality);
-    highlightKeyboardHold(midi, true);
+    highlightKeyboardHold(midi, false);
     showChordTransitionDiff(chordTransitionDiff);
     el.chordDisplay.textContent = `Palette chord armed: ${label} (release to play)`;
+
+    let pointerIsDown = true;
+    let explorationTriggered = false;
+    let holdExploreTimerId = null;
+    if (appState.exploreHarmonyEnabled) {
+      appState.exploreStartTime = Date.now();
+      holdExploreTimerId = window.setTimeout(() => {
+        if (!pointerIsDown) return;
+        if (holdExploreTimerId !== null) {
+          clearExploreTimer(holdExploreTimerId);
+          holdExploreTimerId = null;
+        }
+        explorationTriggered = true;
+        beginHarmonyExploration({ root, quality, midi, label });
+      }, EXPLORATION_HOLD_THRESHOLD_MS);
+      registerExploreTimer(holdExploreTimerId, "timeout");
+    }
 
     const pointerId = event.pointerId;
     const onRelease = (releaseEvent) => {
       if (releaseEvent.pointerId !== pointerId) return;
+      pointerIsDown = false;
       cleanupPointerHandlers();
+      if (holdExploreTimerId !== null) {
+        clearExploreTimer(holdExploreTimerId);
+        holdExploreTimerId = null;
+      }
       clearChordDiffPreview();
+      if (explorationTriggered || appState.isExploring) {
+        const exploredLongEnough = (Date.now() - appState.exploreStartTime) >= EXPLORATION_HOLD_THRESHOLD_MS;
+        stopHarmonyExploration({ withResolution: exploredLongEnough, clearLabel: true });
+        lastRestrictedChordWindowMidi = restrictedMidi;
+        lastChordPaletteSelectionAtMs = performance.now();
+        el.chordDisplay.textContent = `Palette chord: ${label}`;
+        trackRep("chords", label);
+        return;
+      }
       const hold = getHoldSeconds();
-      playMidiNotes(midi, { hold, asChord: true, highlightMs: getHighlightMs(hold), restrictToWindow: true });
+      playMidiNotes(midi, { hold, asChord: true, highlightMs: getHighlightMs(hold), restrictToWindow: false });
       lastRestrictedChordWindowMidi = restrictedMidi;
       lastChordPaletteSelectionAtMs = performance.now();
       el.chordDisplay.textContent = `Palette chord: ${label}`;
@@ -1152,7 +1630,15 @@ function bindEvents() {
 
     const onCancel = (cancelEvent) => {
       if (cancelEvent.pointerId !== pointerId) return;
+      pointerIsDown = false;
       cleanupPointerHandlers();
+      if (holdExploreTimerId !== null) {
+        clearExploreTimer(holdExploreTimerId);
+        holdExploreTimerId = null;
+      }
+      if (explorationTriggered || appState.isExploring) {
+        stopHarmonyExploration({ withResolution: false, clearLabel: true });
+      }
       clearKeyboardHighlights();
       el.chordDisplay.textContent = `Palette chord canceled: ${label}`;
     };
@@ -1174,6 +1660,114 @@ function bindEvents() {
     cell.addEventListener("pointercancel", onCancel);
     window.addEventListener("pointerup", onRelease);
     window.addEventListener("pointercancel", onCancel);
+  });
+
+  el.chordTableHead.addEventListener("click", (event) => {
+    const trigger = event.target.closest(".axis-play-col");
+    if (!trigger) return;
+    const columnIndex = Number(trigger.dataset.columnIndex);
+    if (!Number.isInteger(columnIndex) || columnIndex < 0) return;
+    if (["scales", "modes", "pentatonic", "color"].includes(appState.paletteTab)) {
+      const rows = Array.from(el.chordTableBody.querySelectorAll("tr"));
+      const cells = rows.map((row) => {
+        const scalarCells = row.querySelectorAll("td[data-scale-note]");
+        return scalarCells[columnIndex] || null;
+      }).filter(Boolean);
+      void playScalarPaletteCellSequence(cells, `Column ${trigger.dataset.columnRoman || String(columnIndex + 1)}`);
+      return;
+    }
+    if (isHarmonicPaletteTab(appState.paletteTab)) {
+      const rows = Array.from(el.chordTableBody.querySelectorAll("tr"));
+      const cells = rows.map((row) => {
+        const harmonicCells = row.querySelectorAll("td");
+        const candidate = harmonicCells[columnIndex] || null;
+        if (!candidate || !candidate.dataset?.harmonyEvent) return null;
+        return candidate;
+      }).filter(Boolean);
+      void playHarmonicPaletteCellSequence(cells, `${trigger.dataset.columnRoman || `Column ${columnIndex + 1}`}`.trim());
+      return;
+    }
+    const rows = Array.from(el.chordTableBody.querySelectorAll("tr"));
+    const cells = rows.map((row) => {
+      const chordCells = row.querySelectorAll("td[data-root][data-quality]");
+      return chordCells[columnIndex] || null;
+    }).filter(Boolean);
+    if (appState.paletteTab === "arpeggios") {
+      void playArpeggioTableCellSequence(cells, `Arpeggio Column ${trigger.dataset.columnRoman || ""}`.trim());
+      return;
+    }
+    void playChordTableCellSequence(cells, `Column ${trigger.dataset.columnRoman || ""}`.trim());
+  });
+
+  el.chordTableBody.addEventListener("click", (event) => {
+    const trigger = event.target.closest(".axis-play-row");
+    if (trigger) {
+      const paletteRowId = trigger.dataset.paletteRowId;
+      const paletteTab = trigger.dataset.paletteTab;
+      if (paletteRowId && paletteTab && ["scales", "modes", "pentatonic", "color"].includes(paletteTab)) {
+        void playScalarPaletteRow(paletteTab, paletteRowId);
+        return;
+      }
+      if (paletteRowId && paletteTab && isHarmonicPaletteTab(paletteTab)) {
+        const row = trigger.closest("tr");
+        if (!row) return;
+        const cells = Array.from(row.querySelectorAll("td[data-harmony-event]"));
+        void playHarmonicPaletteCellSequence(cells, `${trigger.dataset.rowName || "Harmony"} in ${el.keySelect.value}`);
+        return;
+      }
+      const row = trigger.closest("tr");
+      if (!row) return;
+      const cells = Array.from(row.querySelectorAll("td[data-root][data-quality]"));
+      if (appState.paletteTab === "arpeggios") {
+        void playArpeggioTableCellSequence(cells, `Arpeggio Row ${trigger.dataset.rowName || ""}`.trim());
+        return;
+      }
+      void playChordTableCellSequence(cells, `Row ${trigger.dataset.rowName || ""}`.trim());
+      return;
+    }
+
+    if (isHarmonicPaletteTab(appState.paletteTab)) {
+      const cell = event.target.closest("td[data-harmony-event]");
+      if (!cell) return;
+      const token = ++paletteSequenceToken;
+      void playHarmonicPaletteCell(cell, { sequenceToken: token, updateOutput: true }).then((payload) => {
+        if (!payload || token !== paletteSequenceToken) return;
+        if (el.chordDisplay) {
+          el.chordDisplay.textContent = payload.eventPayload.label;
+        }
+        trackRep("chords", payload.eventPayload.label);
+      });
+      return;
+    }
+
+    if (["scales", "modes", "pentatonic", "color"].includes(appState.paletteTab)) {
+      const scalarCell = event.target.closest("td[data-scale-note]");
+      if (!scalarCell) return;
+      const row = scalarCell.closest("tr");
+      const rowTrigger = row?.querySelector(".axis-play-row[data-palette-row-id][data-palette-tab]");
+      const rowId = rowTrigger?.dataset?.paletteRowId;
+      const tab = rowTrigger?.dataset?.paletteTab;
+      if (!rowId || !tab) return;
+      void playScalarPaletteRow(tab, rowId);
+      return;
+    }
+
+    if (appState.paletteTab !== "arpeggios") return;
+    const cell = event.target.closest("td[data-root][data-quality][data-inversion-index]");
+    if (!cell) return;
+    const token = ++paletteSequenceToken;
+    void playArpeggioCell(cell, { snapshot: true }).then((payload) => {
+      if (!payload || token !== paletteSequenceToken) return;
+      if (el.chordDisplay) {
+        const inversionLabel = payload.inversionIndex === 0
+          ? "root position"
+          : payload.inversionIndex === 1
+            ? "1st inversion"
+            : "2nd inversion";
+        el.chordDisplay.textContent = `${payload.root}${CHORDS[payload.quality]?.short || ""} ${inversionLabel}: ${payload.notes.join(" - ")}`;
+      }
+      trackRep("arpeggios", payload.label);
+    });
   });
 
   el.playArpBtn.addEventListener("click", async () => {
@@ -1200,32 +1794,31 @@ function bindEvents() {
 
   el.playScaleBtn.addEventListener("click", async () => {
     const root = el.scaleRootSelect.value;
-    const type = el.scaleTypeSelect.value;
-    const bpm = Number(el.tempoInput.value) || 90;
-    const hold = Math.max(0.32, getHoldSeconds() * 0.54);
-    const notes = buildScaleMidi(root, SCALE_FAMILIES[type].intervals, 3);
-    const intervalMs = (60 / bpm) * 1000;
-
-    for (const midi of notes) {
-      playMidiNotes([midi], { hold, asChord: true, velocity: 0.74 });
-      await wait(intervalMs);
+    const patternKey = resolveScalePatternKey(el.scaleTypeSelect.value);
+    const midi = buildScalePatternMidi(root, patternKey, 3);
+    const notes = midi.map((value) => midiToNoteName(value));
+    const scaleHand = el.handSelect?.value === "left" ? "left" : "right";
+    const fingers = buildScaleFingering(notes, scaleHand);
+    await playPatternScheduled({
+      notes,
+      fingers,
+      showFingers: true,
+      snapshot: true
+    });
+    if (el.scaleOutput) {
+      el.scaleOutput.textContent = `${root} ${scalePatternLabel(patternKey)} @ ${appState.tempoBpm} BPM: ${notes.join(" - ")}`;
     }
-    for (let i = notes.length - 2; i >= 0; i -= 1) {
-      playMidiNotes([notes[i]], { hold, asChord: true, velocity: 0.74 });
-      await wait(intervalMs);
-    }
-
-    el.scaleOutput.textContent = `${root} ${type}: ${notes.map(midiToNoteName).join(" - ")}`;
-    trackRep("scales", `${root} ${type}`);
+    trackRep("scales", `${root} ${scalePatternLabel(patternKey)}`);
   });
 
   el.scalePracticeBtn.addEventListener("click", () => {
     const root = el.scaleRootSelect.value;
-    const type = el.scaleTypeSelect.value;
-    const bpm = Number(el.tempoInput.value) || 90;
-    const useCase = SCALE_FAMILIES[type].useCase;
+    const patternKey = resolveScalePatternKey(el.scaleTypeSelect.value);
+    const bpm = appState.tempoBpm;
+    const family = patternKey === "major" ? "major (classical)" : "natural minor (classical)";
+    const useCase = SCALE_FAMILIES[family]?.useCase || "timing, tone consistency, and relaxed fingering";
     el.scaleOutput.textContent = [
-      `Micro-plan for ${root} ${type} @ ${bpm} BPM:`,
+      `Micro-plan for ${root} ${scalePatternLabel(patternKey)} @ ${bpm} BPM:`,
       "1) 2 min hands separate, long tone.",
       "2) 2 min contrary motion.",
       "3) 2 min phrase ending on chord tone.",
@@ -1245,13 +1838,40 @@ function bindEvents() {
       `Cadence emotion: ${cadenceProfile.emotion}`,
       `Chord focus: ${appState.root}${CHORDS[appState.quality].short}`,
       `Arpeggio: ${el.arpRootSelect.value} ${el.arpTypeSelect.value}`,
-      `Scale: ${el.scaleRootSelect.value} ${el.scaleTypeSelect.value}`,
+      `Scale: ${el.scaleRootSelect.value} ${scalePatternLabel(resolveScalePatternKey(el.scaleTypeSelect.value))}`,
       `Recent progress: chords ${progress.chordReps}, progressions ${progress.progressionReps}, scales ${progress.scaleReps}, arpeggios ${progress.arpeggioReps}`,
       "Give a concise ADHD-friendly 12-minute session with practical voicing examples."
     ].join(" | ");
   });
 
+  initializeCoachThreads();
+
+  if (el.coachThreadSelect) {
+    el.coachThreadSelect.addEventListener("change", () => {
+      coachState.activeThreadId = el.coachThreadSelect.value;
+      saveCoachThreads();
+      renderCoachThreadSelect();
+      renderCoachMessages();
+    });
+  }
+
+  if (el.coachNewThreadBtn) {
+    el.coachNewThreadBtn.addEventListener("click", () => {
+      createCoachThread();
+      renderCoachThreadSelect();
+      renderCoachMessages();
+    });
+  }
+
   el.coachAskBtn.addEventListener("click", askCoach);
+  if (el.coachInput) {
+    el.coachInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey) return;
+      event.preventDefault();
+      void askCoach();
+    });
+  }
+  refreshCoachStatus();
 
   el.completeSessionBtn.addEventListener("click", () => {
     markSessionComplete();
@@ -1289,6 +1909,18 @@ function bindEvents() {
   if (el.glossaryPlayBtn) {
     el.glossaryPlayBtn.addEventListener("click", playGlossaryExample);
   }
+
+  if (el.exerciseList) {
+    el.exerciseList.addEventListener("click", (event) => {
+      const btn = event.target.closest("button[data-ex]");
+      if (!btn) return;
+      const exerciseId = btn.dataset.ex;
+      if (!exerciseId) return;
+      void runGuidedExercise(exerciseId);
+    });
+  }
+
+  bindRepertoireEvents();
 
   if (el.theoryTrackSelect) {
     el.theoryTrackSelect.addEventListener("change", () => {
@@ -1485,6 +2117,7 @@ function renderKeyboard() {
     key.className = "piano-key white-key";
     key.dataset.noteClass = noteClass;
     key.dataset.midi = String(midi);
+    key.dataset.note = midiToNoteName(midi);
     key.title = midiToNoteName(midi);
     key.addEventListener("pointerdown", (event) => {
       startManualKeyGesture(event, key, midi);
@@ -1508,6 +2141,7 @@ function renderKeyboard() {
     key.className = "piano-key black-key";
     key.dataset.noteClass = noteClass;
     key.dataset.midi = String(midi);
+    key.dataset.note = midiToNoteName(midi);
     key.title = midiToNoteName(midi);
     key.addEventListener("pointerdown", (event) => {
       startManualKeyGesture(event, key, midi);
@@ -1761,28 +2395,2916 @@ function renderChordTable() {
   el.chordTableTitle.textContent = `Chords in ${key} Major`;
 
   const degreeRoots = DEGREE_TO_SEMITONE.map((semi) => NOTES[(NOTES.indexOf(key) + semi) % 12]);
-  const triad = ["major", "minor", "minor", "major", "major", "minor", "diminished"];
-  const seventh = ["maj7", "min7", "min7", "maj7", "dom7", "min7", "m7b5"];
 
-  el.chordTableHead.innerHTML = `<th></th>${degreeRoots.map((root, idx) => `<th>${ROMAN[idx]}<br>${root}</th>`).join("")}`;
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${degreeRoots.map((root, idx) => (
+    `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${ROMAN[idx]}" data-column-root="${root}">${ROMAN[idx]}<br>${root}</button></th>`
+  )).join("")}`;
 
   const rows = [
     { name: "Sus2", quality: "sus2" },
-    { name: "Triad", map: triad },
+    { name: "Triad", map: MAJOR_KEY_TRIAD_QUALITIES },
     { name: "Sus4", quality: "sus4" },
-    { name: "7th", map: seventh }
+    { name: "7th", map: MAJOR_KEY_SEVENTH_QUALITIES }
   ];
 
-  el.chordTableBody.innerHTML = rows.map((row) => {
+  el.chordTableBody.innerHTML = rows.map((row, rowIndex) => {
     const cells = degreeRoots.map((root, idx) => {
       const quality = row.quality || row.map[idx];
       const label = chordSymbol(root, quality);
       return `<td data-root="${root}" data-quality="${quality}" data-label="${label}">${label}</td>`;
     }).join("");
-    return `<tr><td class="row-label">${row.name}</td>${cells}</tr>`;
+    return `<tr data-row-index="${rowIndex}"><th scope="row" class="row-label"><button type="button" class="axis-play-btn axis-play-row" data-row-index="${rowIndex}" data-row-name="${row.name}">${row.name}</button></th>${cells}</tr>`;
   }).join("");
 
   markChordTableCell(appState.root, appState.quality);
+}
+
+function renderArpeggioTable() {
+  const key = el.keySelect.value;
+  el.chordTableTitle.textContent = `Arpeggios in ${key} Major`;
+  const degreeRoots = DEGREE_TO_SEMITONE.map((semi) => NOTES[(NOTES.indexOf(key) + semi) % 12]);
+
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${degreeRoots.map((root, idx) => (
+    `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${ROMAN[idx]}" data-column-root="${root}">${ROMAN[idx]}<br>${root}</button></th>`
+  )).join("")}`;
+
+  el.chordTableBody.innerHTML = ARPEGGIO_TRIAD_ROWS.map((row, rowIndex) => {
+    const cells = degreeRoots.map((root, idx) => {
+      const quality = MAJOR_KEY_TRIAD_QUALITIES[idx];
+      const shortInversion = row.inversionIndex === 0
+        ? "RP"
+        : row.inversionIndex === 1
+          ? "1st"
+          : "2nd";
+      const label = `${chordSymbol(root, quality)} ${shortInversion}`;
+      return `<td data-root="${root}" data-quality="${quality}" data-label="${label}" data-inversion-index="${row.inversionIndex}">${label}</td>`;
+    }).join("");
+    return `<tr data-row-index="${rowIndex}"><th scope="row" class="row-label"><button type="button" class="axis-play-btn axis-play-row" data-row-index="${rowIndex}" data-row-name="${row.name}" data-inversion-index="${row.inversionIndex}">${row.name}</button></th>${cells}</tr>`;
+  }).join("");
+
+  clearChordTableSelection();
+}
+
+function getScalarPaletteConfig(paletteTab) {
+  if (paletteTab === "scales") {
+    return {
+      title: `Scales in ${el.keySelect.value}`,
+      rows: SCALES_PALETTE_ROWS
+    };
+  }
+  if (paletteTab === "modes") {
+    return {
+      title: `Modes in ${el.keySelect.value}`,
+      rows: MODES_PALETTE_ROWS
+    };
+  }
+  if (paletteTab === "pentatonic") {
+    return {
+      title: `Pentatonic in ${el.keySelect.value}`,
+      rows: PENTATONIC_PALETTE_ROWS
+    };
+  }
+  if (paletteTab === "color") {
+    return {
+      title: `Color in ${el.keySelect.value}`,
+      rows: COLOR_PALETTE_ROWS
+    };
+  }
+  return null;
+}
+
+function renderScalarPaletteTable(paletteTab) {
+  const config = getScalarPaletteConfig(paletteTab);
+  if (!config) return;
+  const key = el.keySelect.value;
+  el.chordTableTitle.textContent = config.title;
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${PALETTE_SCALAR_COLUMN_DEGREES
+    .map((degree, idx) => `<th class="axis-col-cell degree-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${degree}">${degree}</button></th>`)
+    .join("")}`;
+
+  el.chordTableBody.innerHTML = config.rows.map((row, rowIndex) => {
+    const ascending = buildAscendingScaleMidiFromIntervals(key, row.intervals, 3, true);
+    const displayMidi = ascending.slice(0, PALETTE_SCALAR_COLUMN_DEGREES.length);
+    const displayNotes = ascending
+      .slice(0, PALETTE_SCALAR_COLUMN_DEGREES.length)
+      .map((midi) => pitchClassFromMidi(midi));
+    const cells = PALETTE_SCALAR_COLUMN_DEGREES.map((_, idx) => {
+      const label = displayNotes[idx] || "";
+      const midi = Number.isFinite(displayMidi[idx]) ? displayMidi[idx] : "";
+      return `<td data-scale-note="${label}" data-scale-midi="${midi}">${label}</td>`;
+    }).join("");
+    return `<tr data-row-index="${rowIndex}"><th scope="row" class="row-label"><button type="button" class="axis-play-btn axis-play-row" data-row-index="${rowIndex}" data-row-name="${row.name}" data-palette-row-id="${row.id}" data-palette-tab="${paletteTab}">${row.name}</button></th>${cells}</tr>`;
+  }).join("");
+  clearChordTableSelection();
+}
+
+function isHarmonicPaletteTab(tab) {
+  return HARMONIC_PALETTE_TABS.includes(tab);
+}
+
+function formatHarmonyNoteName(note, preferFlat = false) {
+  if (!preferFlat) return note;
+  return ENHARMONIC_FLAT_MAP[note] || note;
+}
+
+function harmonyChordSymbol(root, quality, options = {}) {
+  const safeRoot = formatHarmonyNoteName(root, options.preferFlat === true);
+  return `${safeRoot}${CHORDS[quality]?.short || ""}`;
+}
+
+function encodeHarmonyEventPayload(payload) {
+  return encodeURIComponent(JSON.stringify(payload));
+}
+
+function decodeHarmonyEventPayload(raw) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
+}
+
+function getHarmonyCellEventFromCell(cell) {
+  return decodeHarmonyEventPayload(cell?.dataset?.harmonyEvent || "");
+}
+
+function keyOffsetRoot(key, semitoneOffset) {
+  const keyIndex = NOTES.indexOf(key);
+  return NOTES[(keyIndex + semitoneOffset + 1200) % 12];
+}
+
+function majorDegreeRoot(key, degreeIndexZeroBased) {
+  return keyOffsetRoot(key, DEGREE_TO_SEMITONE[degreeIndexZeroBased % DEGREE_TO_SEMITONE.length]);
+}
+
+function buildAlteredDominantMidi(root, baseOctave = 3) {
+  const rootMidi = 12 * (baseOctave + 1) + NOTES.indexOf(root);
+  const midi = [0, 4, 10, 13, 15].map((interval) => rootMidi + interval);
+  return Array.from(new Set(midi)).sort((a, b) => a - b);
+}
+
+function createHarmonyStep(root, quality, options = {}) {
+  const step = { root, quality };
+  if (Number.isFinite(options.beats) && options.beats > 0) {
+    step.beats = options.beats;
+  } else if (Number.isFinite(options.measures) && options.measures > 0) {
+    step.measures = options.measures;
+  } else {
+    step.beats = 2;
+  }
+  if (Array.isArray(options.midiNotes) && options.midiNotes.length > 0) {
+    step.midiNotes = options.midiNotes.filter((note) => Number.isFinite(note));
+  }
+  return step;
+}
+
+function buildSecondaryDominantPaletteConfig(key) {
+  const tonicSymbol = harmonyChordSymbol(key, "major");
+  const targets = [
+    { columnLabel: "ii", degreeIndex: 1 },
+    { columnLabel: "iii", degreeIndex: 2 },
+    { columnLabel: "IV", degreeIndex: 3 },
+    { columnLabel: "V", degreeIndex: 4 },
+    { columnLabel: "vi", degreeIndex: 5 }
+  ];
+
+  const cells = targets.map((target) => {
+    const targetRoot = majorDegreeRoot(key, target.degreeIndex);
+    const targetQuality = MAJOR_KEY_TRIAD_QUALITIES[target.degreeIndex];
+    const dominantRoot = keyOffsetRoot(targetRoot, 7);
+    const dominantSymbol = harmonyChordSymbol(dominantRoot, "dom7");
+    const targetSymbol = harmonyChordSymbol(targetRoot, targetQuality);
+    return {
+      label: `${dominantSymbol} \u2192 ${targetSymbol}`,
+      event: {
+        type: "secondary",
+        targetDegree: target.columnLabel,
+        label: `${dominantSymbol} \u2192 ${targetSymbol}`,
+        steps: [
+          createHarmonyStep(dominantRoot, "dom7", { measures: 1 }),
+          createHarmonyStep(targetRoot, targetQuality, { measures: 1 }),
+          createHarmonyStep(key, "major", { measures: 0.5 })
+        ]
+      }
+    };
+  });
+
+  return {
+    title: `Secondary Dominants in ${key} Major`,
+    columns: targets.map((target) => target.columnLabel),
+    rows: [
+      { id: "secondary-row", name: "Secondary Dominant", cells }
+    ],
+    completionLabel: `Secondary sweep in ${key}: resolves to ${tonicSymbol}`
+  };
+}
+
+function buildBorrowedPaletteConfig(key) {
+  const tonicSymbol = harmonyChordSymbol(key, "major");
+  const specs = [
+    { columnLabel: "iv", offset: 5, quality: "minor", preferFlat: false },
+    { columnLabel: "\u266dVI", offset: 8, quality: "major", preferFlat: true },
+    { columnLabel: "\u266dVII", offset: 10, quality: "major", preferFlat: true },
+    { columnLabel: "ii\u00b0", offset: 2, quality: "diminished", preferFlat: false }
+  ];
+  const cells = specs.map((spec) => {
+    const root = keyOffsetRoot(key, spec.offset);
+    const borrowedSymbol = harmonyChordSymbol(root, spec.quality, { preferFlat: spec.preferFlat });
+    return {
+      label: `${borrowedSymbol} \u2192 ${tonicSymbol}`,
+      event: {
+        type: "borrowed",
+        column: spec.columnLabel,
+        label: `${borrowedSymbol} \u2192 ${tonicSymbol}`,
+        steps: [
+          createHarmonyStep(root, spec.quality, { measures: 1 }),
+          createHarmonyStep(key, "major", { measures: 1 })
+        ]
+      }
+    };
+  });
+
+  return {
+    title: `Borrowed Chords in ${key} Major`,
+    columns: specs.map((spec) => spec.columnLabel),
+    rows: [
+      { id: "borrowed-row", name: "Borrowed", cells }
+    ],
+    completionLabel: `Borrowed sweep in ${key}: modal interchange`
+  };
+}
+
+function buildSubstitutionPaletteConfig(key) {
+  const dominantRoot = majorDegreeRoot(key, 4);
+  const substituteRoot = keyOffsetRoot(dominantRoot, 6);
+  const tonicSymbol = harmonyChordSymbol(key, "major");
+  const dominantSymbol = harmonyChordSymbol(dominantRoot, "dom7");
+  const substituteSymbol = harmonyChordSymbol(substituteRoot, "dom7", { preferFlat: true });
+  return {
+    title: `Tritone Substitution in ${key} Major`,
+    columns: ["Original", "Substitution"],
+    rows: [
+      {
+        id: "substitution-row",
+        name: "Dominant Substitution",
+        cells: [
+          {
+            label: `${dominantSymbol} \u2192 ${tonicSymbol}`,
+            event: {
+              type: "substitution-original",
+              label: `${dominantSymbol} \u2192 ${tonicSymbol}`,
+              steps: [
+                createHarmonyStep(dominantRoot, "dom7", { measures: 1 }),
+                createHarmonyStep(key, "major", { measures: 1 })
+              ]
+            }
+          },
+          {
+            label: `${substituteSymbol} \u2192 ${tonicSymbol}`,
+            event: {
+              type: "substitution-tritone",
+              label: `${substituteSymbol} \u2192 ${tonicSymbol}`,
+              steps: [
+                createHarmonyStep(substituteRoot, "dom7", { measures: 1 }),
+                createHarmonyStep(key, "major", { measures: 1 })
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    completionLabel: `Substitution sweep in ${key}: dominant color paths`
+  };
+}
+
+function buildCadenceLabPaletteConfig(key) {
+  const rootI = key;
+  const rootIi = majorDegreeRoot(key, 1);
+  const rootIv = majorDegreeRoot(key, 3);
+  const rootV = majorDegreeRoot(key, 4);
+  const rootVi = majorDegreeRoot(key, 5);
+  const rootFlatVii = keyOffsetRoot(key, 10);
+  const rootFlatIi = keyOffsetRoot(rootV, 6);
+
+  const symI = harmonyChordSymbol(rootI, "major");
+  const symIi = harmonyChordSymbol(rootIi, "minor");
+  const symIv = harmonyChordSymbol(rootIv, "major");
+  const symV7 = harmonyChordSymbol(rootV, "dom7");
+  const symVi = harmonyChordSymbol(rootVi, "minor");
+  const symFlatVii7 = harmonyChordSymbol(rootFlatVii, "dom7", { preferFlat: true });
+  const symFlatIi7 = harmonyChordSymbol(rootFlatIi, "dom7", { preferFlat: true });
+  const rootViDom = harmonyChordSymbol(rootVi, "dom7");
+
+  const twoBeat = { beats: 2 };
+
+  return {
+    title: `Cadences in ${key} Major`,
+    columns: ["Authentic", "Plagal", "Half", "Deceptive", "Backdoor"],
+    rows: [
+      {
+        id: "cadence-core-row",
+        name: "Cadences",
+        cells: [
+          {
+            label: `${symV7}\u2192${symI}`,
+            event: {
+              type: "cadence-authentic",
+              label: `${symV7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootV, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          {
+            label: `${symIv}\u2192${symI}`,
+            event: {
+              type: "cadence-plagal",
+              label: `${symIv} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootIv, "major", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          {
+            label: `${symIi}\u2192${symV7}`,
+            event: {
+              type: "cadence-half",
+              label: `${symIi} \u2192 ${symV7}`,
+              steps: [
+                createHarmonyStep(rootIi, "minor", twoBeat),
+                createHarmonyStep(rootV, "dom7", twoBeat)
+              ]
+            }
+          },
+          {
+            label: `${symV7}\u2192${symVi}`,
+            event: {
+              type: "cadence-deceptive",
+              label: `${symV7} \u2192 ${symVi}`,
+              steps: [
+                createHarmonyStep(rootV, "dom7", twoBeat),
+                createHarmonyStep(rootVi, "minor", twoBeat)
+              ]
+            }
+          },
+          {
+            label: `${symFlatVii7}\u2192${symI}`,
+            event: {
+              type: "cadence-backdoor",
+              label: `${symFlatVii7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootFlatVii, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          }
+        ]
+      },
+      {
+        id: "cadence-jazz-row",
+        name: "Jazz Cadences",
+        cells: [
+          {
+            label: "ii\u2013V\u2013I",
+            event: {
+              type: "jazz-251",
+              label: `ii\u2013V\u2013I: ${symIi} \u2192 ${symV7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootIi, "minor", twoBeat),
+                createHarmonyStep(rootV, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          {
+            label: "vi\u2013ii\u2013V\u2013I",
+            event: {
+              type: "jazz-6251",
+              label: `vi\u2013ii\u2013V\u2013I: ${symVi} \u2192 ${symIi} \u2192 ${symV7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootVi, "minor", twoBeat),
+                createHarmonyStep(rootIi, "minor", twoBeat),
+                createHarmonyStep(rootV, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          {
+            label: "I\u2013VI7\u2013ii\u2013V",
+            event: {
+              type: "jazz-turnaround",
+              label: `I\u2013VI7\u2013ii\u2013V: ${symI} \u2192 ${rootViDom} \u2192 ${symIi} \u2192 ${symV7}`,
+              steps: [
+                createHarmonyStep(rootI, "major", twoBeat),
+                createHarmonyStep(rootVi, "dom7", twoBeat),
+                createHarmonyStep(rootIi, "minor", twoBeat),
+                createHarmonyStep(rootV, "dom7", twoBeat)
+              ]
+            }
+          },
+          {
+            label: "\u266dVII7\u2192I",
+            event: {
+              type: "jazz-backdoor",
+              label: `${symFlatVii7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootFlatVii, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          { label: "" }
+        ]
+      },
+      {
+        id: "cadence-dominant-color-row",
+        name: "Dominant Colors",
+        cells: [
+          {
+            label: "Plain V7",
+            event: {
+              type: "dominant-plain",
+              label: `Plain: ${symV7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootV, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          {
+            label: "Tritone Sub",
+            event: {
+              type: "dominant-tritone",
+              label: `Tritone: ${symFlatIi7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootFlatIi, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          {
+            label: "Backdoor",
+            event: {
+              type: "dominant-backdoor",
+              label: `Backdoor: ${symFlatVii7} \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootFlatVii, "dom7", twoBeat),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          {
+            label: "Altered V7",
+            event: {
+              type: "dominant-altered",
+              label: `Altered: ${symV7}(b9,#9) \u2192 ${symI}`,
+              steps: [
+                createHarmonyStep(rootV, "dom7", { beats: 2, midiNotes: buildAlteredDominantMidi(rootV, 3) }),
+                createHarmonyStep(rootI, "major", twoBeat)
+              ]
+            }
+          },
+          { label: "" }
+        ]
+      }
+    ],
+    completionLabel: `Cadence sweep in ${key}: dominant resolution flow`
+  };
+}
+
+function getHarmonicPaletteConfig(paletteTab) {
+  const key = el.keySelect?.value || appState.root;
+  if (paletteTab === "secondary") return buildSecondaryDominantPaletteConfig(key);
+  if (paletteTab === "borrowed") return buildBorrowedPaletteConfig(key);
+  if (paletteTab === "substitution") return buildSubstitutionPaletteConfig(key);
+  if (paletteTab === "cadences") return buildCadenceLabPaletteConfig(key);
+  return null;
+}
+
+function renderHarmonicPaletteTable(paletteTab) {
+  const config = getHarmonicPaletteConfig(paletteTab);
+  if (!config) return;
+  el.chordTableTitle.textContent = config.title;
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${config.columns.map((columnLabel, idx) => (
+    `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${columnLabel}">${columnLabel}</button></th>`
+  )).join("")}`;
+  el.chordTableBody.innerHTML = config.rows.map((row, rowIndex) => {
+    const cells = row.cells.map((cell) => {
+      const label = cell?.label || "";
+      const eventPayload = cell?.event ? encodeHarmonyEventPayload(cell.event) : "";
+      if (eventPayload) {
+        return `<td data-harmony-event="${eventPayload}">${label}</td>`;
+      }
+      return `<td>${label}</td>`;
+    }).join("");
+    return `<tr data-row-index="${rowIndex}"><th scope="row" class="row-label"><button type="button" class="axis-play-btn axis-play-row" data-row-index="${rowIndex}" data-row-name="${row.name}" data-palette-row-id="${row.id}" data-palette-tab="${paletteTab}">${row.name}</button></th>${cells}</tr>`;
+  }).join("");
+  clearChordTableSelection();
+}
+
+function pitchClassFromMidi(midi) {
+  if (!Number.isFinite(midi)) return "";
+  return NOTES[(midi % 12 + 12) % 12];
+}
+
+function buildAscendingScaleMidiFromIntervals(root, intervals, octave = 3, includeOctave = true) {
+  const base = 12 * (octave + 1) + NOTES.indexOf(root);
+  const asc = intervals.map((interval) => base + interval);
+  if (!includeOctave) return asc;
+  return [...asc, base + 12];
+}
+
+function buildAscendingDescendingSequence(midiAscending) {
+  const asc = Array.isArray(midiAscending) ? midiAscending.filter((midi) => Number.isFinite(midi)) : [];
+  if (asc.length === 0) return [];
+  return [...asc, ...asc.slice(0, -1).reverse()];
+}
+
+function mirrorFingering(upFingers) {
+  const up = Array.isArray(upFingers) ? upFingers.filter((finger) => Number.isFinite(Number(finger))) : [];
+  if (up.length === 0) return [];
+  return [...up, ...up.slice(0, -1).reverse()];
+}
+
+function buildRepeatingFingering(length, cycle, offset = 0) {
+  const safeCycle = Array.isArray(cycle) ? cycle : [];
+  if (!safeCycle.length || length <= 0) return [];
+  const out = [];
+  for (let i = 0; i < length; i += 1) {
+    out.push(safeCycle[(offset + i) % safeCycle.length]);
+  }
+  return out;
+}
+
+function chooseRightHandOffsetForWhiteThumb(ascendingMidi, cycle) {
+  const notes = Array.isArray(ascendingMidi) ? ascendingMidi : [];
+  let bestOffset = 0;
+  let bestScore = -1;
+  for (let offset = 0; offset < cycle.length; offset += 1) {
+    let score = 0;
+    for (let i = 0; i < notes.length; i += 1) {
+      const finger = cycle[(offset + i) % cycle.length];
+      if (finger !== 1) continue;
+      if (!isBlackMidiNote(notes[i])) score += 1;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestOffset = offset;
+    }
+  }
+  return bestOffset;
+}
+
+function buildModesFingering(sequenceMidi, hand = "right") {
+  const ascLength = Math.floor((sequenceMidi.length + 1) / 2);
+  const ascendingNotes = sequenceMidi.slice(0, ascLength).map((midi) => midiToNoteName(midi));
+  const up = buildScaleFingering(ascendingNotes, hand);
+  return mirrorFingering(up);
+}
+
+function buildPentatonicFingering(hand = "right") {
+  const up = hand === "left"
+    ? [5, 4, 3, 2, 1, 3]
+    : [1, 2, 3, 1, 2, 3];
+  return mirrorFingering(up);
+}
+
+function buildColorFingering(rowId, sequenceMidi, hand = "right") {
+  const ascLength = Math.floor((sequenceMidi.length + 1) / 2);
+  const ascendingMidi = sequenceMidi.slice(0, ascLength);
+  if (rowId === "wholeTone") {
+    const base = hand === "left" ? [5, 4, 3, 2, 1, 3] : [1, 2, 3, 1, 2, 3];
+    const up = [...base, base[0]];
+    return mirrorFingering(up);
+  }
+  if (rowId === "diminishedHW" || rowId === "diminishedWH") {
+    if (hand === "left") {
+      const up = buildRepeatingFingering(ascendingMidi.length, [5, 4, 3, 2], 0);
+      return mirrorFingering(up);
+    }
+    const cycle = [1, 2, 3, 4];
+    const offset = chooseRightHandOffsetForWhiteThumb(ascendingMidi, cycle);
+    const up = buildRepeatingFingering(ascendingMidi.length, cycle, offset);
+    return mirrorFingering(up);
+  }
+  const ascendingNotes = ascendingMidi.map((midi) => midiToNoteName(midi));
+  const up = buildScaleFingering(ascendingNotes, hand);
+  return mirrorFingering(up);
+}
+
+function findScalarPaletteRow(paletteTab, rowId) {
+  const config = getScalarPaletteConfig(paletteTab);
+  if (!config) return null;
+  return config.rows.find((row) => row.id === rowId) || null;
+}
+
+function getScalarPaletteFingering(paletteTab, row, sequenceMidi) {
+  const hand = el.handSelect?.value === "left" ? "left" : "right";
+  if (paletteTab === "scales") {
+    return buildModesFingering(sequenceMidi, hand);
+  }
+  if (paletteTab === "modes") {
+    return buildModesFingering(sequenceMidi, hand);
+  }
+  if (paletteTab === "pentatonic") {
+    return buildPentatonicFingering(hand);
+  }
+  if (paletteTab === "color") {
+    return buildColorFingering(row.id, sequenceMidi, hand);
+  }
+  return [];
+}
+
+function scalarPitchClassToMidi(pitchClass, octave = 4) {
+  if (!pitchClass) return null;
+  const idx = NOTES.indexOf(String(pitchClass));
+  if (idx < 0) return null;
+  return 12 * (octave + 1) + idx;
+}
+
+function scalarCellMidi(cell) {
+  const rawMidi = Number(cell?.dataset?.scaleMidi);
+  if (Number.isFinite(rawMidi)) return rawMidi;
+  const pitchClass = cell?.dataset?.scaleNote;
+  return scalarPitchClassToMidi(pitchClass);
+}
+
+async function playScalarPaletteCellSequence(cells, label) {
+  if (!Array.isArray(cells) || cells.length === 0) return;
+  const playableCells = cells.filter((cell) => {
+    return Number.isFinite(scalarCellMidi(cell));
+  });
+  if (!playableCells.length) return;
+
+  const sequenceToken = ++paletteSequenceToken;
+
+  const stepSeconds = getStepSeconds();
+  const hold = Math.max(0.08, stepSeconds * 0.9);
+  const stepMs = Math.max(60, Math.round(stepSeconds * 1000));
+
+  for (let i = 0; i < playableCells.length; i += 1) {
+    if (sequenceToken !== paletteSequenceToken) return;
+    const cell = playableCells[i];
+    const midi = scalarCellMidi(cell);
+    if (!Number.isFinite(midi)) continue;
+    clearChordTableSelection();
+    cell.classList.add("is-selected");
+    playMidiNotes([midi], {
+      hold,
+      asChord: true,
+      highlightMs: getHighlightMs(hold, stepMs),
+      restrictToWindow: false
+    });
+    if (i === playableCells.length - 1) {
+      celebrateResolutionCell(cell);
+    }
+    await wait(stepMs);
+  }
+
+  if (sequenceToken !== paletteSequenceToken) return;
+  if (el.chordDisplay) {
+    const endMidi = scalarCellMidi(playableCells[playableCells.length - 1]);
+    const endNote = Number.isFinite(endMidi) ? midiToNoteName(endMidi) : "end";
+    el.chordDisplay.textContent = `${label}: resolved on ${endNote}`;
+  }
+  trackRep("scales", label);
+}
+
+async function playScalarPaletteRow(paletteTab, rowId) {
+  const row = findScalarPaletteRow(paletteTab, rowId);
+  if (!row) return;
+  const key = el.keySelect.value;
+  const rowButton = el.chordTableBody.querySelector(`.axis-play-row[data-palette-row-id="${row.id}"]`);
+  const rowElement = rowButton?.closest("tr");
+  const cells = Array.from(rowElement?.querySelectorAll("td[data-scale-note]") || []);
+  await playScalarPaletteCellSequence(cells, `${row.name} in ${key}`);
+}
+
+function buildTriadMidiFromQuality(root, quality, baseOctave = 3) {
+  const rootMidi = 12 * (baseOctave + 1) + NOTES.indexOf(root);
+  const intervals = quality === "major"
+    ? [0, 4, 7]
+    : quality === "minor"
+      ? [0, 3, 7]
+      : [0, 3, 6];
+  return intervals.map((interval) => rootMidi + interval);
+}
+
+function invertChord(midiNotes, inversionIndex) {
+  const source = Array.isArray(midiNotes) ? midiNotes.filter((note) => Number.isFinite(note)) : [];
+  if (source.length === 0) return [];
+  const normalizedInversion = Math.max(0, Math.floor(inversionIndex)) % source.length;
+  const rotated = [...source.slice(normalizedInversion), ...source.slice(0, normalizedInversion)];
+  for (let i = 1; i < rotated.length; i += 1) {
+    while (rotated[i] <= rotated[i - 1]) {
+      rotated[i] += 12;
+    }
+  }
+  return rotated;
+}
+
+function buildArpeggioSequence(midiNotes) {
+  const chord = Array.isArray(midiNotes) ? midiNotes.filter((note) => Number.isFinite(note)) : [];
+  if (chord.length === 0) return [];
+  const ascending = [...chord, chord[0] + 12];
+  const descending = [...chord].reverse();
+  return [...ascending, ...descending];
+}
+
+function isBlackMidiNote(midi) {
+  return NOTES[(midi % 12 + 12) % 12].includes("#");
+}
+
+function getTriadArpeggioFingering(midiSequence, inversionIndex, hand = "right") {
+  const leftPattern = [5, 3, 2, 1, 2, 3, 5];
+  if (hand === "left") return leftPattern;
+
+  const rootPattern = [1, 2, 3, 5, 3, 2, 1];
+  const inversionPattern = [1, 2, 4, 5, 4, 2, 1];
+
+  if (inversionIndex === 1) return inversionPattern;
+  if (inversionIndex === 2) {
+    return isBlackMidiNote(midiSequence[0]) ? inversionPattern : rootPattern;
+  }
+  return rootPattern;
+}
+
+function buildArpeggioPatternFromCell(cell) {
+  const root = cell?.dataset?.root;
+  const quality = cell?.dataset?.quality;
+  const inversionIndex = Math.max(0, Number(cell?.dataset?.inversionIndex || 0));
+  if (!root || !quality) return null;
+  const baseTriad = buildTriadMidiFromQuality(root, quality, 3);
+  const invertedTriad = invertChord(baseTriad, inversionIndex);
+  const midiSequence = buildArpeggioSequence(invertedTriad);
+  const notes = midiSequence.map((midi) => midiToNoteName(midi));
+  const hand = el.handSelect?.value === "left" ? "left" : "right";
+  const fingers = getTriadArpeggioFingering(midiSequence, inversionIndex, hand);
+  return {
+    root,
+    quality,
+    inversionIndex,
+    midiSequence,
+    notes,
+    fingers,
+    label: cell.dataset.label || `${root}${CHORDS[quality]?.short || ""}`
+  };
+}
+
+async function playArpeggioCell(cell, options = {}) {
+  const payload = buildArpeggioPatternFromCell(cell);
+  if (!payload) return null;
+  clearChordTableSelection();
+  cell.classList.add("is-selected");
+  await playPatternScheduled({
+    notes: payload.notes,
+    fingers: payload.fingers,
+    startTimeSec: options.startTimeSec ?? null,
+    showFingers: true,
+    snapshot: options.snapshot !== false
+  });
+  return payload;
+}
+
+async function playArpeggioTableCellSequence(cells, label) {
+  if (!Array.isArray(cells) || cells.length === 0) return;
+  const playableCells = cells.filter((cell) => cell?.dataset?.root && cell?.dataset?.quality);
+  if (playableCells.length === 0) return;
+  const startCell = playableCells[0];
+  const startRoot = startCell.dataset.root;
+  const startQuality = startCell.dataset.quality;
+
+  const sequenceToken = ++paletteSequenceToken;
+  const stepSeconds = getStepSeconds();
+  const baseLead = Math.max(0.01, getInteractiveStartLeadTimeSeconds());
+  let nextStartSec = getSchedulerNowSeconds() + baseLead;
+
+  for (let i = 0; i < playableCells.length; i += 1) {
+    if (sequenceToken !== paletteSequenceToken) return;
+    const cell = playableCells[i];
+    const payload = await playArpeggioCell(cell, {
+      startTimeSec: nextStartSec,
+      snapshot: i === playableCells.length - 1
+    });
+    if (!payload) continue;
+    const cellSeconds = stepSeconds * payload.notes.length;
+    const gapSeconds = stepSeconds;
+    nextStartSec += cellSeconds + gapSeconds;
+    const waitMs = Math.max(0, Math.round((nextStartSec - getSchedulerNowSeconds()) * 1000));
+    if (waitMs > 0) {
+      await wait(waitMs);
+    }
+  }
+
+  if (sequenceToken !== paletteSequenceToken) return;
+  const beatSeconds = getHarmonyBeatSeconds();
+  const resolveHold = Math.max(0.14, beatSeconds * 1.8);
+  const resolvedMidi = buildChordMidi(startRoot, startQuality, "root position", 3).map((midi) => midi + 12);
+  playCircularResolveAtStartCell(startCell, resolvedMidi, resolveHold);
+  if (el.chordDisplay) {
+    const resolvedLabel = `${startRoot}${CHORDS[startQuality]?.short || ""}`;
+    el.chordDisplay.textContent = `${label}: arpeggio cycle complete -> ${resolvedLabel}↑`;
+  }
+  trackRep("arpeggios", label);
+}
+
+function getHarmonyBeatSeconds() {
+  return Math.max(0.06, 60 / Math.max(30, Math.min(240, Number(appState.tempoBpm) || 80)));
+}
+
+function getHarmonySubdivisionSeconds() {
+  const subdivision = Number(appState.subdivision);
+  const normalized = Number.isFinite(subdivision) && subdivision > 0 ? subdivision : 1;
+  return Math.max(0.02, getHarmonyBeatSeconds() * normalized);
+}
+
+function getHarmonyMeasureSeconds() {
+  return getHarmonyBeatSeconds() * 4;
+}
+
+function getHarmonyStepDurationSeconds(step) {
+  const rawBeats = Number(step?.beats);
+  if (Number.isFinite(rawBeats) && rawBeats > 0) {
+    return getHarmonyBeatSeconds() * rawBeats;
+  }
+  const rawMeasures = Number(step?.measures);
+  const measures = Number.isFinite(rawMeasures) && rawMeasures > 0 ? rawMeasures : 1;
+  return getHarmonyMeasureSeconds() * measures;
+}
+
+function getHarmonyEventDurationSeconds(eventPayload) {
+  const steps = Array.isArray(eventPayload?.steps) ? eventPayload.steps : [];
+  if (!steps.length) return 0;
+  return steps.reduce((sum, step) => sum + getHarmonyStepDurationSeconds(step), 0);
+}
+
+async function ensureHarmonicPlaybackReady() {
+  if (!ensureAudio()) return false;
+
+  if (isToneEngineAvailable() && (!toneEngineReady || !toneSampler)) {
+    await ensureToneEngine();
+  }
+
+  if (!toneEngineReady
+    && shouldUseRnboPrimaryEngine()
+    && !htmlSampleEngineActive
+    && !rnboEngineActive
+    && !rnboEngineFailedReason) {
+    await initializeRnboEngine();
+  }
+
+  const canSchedule = (isToneEngineAvailable() && toneEngineReady && toneSampler)
+    || (shouldUseRnboPrimaryEngine() && rnboEngineActive)
+    || (sampleEngineReady && !htmlSampleEngineActive)
+    || htmlSampleEngineActive;
+
+  if (!canSchedule && el.chordDisplay) {
+    el.chordDisplay.textContent = "Audio scheduler unavailable for harmonic playback.";
+  }
+  return canSchedule;
+}
+
+function scheduleHarmonicChordAt(midiNotes, startTimeSec, holdSeconds, sequenceToken) {
+  const midi = (Array.isArray(midiNotes) ? midiNotes : []).filter((note) => Number.isFinite(note));
+  if (!midi.length) return;
+  scheduleChordAtTime(midi, startTimeSec, holdSeconds, sequenceToken);
+}
+
+function scheduleChordAtTime(midiNotes, timeSec, durationSec, sequenceToken = paletteSequenceToken) {
+  const midi = (Array.isArray(midiNotes) ? midiNotes : []).filter((note) => Number.isFinite(note));
+  if (!midi.length) return;
+  midi.forEach((note) => {
+    scheduleSingleMidiNote(note, timeSec, durationSec, 0.8);
+  });
+
+  const nowSec = getSchedulerNowSeconds();
+  const onDelayMs = Math.max(0, Math.round((timeSec - nowSec) * 1000));
+  const highlightMs = Math.max(110, Math.round(durationSec * 1000));
+  window.setTimeout(() => {
+    if (sequenceToken !== paletteSequenceToken) return;
+    highlightKeyboard(midi, highlightMs, true);
+  }, onDelayMs);
+}
+
+function scheduleHarmonicCellSelection(cell, startTimeSec, durationSec, sequenceToken) {
+  if (!cell) return;
+  const nowSec = getSchedulerNowSeconds();
+  const onDelayMs = Math.max(0, Math.round((startTimeSec - nowSec) * 1000));
+  const offDelayMs = Math.max(onDelayMs + 40, Math.round((startTimeSec + durationSec - nowSec) * 1000));
+  window.setTimeout(() => {
+    if (sequenceToken !== paletteSequenceToken) return;
+    clearChordTableSelection();
+    cell.classList.add("is-selected");
+  }, onDelayMs);
+  window.setTimeout(() => {
+    if (sequenceToken !== paletteSequenceToken) return;
+    cell.classList.remove("is-selected");
+  }, offDelayMs);
+}
+
+function scheduleHarmonicEventPlayback(eventPayload, startTimeSec, sequenceToken, cell = null) {
+  if (!eventPayload || !Array.isArray(eventPayload.steps)) return startTimeSec;
+  let cursor = startTimeSec;
+  eventPayload.steps.forEach((step) => {
+    const midi = Array.isArray(step?.midiNotes) && step.midiNotes.length
+      ? step.midiNotes.filter((note) => Number.isFinite(note))
+      : buildChordMidi(step.root, step.quality, "root position", 3);
+    const stepDuration = getHarmonyStepDurationSeconds(step);
+    const holdSeconds = Math.max(0.14, stepDuration * 0.9);
+    scheduleHarmonicChordAt(midi, cursor, holdSeconds, sequenceToken);
+    cursor += stepDuration;
+  });
+  if (cell) {
+    scheduleHarmonicCellSelection(cell, startTimeSec, Math.max(0.12, cursor - startTimeSec), sequenceToken);
+  }
+  return cursor;
+}
+
+async function playHarmonicPaletteCell(cell, options = {}) {
+  const eventPayload = getHarmonyCellEventFromCell(cell);
+  if (!eventPayload) return null;
+  const token = Number.isInteger(options.sequenceToken) ? options.sequenceToken : ++paletteSequenceToken;
+  if (!options.skipEngineCheck) {
+    const ready = await ensureHarmonicPlaybackReady();
+    if (!ready) return null;
+  }
+
+  const nowSec = getSchedulerNowSeconds();
+  const startTimeSec = Number.isFinite(options.startTimeSec)
+    ? Math.max(options.startTimeSec, nowSec + 0.002)
+    : nowSec + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
+  const endTimeSec = scheduleHarmonicEventPlayback(eventPayload, startTimeSec, token, cell);
+  if (el.chordDisplay && options.updateOutput !== false) {
+    el.chordDisplay.textContent = eventPayload.label;
+  }
+  return { eventPayload, startTimeSec, endTimeSec };
+}
+
+async function playHarmonicPaletteCellSequence(cells, label) {
+  if (!Array.isArray(cells) || cells.length === 0) return;
+  const playableCells = cells.filter((cell) => getHarmonyCellEventFromCell(cell));
+  if (!playableCells.length) return;
+  const startCell = playableCells[0];
+  const startEvent = getHarmonyCellEventFromCell(startCell);
+  const startStep = Array.isArray(startEvent?.steps) ? startEvent.steps[0] : null;
+  const token = ++paletteSequenceToken;
+  const ready = await ensureHarmonicPlaybackReady();
+  if (!ready) return;
+
+  let nextStartSec = getSchedulerNowSeconds() + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
+  playableCells.forEach((cell) => {
+    const payload = getHarmonyCellEventFromCell(cell);
+    if (!payload) return;
+    nextStartSec = scheduleHarmonicEventPlayback(payload, nextStartSec, token, cell);
+    nextStartSec += getHarmonySubdivisionSeconds();
+  });
+
+  const waitMs = Math.max(0, Math.round((nextStartSec - getSchedulerNowSeconds()) * 1000));
+  if (waitMs > 0) {
+    await wait(waitMs);
+  }
+
+  if (token !== paletteSequenceToken) return;
+  if (startStep?.root && startStep?.quality) {
+    const resolveHold = Math.max(0.14, getHarmonyBeatSeconds() * 1.8);
+    const resolvedMidi = buildChordMidi(startStep.root, startStep.quality, "root position", 3).map((midi) => midi + 12);
+    playCircularResolveAtStartCell(startCell, resolvedMidi, resolveHold);
+  }
+  if (el.chordDisplay) {
+    const resolvedLabel = startStep?.root && startStep?.quality
+      ? `${startStep.root}${CHORDS[startStep.quality]?.short || ""}↑`
+      : "loop resolved";
+    el.chordDisplay.textContent = `${label}: sweep complete -> ${resolvedLabel}`;
+  }
+  trackRep("chords", label);
+}
+
+function clearGuidedExerciseUiTimers() {
+  guidedExerciseUiTimers.forEach((timerId) => window.clearTimeout(timerId));
+  guidedExerciseUiTimers.clear();
+}
+
+function clearScheduledFallbackNoteTimers() {
+  scheduledFallbackNoteTimers.forEach((timerId) => window.clearTimeout(timerId));
+  scheduledFallbackNoteTimers.clear();
+}
+
+function registerGuidedExerciseUiTimer(timerId) {
+  guidedExerciseUiTimers.add(timerId);
+}
+
+function stopAudioPoolMap(poolMap) {
+  poolMap.forEach((pool) => {
+    const voices = Array.isArray(pool?.voices) ? pool.voices : [];
+    voices.forEach((voice) => {
+      if (voice?.stopTimerId) {
+        window.clearTimeout(voice.stopTimerId);
+        voice.stopTimerId = null;
+      }
+      const audio = voice?.audio;
+      if (!audio) return;
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        // Ignore media teardown errors.
+      }
+    });
+  });
+}
+
+function stopAllPlayback() {
+  stopRepertoirePlayback({ preserveSelection: true, keepPausedState: false, resetPlayhead: false });
+  cancelPaletteSequence();
+  stopHarmonyExploration({ withResolution: false, clearLabel: true });
+  clearExploreTimers();
+  clearGuidedExerciseUiTimers();
+  clearScheduledFallbackNoteTimers();
+  clearPatternUiTimers();
+  clearFingerOverlays();
+  clearProgressionStep();
+  clearCadenceStep();
+  clearKeyboardHighlights();
+  clearChordTableSelection();
+  stopTheoryLessonAudio();
+  if (toneSampler && typeof toneSampler.releaseAll === "function") {
+    try {
+      toneSampler.releaseAll();
+    } catch {
+      // Ignore tone release errors.
+    }
+  }
+  stopAudioPoolMap(htmlSamplePools);
+  stopAudioPoolMap(chordAssetHtmlPools);
+}
+
+function waitGuidedExercise(ms, token) {
+  const safeMs = Math.max(0, Number(ms) || 0);
+  return new Promise((resolve) => {
+    const timerId = window.setTimeout(() => {
+      guidedExerciseUiTimers.delete(timerId);
+      resolve(token === paletteSequenceToken);
+    }, safeMs);
+    registerGuidedExerciseUiTimer(timerId);
+  });
+}
+
+function isGuidedExerciseTokenActive(token) {
+  return token === paletteSequenceToken;
+}
+
+function setGuidedExerciseInstruction(text) {
+  if (!el.exerciseInstruction) return;
+  el.exerciseInstruction.textContent = String(text || "");
+}
+
+function getGuidedExerciseContext() {
+  const key = el.keySelect?.value || appState.root;
+  const rootI = key;
+  const rootIi = majorDegreeRoot(key, 1);
+  const rootIv = majorDegreeRoot(key, 3);
+  const rootV = majorDegreeRoot(key, 4);
+  const rootVi = majorDegreeRoot(key, 5);
+  const rootFlatVii = keyOffsetRoot(key, 10);
+  const rootFlatIi = keyOffsetRoot(rootV, 6);
+  return {
+    key,
+    rootI,
+    rootIi,
+    rootIv,
+    rootV,
+    rootVi,
+    rootFlatVii,
+    rootFlatIi
+  };
+}
+
+function buildGuidedDominantLadderMidi(root, level) {
+  const rootMidi = 12 * (3 + 1) + NOTES.indexOf(root);
+  const build = (intervals) => Array.from(new Set(intervals.map((interval) => rootMidi + interval))).sort((a, b) => a - b);
+  const safeLevel = Math.max(0, Math.min(3, Number(level) || 0));
+  if (safeLevel === 0) return buildChordMidi(root, "dom7", "root position", 3);
+  if (safeLevel === 1) return build([0, 4, 7, 10, 14]);       // add 9
+  if (safeLevel === 2) return build([0, 4, 7, 10, 13, 18]);   // add b9 + #11
+  return buildAlteredDominantMidi(root, 3);                   // strongest altered color
+}
+
+async function playGuidedExerciseChordSteps(steps, token) {
+  const ready = await ensureHarmonicPlaybackReady();
+  if (!ready || !isGuidedExerciseTokenActive(token)) return false;
+
+  for (let i = 0; i < steps.length; i += 1) {
+    if (!isGuidedExerciseTokenActive(token)) return false;
+    const step = steps[i];
+    if (!step) continue;
+    if (Number.isFinite(step.pauseBeats) && step.pauseBeats > 0) {
+      const pauseMs = Math.round(getHarmonyBeatSeconds() * step.pauseBeats * 1000);
+      const stillActive = await waitGuidedExercise(pauseMs, token);
+      if (!stillActive) return false;
+      continue;
+    }
+    const stepDurationSec = getHarmonyStepDurationSeconds(step);
+    const holdSeconds = Math.max(0.14, stepDurationSec * 0.9);
+    const startTimeSec = getSchedulerNowSeconds() + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
+    const midiNotes = Array.isArray(step.midiNotes) && step.midiNotes.length
+      ? step.midiNotes
+      : buildChordMidi(step.root, step.quality, "root position", 3);
+    scheduleChordAtTime(midiNotes, startTimeSec, holdSeconds, token);
+    const waitMs = Math.max(60, Math.round(stepDurationSec * 1000));
+    const stillActive = await waitGuidedExercise(waitMs, token);
+    if (!stillActive) return false;
+  }
+
+  return isGuidedExerciseTokenActive(token);
+}
+
+async function playGuidedExerciseScale(root, intervals, token, options = {}) {
+  if (!isGuidedExerciseTokenActive(token)) return false;
+  const ascending = buildAscendingScaleMidiFromIntervals(root, intervals, 3, true);
+  const sequence = buildAscendingDescendingSequence(ascending);
+  const notes = sequence.map((midi) => midiToNoteName(midi));
+  const showFingers = options.showFingers === true;
+  const fingers = showFingers ? buildScaleFingering(notes, "right") : null;
+  await playPatternScheduled({
+    notes,
+    fingers,
+    showFingers,
+    snapshot: false
+  });
+  return isGuidedExerciseTokenActive(token);
+}
+
+async function playGuidedExerciseArpeggio(root, quality, inversionIndex, token) {
+  if (!isGuidedExerciseTokenActive(token)) return false;
+  const triad = buildTriadMidiFromQuality(root, quality, 3);
+  const inverted = invertChord(triad, inversionIndex);
+  const midiSequence = buildArpeggioSequence(inverted);
+  const notes = midiSequence.map((midi) => midiToNoteName(midi));
+  const fingers = getTriadArpeggioFingering(midiSequence, inversionIndex, "right");
+  await playPatternScheduled({
+    notes,
+    fingers,
+    showFingers: true,
+    snapshot: false
+  });
+  return isGuidedExerciseTokenActive(token);
+}
+
+async function runExercisePowerOfResolution(token, ctx) {
+  return playGuidedExerciseChordSteps([
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootIv, quality: "major", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { pauseBeats: 1 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { pauseBeats: 1 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2, midiNotes: buildAlteredDominantMidi(ctx.rootV, 3) },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+async function runExerciseTensionLadder(token, ctx) {
+  return playGuidedExerciseChordSteps([
+    { root: ctx.rootV, quality: "dom7", measures: 1, midiNotes: buildGuidedDominantLadderMidi(ctx.rootV, 0) },
+    { root: ctx.rootV, quality: "dom7", measures: 1, midiNotes: buildGuidedDominantLadderMidi(ctx.rootV, 1) },
+    { root: ctx.rootV, quality: "dom7", measures: 1, midiNotes: buildGuidedDominantLadderMidi(ctx.rootV, 2) },
+    { root: ctx.rootV, quality: "dom7", measures: 1, midiNotes: buildGuidedDominantLadderMidi(ctx.rootV, 3) },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+async function runExerciseSecondarySpotlight(token, ctx) {
+  const rootVofIi = keyOffsetRoot(ctx.rootIi, 7);
+  const rootVofV = keyOffsetRoot(ctx.rootV, 7);
+  return playGuidedExerciseChordSteps([
+    { root: ctx.rootIi, quality: "minor", beats: 2 },
+    { root: rootVofIi, quality: "dom7", beats: 2 },
+    { root: ctx.rootIi, quality: "minor", beats: 2 },
+    { root: rootVofV, quality: "dom7", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+async function runExerciseBorrowedMoodShift(token, ctx) {
+  const rootFlatVi = keyOffsetRoot(ctx.key, 8);
+  return playGuidedExerciseChordSteps([
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootIv, quality: "major", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootIv, quality: "minor", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: rootFlatVi, quality: "major", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+async function runExerciseTritoneSurprise(token, ctx) {
+  return playGuidedExerciseChordSteps([
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { pauseBeats: 1 },
+    { root: ctx.rootFlatIi, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+async function runExerciseIiVIBuild(token, ctx) {
+  return playGuidedExerciseChordSteps([
+    { root: ctx.rootIi, quality: "minor", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootIi, quality: "minor", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootVi, quality: "minor", beats: 2 },
+    { root: ctx.rootIi, quality: "minor", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+async function runExerciseModalColorContrast(token, ctx) {
+  const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
+  const dorianIntervals = [0, 2, 3, 5, 7, 9, 10];
+  const lydianIntervals = [0, 2, 4, 6, 7, 9, 11];
+  const sequences = [majorIntervals, dorianIntervals, lydianIntervals];
+  for (let i = 0; i < sequences.length; i += 1) {
+    const ok = await playGuidedExerciseScale(ctx.key, sequences[i], token, { showFingers: false });
+    if (!ok) return false;
+    const chordOk = await playGuidedExerciseChordSteps([
+      { root: ctx.rootI, quality: "major", beats: 2 }
+    ], token);
+    if (!chordOk) return false;
+  }
+  return isGuidedExerciseTokenActive(token);
+}
+
+async function runExerciseWholeToneAtmosphere(token, ctx) {
+  const wholeToneIntervals = [0, 2, 4, 6, 8, 10];
+  const ok = await playGuidedExerciseScale(ctx.key, wholeToneIntervals, token, { showFingers: false });
+  if (!ok) return false;
+  const rootMidi = 12 * (3 + 1) + NOTES.indexOf(ctx.key);
+  const cluster = [0, 2, 4, 6].map((interval) => rootMidi + interval);
+  return playGuidedExerciseChordSteps([
+    { root: ctx.key, quality: "major", beats: 2, midiNotes: cluster },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+async function runExerciseArpeggioArchitecture(token, ctx) {
+  const steps = [
+    { root: ctx.rootI, quality: "major", inversion: 0 },
+    { root: ctx.rootI, quality: "major", inversion: 1 },
+    { root: ctx.rootI, quality: "major", inversion: 2 },
+    { root: ctx.rootIi, quality: "minor", inversion: 0 },
+    { root: ctx.rootV, quality: "major", inversion: 0 },
+    { root: ctx.rootI, quality: "major", inversion: 0 }
+  ];
+  for (let i = 0; i < steps.length; i += 1) {
+    const step = steps[i];
+    const ok = await playGuidedExerciseArpeggio(step.root, step.quality, step.inversion, token);
+    if (!ok) return false;
+    const stillActive = await waitGuidedExercise(Math.round(getHarmonyBeatSeconds() * 1000), token);
+    if (!stillActive) return false;
+  }
+  return isGuidedExerciseTokenActive(token);
+}
+
+async function runExerciseCadenceLab(token, ctx) {
+  return playGuidedExerciseChordSteps([
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootIv, quality: "major", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 },
+    { root: ctx.rootV, quality: "dom7", beats: 2 },
+    { root: ctx.rootVi, quality: "minor", beats: 2 },
+    { root: ctx.rootFlatVii, quality: "dom7", beats: 2 },
+    { root: ctx.rootI, quality: "major", beats: 2 }
+  ], token);
+}
+
+function getGuidedExerciseRegistry() {
+  return {
+    power: {
+      instruction: "Notice how dominant tension increases anticipation.",
+      run: runExercisePowerOfResolution
+    },
+    tension: {
+      instruction: "More tension creates stronger release.",
+      run: runExerciseTensionLadder
+    },
+    secondary: {
+      instruction: "Temporary tonicization shifts the center.",
+      run: runExerciseSecondarySpotlight
+    },
+    borrowed: {
+      instruction: "Parallel minor changes emotional color.",
+      run: runExerciseBorrowedMoodShift
+    },
+    tritone: {
+      instruction: "Different path. Same destination.",
+      run: runExerciseTritoneSurprise
+    },
+    "ii-v-i": {
+      instruction: "Forward motion through harmonic gravity.",
+      run: runExerciseIiVIBuild
+    },
+    modal: {
+      instruction: "Same root. Different universe.",
+      run: runExerciseModalColorContrast
+    },
+    whole: {
+      instruction: "Gravity dissolves in symmetry.",
+      run: runExerciseWholeToneAtmosphere
+    },
+    arpeggio: {
+      instruction: "Voice leading lives inside inversion.",
+      run: runExerciseArpeggioArchitecture
+    },
+    cadence: {
+      instruction: "Resolution takes many forms.",
+      run: runExerciseCadenceLab
+    }
+  };
+}
+
+async function runGuidedExercise(exerciseId) {
+  const registry = getGuidedExerciseRegistry();
+  const entry = registry[String(exerciseId || "").trim()];
+  if (!entry) return;
+  repertoireState.activeExerciseId = String(exerciseId);
+  updateExerciseRelatedStudyButton();
+  highlightActiveExerciseButton();
+  stopAllPlayback();
+  const token = paletteSequenceToken;
+  const context = getGuidedExerciseContext();
+  setGuidedExerciseInstruction(entry.instruction);
+  if (el.chordDisplay) {
+    el.chordDisplay.textContent = `Exercise: ${entry.instruction}`;
+  }
+  await entry.run(token, context);
+}
+
+function normalizePitchClassName(raw) {
+  const token = String(raw || "").trim();
+  if (!token) return "";
+  const first = token[0]?.toUpperCase?.() || "";
+  const accidental = token.slice(1).replace(/\s+/g, "");
+  const normalized = `${first}${accidental}`;
+  return FLAT_TO_SHARP[normalized] || normalized;
+}
+
+function normalizeNoteToken(note) {
+  const token = String(note || "").trim();
+  const match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(token);
+  if (!match) return token;
+  const pitch = normalizePitchClassName(`${match[1].toUpperCase()}${match[2] || ""}`);
+  return `${pitch}${match[3]}`;
+}
+
+function getPitchClassIndex(raw) {
+  const normalized = normalizePitchClassName(raw);
+  return NOTES.indexOf(normalized);
+}
+
+function clampMidiRange(midi) {
+  const value = Math.round(Number(midi));
+  if (!Number.isFinite(value)) return null;
+  return Math.max(21, Math.min(108, value));
+}
+
+function getRepertoireTransposeSemitones(item) {
+  const selectedKey = appState.root || el.keySelect?.value || "C";
+  const itemKey = normalizePitchClassName(item?.defaultKey || selectedKey);
+  const selectedIdx = getPitchClassIndex(selectedKey);
+  const itemIdx = getPitchClassIndex(itemKey);
+  if (selectedIdx < 0 || itemIdx < 0) return 0;
+  return selectedIdx - itemIdx;
+}
+
+function classifyRepertoireTrackRoleByName(trackName = "") {
+  const text = String(trackName || "").toLowerCase();
+  if (!text) return "";
+  if (text.includes("melody") || text.includes("lead") || text.includes("right")) return "melody";
+  if (text.includes("bass") || text.includes("left")) return "bass";
+  if (text.includes("drum") || text.includes("perc")) return "drums";
+  if (text.includes("pad") || text.includes("string")) return "pad";
+  return "";
+}
+
+function buildRepertoireCacheKey(item) {
+  const midiUrl = item?.arrangement?.midi?.url || "";
+  return `${item?.id || "unknown"}::${midiUrl}`;
+}
+
+function buildRepertoireMidiFetchUrl(rawUrl) {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) {
+    return `${REPERTOIRE_MIDI_PROXY_ENDPOINT}?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
+async function getRepertoireCacheDb() {
+  if (repertoireState.dbPromise) return repertoireState.dbPromise;
+  if (!("indexedDB" in window)) return null;
+  repertoireState.dbPromise = new Promise((resolve) => {
+    const request = indexedDB.open(REPERTOIRE_CACHE_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(REPERTOIRE_CACHE_STORE)) {
+        db.createObjectStore(REPERTOIRE_CACHE_STORE, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+  return repertoireState.dbPromise;
+}
+
+async function readRepertoireCacheEntry(cacheKey) {
+  try {
+    const db = await getRepertoireCacheDb();
+    if (!db) return null;
+    return await new Promise((resolve) => {
+      const tx = db.transaction(REPERTOIRE_CACHE_STORE, "readonly");
+      const store = tx.objectStore(REPERTOIRE_CACHE_STORE);
+      const req = store.get(cacheKey);
+      req.onsuccess = () => resolve(req.result?.payload || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function writeRepertoireCacheEntry(cacheKey, payload) {
+  try {
+    const db = await getRepertoireCacheDb();
+    if (!db) return false;
+    return await new Promise((resolve) => {
+      const tx = db.transaction(REPERTOIRE_CACHE_STORE, "readwrite");
+      const store = tx.objectStore(REPERTOIRE_CACHE_STORE);
+      store.put({
+        id: cacheKey,
+        payload,
+        updatedAt: Date.now()
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+function parseMidiVarInt(view, state) {
+  let value = 0;
+  for (let i = 0; i < 4; i += 1) {
+    if (state.offset >= view.byteLength) return value;
+    const byte = view.getUint8(state.offset);
+    state.offset += 1;
+    value = (value << 7) | (byte & 0x7f);
+    if ((byte & 0x80) === 0) return value;
+  }
+  return value;
+}
+
+function parseMidiString(view, state, length) {
+  const safeLength = Math.max(0, Math.min(length, view.byteLength - state.offset));
+  const bytes = new Uint8Array(view.buffer, view.byteOffset + state.offset, safeLength);
+  state.offset += safeLength;
+  const decoder = new TextDecoder("utf-8");
+  return decoder.decode(bytes);
+}
+
+function parseMidiArrayBufferToEvents(arrayBuffer, fallbackBpm = 80) {
+  const view = new DataView(arrayBuffer);
+  const state = { offset: 0 };
+  const readU16 = () => {
+    const value = view.getUint16(state.offset);
+    state.offset += 2;
+    return value;
+  };
+  const readU32 = () => {
+    const value = view.getUint32(state.offset);
+    state.offset += 4;
+    return value;
+  };
+  const readU8 = () => {
+    const value = view.getUint8(state.offset);
+    state.offset += 1;
+    return value;
+  };
+  const readChunkHeader = () => {
+    const id = parseMidiString(view, state, 4);
+    const length = readU32();
+    return { id, length };
+  };
+
+  const headerChunk = readChunkHeader();
+  if (headerChunk.id !== "MThd") {
+    throw new Error("Invalid MIDI header.");
+  }
+  const headerEnd = state.offset + headerChunk.length;
+  const format = readU16();
+  const trackCount = readU16();
+  const division = readU16();
+  state.offset = headerEnd;
+
+  const defaultTempoMicros = Math.round(60_000_000 / Math.max(30, Math.min(240, Number(fallbackBpm) || 80)));
+  const ppq = (division & 0x8000) === 0 ? Math.max(1, division) : 480;
+  const tempoMap = [{ tick: 0, microPerQuarter: defaultTempoMicros }];
+  const noteEvents = [];
+  const trackStats = new Map();
+
+  const totalTracks = format === 0 ? 1 : trackCount;
+  for (let trackIndex = 0; trackIndex < totalTracks; trackIndex += 1) {
+    if (state.offset >= view.byteLength) break;
+    const trackChunk = readChunkHeader();
+    if (trackChunk.id !== "MTrk") {
+      state.offset += trackChunk.length;
+      continue;
+    }
+
+    const trackEnd = state.offset + trackChunk.length;
+    let tick = 0;
+    let runningStatus = null;
+    let trackName = "";
+    const activeNotes = new Map();
+
+    while (state.offset < trackEnd) {
+      const delta = parseMidiVarInt(view, state);
+      tick += delta;
+      if (state.offset >= trackEnd) break;
+
+      let statusByte = readU8();
+      if (statusByte < 0x80) {
+        if (runningStatus === null) break;
+        state.offset -= 1;
+        statusByte = runningStatus;
+      } else {
+        runningStatus = statusByte;
+      }
+
+      if (statusByte === 0xff) {
+        runningStatus = null;
+        if (state.offset >= trackEnd) break;
+        const metaType = readU8();
+        const metaLength = parseMidiVarInt(view, state);
+        if (metaType === 0x03) {
+          trackName = parseMidiString(view, state, metaLength);
+          continue;
+        }
+        if (metaType === 0x51 && metaLength === 3 && state.offset + 3 <= trackEnd) {
+          const microPerQuarter = (readU8() << 16) | (readU8() << 8) | readU8();
+          if (microPerQuarter > 0) {
+            tempoMap.push({ tick, microPerQuarter });
+          }
+          continue;
+        }
+        state.offset += Math.max(0, Math.min(metaLength, trackEnd - state.offset));
+        continue;
+      }
+
+      if (statusByte === 0xf0 || statusByte === 0xf7) {
+        runningStatus = null;
+        const sysexLength = parseMidiVarInt(view, state);
+        state.offset += Math.max(0, Math.min(sysexLength, trackEnd - state.offset));
+        continue;
+      }
+
+      const eventType = statusByte & 0xf0;
+      const channel = statusByte & 0x0f;
+      if (eventType === 0xc0 || eventType === 0xd0) {
+        if (state.offset < trackEnd) readU8();
+        continue;
+      }
+
+      if (state.offset + 2 > trackEnd) break;
+      const note = readU8();
+      const velocity = readU8();
+      const noteKey = `${channel}:${note}`;
+      const roleByName = classifyRepertoireTrackRoleByName(trackName);
+
+      if (eventType === 0x90 && velocity > 0) {
+        if (!activeNotes.has(noteKey)) activeNotes.set(noteKey, []);
+        activeNotes.get(noteKey).push({
+          tick,
+          velocity,
+          trackIndex,
+          trackName,
+          role: roleByName
+        });
+        continue;
+      }
+
+      if (eventType === 0x80 || (eventType === 0x90 && velocity === 0)) {
+        const stack = activeNotes.get(noteKey);
+        if (!stack || !stack.length) continue;
+        const start = stack.pop();
+        const durationTicks = Math.max(1, tick - start.tick);
+        noteEvents.push({
+          startTick: start.tick,
+          durationTicks,
+          midi: note,
+          velocity: start.velocity / 127,
+          channel,
+          trackIndex,
+          trackName: start.trackName || trackName || "",
+          role: start.role || roleByName || ""
+        });
+      }
+    }
+
+    const trackRole = classifyRepertoireTrackRoleByName(trackName);
+    trackStats.set(trackIndex, {
+      name: trackName,
+      role: trackRole
+    });
+
+    activeNotes.forEach((stack, noteKey) => {
+      const [channelToken, noteToken] = noteKey.split(":");
+      while (stack.length) {
+        const start = stack.pop();
+        const durationTicks = Math.max(1, tick - start.tick);
+        noteEvents.push({
+          startTick: start.tick,
+          durationTicks,
+          midi: Number(noteToken),
+          velocity: start.velocity / 127,
+          channel: Number(channelToken),
+          trackIndex,
+          trackName: start.trackName || trackName || "",
+          role: start.role || trackRole || ""
+        });
+      }
+    });
+
+    state.offset = trackEnd;
+  }
+
+  noteEvents.sort((a, b) => {
+    if (a.startTick !== b.startTick) return a.startTick - b.startTick;
+    if (a.trackIndex !== b.trackIndex) return a.trackIndex - b.trackIndex;
+    return a.midi - b.midi;
+  });
+
+  const byTrack = new Map();
+  noteEvents.forEach((event) => {
+    if (!byTrack.has(event.trackIndex)) {
+      byTrack.set(event.trackIndex, { noteCount: 0, midiSum: 0, explicitRole: event.role || "" });
+    }
+    const stat = byTrack.get(event.trackIndex);
+    stat.noteCount += 1;
+    stat.midiSum += event.midi;
+    if (!stat.explicitRole && event.role) {
+      stat.explicitRole = event.role;
+    }
+  });
+
+  let melodyTrack = -1;
+  let melodyAvg = -Infinity;
+  byTrack.forEach((stat, trackIndex) => {
+    const avg = stat.noteCount > 0 ? stat.midiSum / stat.noteCount : -Infinity;
+    if (avg > melodyAvg) {
+      melodyAvg = avg;
+      melodyTrack = trackIndex;
+    }
+  });
+
+  const events = noteEvents.map((event) => {
+    const trackInfo = byTrack.get(event.trackIndex) || { explicitRole: "" };
+    let role = event.role || trackInfo.explicitRole || "";
+    if (!role && melodyTrack >= 0 && event.trackIndex === melodyTrack) {
+      role = "melody";
+    }
+    return {
+      startBeat: event.startTick / ppq,
+      durationBeats: Math.max(1 / 24, event.durationTicks / ppq),
+      midi: event.midi,
+      velocity: Math.max(0.2, Math.min(1, Number(event.velocity) || 0.8)),
+      channel: event.channel,
+      trackIndex: event.trackIndex,
+      trackName: event.trackName || trackStats.get(event.trackIndex)?.name || "",
+      role
+    };
+  });
+
+  const polyphonyAtBeat = new Map();
+  events.forEach((event) => {
+    const key = event.startBeat.toFixed(4);
+    polyphonyAtBeat.set(key, (polyphonyAtBeat.get(key) || 0) + 1);
+  });
+  events.forEach((event) => {
+    event.polyphony = polyphonyAtBeat.get(event.startBeat.toFixed(4)) || 1;
+  });
+
+  const durationBeats = events.reduce((max, event) => {
+    return Math.max(max, event.startBeat + event.durationBeats);
+  }, 0);
+
+  return {
+    ppq,
+    tempoMap,
+    trackFormat: format,
+    events,
+    durationBeats
+  };
+}
+
+function parseEmbeddedMidiEvents(rawEvents = []) {
+  const sourceEvents = Array.isArray(rawEvents) ? rawEvents : [];
+  const active = new Map();
+  const notes = [];
+  sourceEvents.forEach((raw) => {
+    const type = String(raw?.type || "").toLowerCase();
+    const t = Number(raw?.t);
+    const noteToken = normalizeNoteToken(raw?.note);
+    const noteMidi = noteNameToMidi(noteToken);
+    if (!Number.isFinite(t) || !Number.isFinite(noteMidi)) return;
+    const channel = Number(raw?.ch) || 0;
+    const key = `${channel}:${noteMidi}`;
+    if (type === "note_on" && Number(raw?.vel) > 0) {
+      if (!active.has(key)) active.set(key, []);
+      active.get(key).push({
+        t,
+        vel: Math.max(0.15, Math.min(1, Number(raw?.vel) || 0.8)),
+        channel
+      });
+      return;
+    }
+    if (type === "note_off" || (type === "note_on" && Number(raw?.vel) === 0)) {
+      const stack = active.get(key);
+      if (!stack || !stack.length) return;
+      const start = stack.pop();
+      notes.push({
+        startBeat: start.t,
+        durationBeats: Math.max(1 / 24, t - start.t),
+        midi: noteMidi,
+        velocity: start.vel,
+        channel,
+        trackIndex: Number(raw?.track) || 0,
+        trackName: String(raw?.trackName || ""),
+        role: classifyRepertoireTrackRoleByName(raw?.trackName || "")
+      });
+    }
+  });
+
+  notes.sort((a, b) => a.startBeat - b.startBeat || a.midi - b.midi);
+  const polyphonyAtBeat = new Map();
+  notes.forEach((event) => {
+    const key = event.startBeat.toFixed(4);
+    polyphonyAtBeat.set(key, (polyphonyAtBeat.get(key) || 0) + 1);
+  });
+  notes.forEach((event) => {
+    event.polyphony = polyphonyAtBeat.get(event.startBeat.toFixed(4)) || 1;
+  });
+  const durationBeats = notes.reduce((max, event) => {
+    return Math.max(max, event.startBeat + event.durationBeats);
+  }, 0);
+  return {
+    events: notes,
+    durationBeats
+  };
+}
+
+function parseChordSymbolToken(chordToken) {
+  const token = String(chordToken || "").trim();
+  const match = /^([A-Ga-g])([#b]?)(.*)$/.exec(token);
+  if (!match) return null;
+  const root = normalizePitchClassName(`${match[1].toUpperCase()}${match[2] || ""}`);
+  const suffix = String(match[3] || "").trim();
+  const normalized = suffix.toLowerCase().replace(/\s+/g, "");
+  let quality = "major";
+  if (!normalized || normalized === "maj") quality = "major";
+  else if (normalized === "m" || normalized === "min") quality = "minor";
+  else if (normalized === "7" || normalized === "dom7") quality = "dom7";
+  else if (normalized === "maj7" || normalized === "ma7" || normalized === "delta7") quality = "maj7";
+  else if (normalized === "m7" || normalized === "min7" || normalized === "-7") quality = "min7";
+  else if (normalized === "dim" || normalized === "o" || normalized === "°") quality = "diminished";
+  else if (normalized === "m7b5" || normalized === "ø" || normalized === "halfdim") quality = "m7b5";
+  else if (normalized === "sus2") quality = "sus2";
+  else if (normalized === "sus4" || normalized === "sus") quality = "sus4";
+  else if (normalized === "+" || normalized === "aug") quality = "augmented";
+  return {
+    root,
+    quality,
+    suffix
+  };
+}
+
+function applyProgressionVoicing(midiNotes, quality, voicing = "close") {
+  const midi = (Array.isArray(midiNotes) ? midiNotes : []).filter((note) => Number.isFinite(note)).slice().sort((a, b) => a - b);
+  if (!midi.length) return [];
+  if (voicing === "shell") {
+    if (["maj7", "min7", "dom7", "m7b5"].includes(quality) && midi.length >= 4) {
+      return [midi[0], midi[1], midi[midi.length - 1]];
+    }
+    if (midi.length >= 3) {
+      return [midi[0], midi[1], midi[2] + 12];
+    }
+  }
+  if (voicing === "open") {
+    if (midi.length >= 3) {
+      return [midi[0], midi[1] + 12, midi[midi.length - 1]];
+    }
+  }
+  return midi;
+}
+
+function prepareChordProgressionItem(item) {
+  const progression = Array.isArray(item?.arrangement?.progression) ? item.arrangement.progression : [];
+  let beatCursor = 0;
+  const chordSteps = progression.map((step, index) => {
+    const parsed = parseChordSymbolToken(step?.chord || "");
+    if (!parsed) return null;
+    const beats = Math.max(1 / 4, Number(step?.beats) || 4);
+    const baseMidi = buildChordMidi(parsed.root, parsed.quality, "root position", 3);
+    const voicing = String(step?.voicing || "close");
+    const voicedMidi = applyProgressionVoicing(baseMidi, parsed.quality, voicing);
+    const payload = {
+      id: `${item.id}-step-${index}`,
+      startBeat: beatCursor,
+      beats,
+      root: parsed.root,
+      quality: parsed.quality,
+      midi: voicedMidi,
+      style: String(step?.style || "default"),
+      voicing,
+      label: `${parsed.root}${CHORDS[parsed.quality]?.short || ""}`
+    };
+    beatCursor += beats;
+    return payload;
+  }).filter(Boolean);
+  const durationBeats = chordSteps.reduce((sum, step) => Math.max(sum, step.startBeat + step.beats), 0);
+  return {
+    id: item.id,
+    type: "chord_progression",
+    sourceItem: item,
+    chordSteps,
+    durationBeats
+  };
+}
+
+async function fetchMidiDataForRepertoireItem(item) {
+  const midiUrl = item?.arrangement?.midi?.url;
+  const requestUrl = buildRepertoireMidiFetchUrl(midiUrl);
+  if (!requestUrl) throw new Error("MIDI URL missing.");
+  const response = await fetch(requestUrl);
+  if (!response.ok) {
+    throw new Error(`MIDI fetch failed (${response.status}).`);
+  }
+  return response.arrayBuffer();
+}
+
+async function prepareMidiFileItem(item) {
+  const cacheKey = buildRepertoireCacheKey(item);
+  if (repertoireState.midiMemoryCache.has(cacheKey)) {
+    const memoryPayload = repertoireState.midiMemoryCache.get(cacheKey);
+    return {
+      id: item.id,
+      type: "midi_events",
+      sourceItem: item,
+      noteEvents: memoryPayload.events,
+      durationBeats: memoryPayload.durationBeats
+    };
+  }
+
+  const dbPayload = await readRepertoireCacheEntry(cacheKey);
+  if (dbPayload?.events?.length) {
+    repertoireState.midiMemoryCache.set(cacheKey, dbPayload);
+    return {
+      id: item.id,
+      type: "midi_events",
+      sourceItem: item,
+      noteEvents: dbPayload.events,
+      durationBeats: dbPayload.durationBeats
+    };
+  }
+
+  const arrayBuffer = await fetchMidiDataForRepertoireItem(item);
+  const parsed = parseMidiArrayBufferToEvents(arrayBuffer, Number(item?.defaultBpm) || 80);
+  const payload = {
+    events: parsed.events,
+    durationBeats: parsed.durationBeats,
+    ppq: parsed.ppq,
+    tempoMap: parsed.tempoMap
+  };
+  repertoireState.midiMemoryCache.set(cacheKey, payload);
+  void writeRepertoireCacheEntry(cacheKey, payload);
+  return {
+    id: item.id,
+    type: "midi_events",
+    sourceItem: item,
+    noteEvents: payload.events,
+    durationBeats: payload.durationBeats
+  };
+}
+
+function prepareEmbeddedMidiItem(item) {
+  const normalized = parseEmbeddedMidiEvents(item?.arrangement?.events || []);
+  return {
+    id: item.id,
+    type: "midi_events",
+    sourceItem: item,
+    noteEvents: normalized.events,
+    durationBeats: normalized.durationBeats
+  };
+}
+
+async function prepareRepertoireItem(item) {
+  if (!item) return null;
+  const arrangementType = String(item?.arrangement?.type || "").toLowerCase();
+  if (arrangementType === "chord_progression") {
+    return prepareChordProgressionItem(item);
+  }
+  if (arrangementType === "midi_events") {
+    return prepareEmbeddedMidiItem(item);
+  }
+  return prepareMidiFileItem(item);
+}
+
+function normalizeRepertoireItem(rawItem) {
+  const item = rawItem && typeof rawItem === "object" ? rawItem : {};
+  const id = String(item.id || "").trim();
+  if (!id) return null;
+  const genre = String(item.genre || "study").trim() || "study";
+  const loop = item.loop && typeof item.loop === "object" ? item.loop : {};
+  return {
+    ...item,
+    id,
+    title: String(item.title || id),
+    composerOrSource: String(item.composerOrSource || "Unknown"),
+    genre,
+    tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag)).filter(Boolean) : [],
+    difficulty: Math.max(1, Math.min(5, Number(item.difficulty) || 1)),
+    defaultKey: normalizePitchClassName(item.defaultKey || "C") || "C",
+    defaultBpm: Math.max(30, Math.min(240, Number(item.defaultBpm) || 80)),
+    loop: {
+      enabled: loop.enabled !== false,
+      startBeat: Math.max(0, Number(loop.startBeat) || 0),
+      endBeat: Math.max(1, Number(loop.endBeat) || 16)
+    },
+    lessonLinks: Array.isArray(item.lessonLinks) ? item.lessonLinks : [],
+    ui: item.ui && typeof item.ui === "object" ? item.ui : { description: "", section: "", showInFeatured: false }
+  };
+}
+
+function readRepertoireSeedFromWindow() {
+  const seed = window.BABY_STEPS_REPERTOIRE_SEED;
+  if (!seed || typeof seed !== "object") return null;
+  const itemsJson = Array.isArray(seed.items) ? seed.items : [];
+  const stylesJson = seed.styles && typeof seed.styles === "object" ? seed.styles : {};
+  const normalizedItems = itemsJson
+    .map(normalizeRepertoireItem)
+    .filter(Boolean);
+  if (!normalizedItems.length) return null;
+  return {
+    items: normalizedItems,
+    styles: stylesJson,
+    source: "seed"
+  };
+}
+
+async function loadRepertoireLibrary() {
+  const seedFallback = readRepertoireSeedFromWindow();
+  try {
+    const [itemsResponse, stylesResponse] = await Promise.all([
+      fetch(REPERTOIRE_DATA_URL),
+      fetch(REPERTOIRE_STYLES_DATA_URL)
+    ]);
+    if (!itemsResponse.ok) {
+      throw new Error(`Failed to load repertoire data (${itemsResponse.status}).`);
+    }
+    if (!stylesResponse.ok) {
+      throw new Error(`Failed to load repertoire styles (${stylesResponse.status}).`);
+    }
+    const [itemsJson, stylesJson] = await Promise.all([
+      itemsResponse.json(),
+      stylesResponse.json()
+    ]);
+    const normalizedItems = (Array.isArray(itemsJson) ? itemsJson : [])
+      .map(normalizeRepertoireItem)
+      .filter(Boolean);
+    return {
+      items: normalizedItems,
+      styles: stylesJson && typeof stylesJson === "object" ? stylesJson : {},
+      source: "fetch"
+    };
+  } catch (error) {
+    if (seedFallback) return seedFallback;
+    throw error;
+  }
+}
+
+function syncRepertoireControlState() {
+  if (el.repertoireLoopToggle) el.repertoireLoopToggle.checked = repertoireState.loopEnabled;
+  if (el.repertoireMuteMelodyToggle) el.repertoireMuteMelodyToggle.checked = repertoireState.muteMelody;
+  if (el.repertoireOnlyChordsToggle) el.repertoireOnlyChordsToggle.checked = repertoireState.onlyChords;
+  if (el.repertoireMetronomeToggle) el.repertoireMetronomeToggle.checked = repertoireState.metronomeEnabled;
+  if (el.repertoireLoopStart) el.repertoireLoopStart.value = String(Math.round(repertoireState.loopStartBeat));
+  if (el.repertoireLoopEnd) el.repertoireLoopEnd.value = String(Math.round(repertoireState.loopEndBeat));
+  updateRepertoireLoopLabel();
+  updateRepertoirePlayPauseButton();
+}
+
+function updateRepertoirePlayPauseButton() {
+  if (!el.repertoirePlayPauseBtn) return;
+  if (repertoireState.isPlaying) {
+    el.repertoirePlayPauseBtn.textContent = "Pause";
+    return;
+  }
+  if (repertoireState.isPaused) {
+    el.repertoirePlayPauseBtn.textContent = "Resume";
+    return;
+  }
+  el.repertoirePlayPauseBtn.textContent = "Play";
+}
+
+function updateRepertoireLoopLabel() {
+  if (!el.repertoireLoopLabel) return;
+  const start = Math.round(repertoireState.loopStartBeat);
+  const end = Math.round(repertoireState.loopEndBeat);
+  el.repertoireLoopLabel.textContent = `Loop: ${start} to ${end} beats`;
+}
+
+function getRepertoireFilterById(filterId) {
+  return REPERTOIRE_FILTER_OPTIONS.find((entry) => entry.id === filterId) || REPERTOIRE_FILTER_OPTIONS[0];
+}
+
+function renderRepertoireFilterChips() {
+  if (!el.repertoireFilterChips) return;
+  el.repertoireFilterChips.innerHTML = "";
+  REPERTOIRE_FILTER_OPTIONS.forEach((filterOption) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "repertoire-chip";
+    if (filterOption.id === repertoireState.filteredGenre) {
+      button.classList.add("is-active");
+    }
+    button.dataset.repertoireFilter = filterOption.id;
+    button.textContent = filterOption.label;
+    el.repertoireFilterChips.appendChild(button);
+  });
+}
+
+function getFeaturedRepertoireItems() {
+  const explicit = repertoireState.items.filter((item) => item.ui?.showInFeatured);
+  if (explicit.length >= 6) return explicit.slice(0, 8);
+  const combined = [...explicit];
+  repertoireState.items.forEach((item) => {
+    if (combined.some((entry) => entry.id === item.id)) return;
+    if (combined.length >= 8) return;
+    combined.push(item);
+  });
+  return combined;
+}
+
+function renderRepertoireFeatured() {
+  if (!el.repertoireFeatured) return;
+  el.repertoireFeatured.innerHTML = "";
+  const featured = getFeaturedRepertoireItems();
+  if (!featured.length) {
+    const placeholder = document.createElement("div");
+    placeholder.className = "repertoire-row-meta";
+    placeholder.textContent = repertoireState.loadError
+      ? "Could not load featured library."
+      : "Loading featured library...";
+    el.repertoireFeatured.appendChild(placeholder);
+    return;
+  }
+  featured.forEach((item) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "repertoire-feature-card";
+    card.dataset.repertoireFeaturedId = item.id;
+    if (item.id === repertoireState.selectedId) {
+      card.classList.add("is-selected");
+    }
+    const title = document.createElement("strong");
+    title.textContent = item.title;
+    const meta = document.createElement("span");
+    meta.textContent = `${item.genre.replace("_", " ")} · ${item.composerOrSource}`;
+    card.appendChild(title);
+    card.appendChild(meta);
+    el.repertoireFeatured.appendChild(card);
+  });
+}
+
+function getFilteredRepertoireItems() {
+  const search = repertoireState.searchQuery.trim().toLowerCase();
+  const filter = getRepertoireFilterById(repertoireState.filteredGenre);
+  return repertoireState.items.filter((item) => {
+    if (filter.id !== "all" && !filter.genres.includes(item.genre)) {
+      return false;
+    }
+    if (!search) return true;
+    const haystack = [
+      item.title,
+      item.composerOrSource,
+      item.genre,
+      ...(Array.isArray(item.tags) ? item.tags : []),
+      item.ui?.description || ""
+    ].join(" ").toLowerCase();
+    return haystack.includes(search);
+  });
+}
+
+function updateRepertoireTransportSummary() {
+  if (!el.repertoireTransport) return;
+  const item = repertoireState.selectedItem;
+  if (!item) {
+    el.repertoireTransport.classList.add("is-hidden");
+    if (el.repertoireSelectedTitle) el.repertoireSelectedTitle.textContent = "Select a repertoire item";
+    if (el.repertoireSelectedMeta) el.repertoireSelectedMeta.textContent = "";
+    return;
+  }
+
+  el.repertoireTransport.classList.remove("is-hidden");
+  if (el.repertoireSelectedTitle) {
+    el.repertoireSelectedTitle.textContent = item.title;
+  }
+  if (el.repertoireSelectedMeta) {
+    const tags = (item.tags || []).slice(0, 4).join(" · ");
+    el.repertoireSelectedMeta.textContent = `${item.composerOrSource} · ${item.genre} · key ${appState.root} · bpm ${appState.tempoBpm}${tags ? ` · ${tags}` : ""}`;
+  }
+  syncRepertoireControlState();
+}
+
+function renderRepertoireList() {
+  if (!el.repertoireList) return;
+  const items = getFilteredRepertoireItems();
+  repertoireState.listSnapshot = items;
+  el.repertoireList.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "repertoire-row-meta";
+    if (repertoireState.loadError) {
+      empty.textContent = `Repertoire unavailable: ${repertoireState.loadError}. Run from http://localhost:4010 (not file://).`;
+    } else if (!repertoireState.hasLoaded) {
+      empty.textContent = "Loading repertoire library...";
+    } else {
+      empty.textContent = "No items match this filter.";
+    }
+    el.repertoireList.appendChild(empty);
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("article");
+    row.className = "repertoire-row";
+    row.dataset.repertoireId = item.id;
+    row.setAttribute("role", "listitem");
+    if (item.id === repertoireState.selectedId) row.classList.add("is-selected");
+
+    const head = document.createElement("div");
+    head.className = "repertoire-row-head";
+    const title = document.createElement("div");
+    title.className = "repertoire-row-title";
+    title.textContent = item.title;
+    const meta = document.createElement("div");
+    meta.className = "repertoire-row-meta";
+    meta.textContent = `${item.composerOrSource} · ${item.genre} · diff ${item.difficulty}`;
+    head.appendChild(title);
+    head.appendChild(meta);
+
+    const tags = document.createElement("div");
+    tags.className = "repertoire-tags";
+    item.tags.slice(0, 6).forEach((tag) => {
+      const pill = document.createElement("span");
+      pill.className = "repertoire-tag";
+      pill.textContent = tag;
+      tags.appendChild(pill);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "repertoire-row-actions";
+    const playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.dataset.repertoireAction = "play";
+    playBtn.textContent = "Play";
+    const loopBtn = document.createElement("button");
+    loopBtn.type = "button";
+    loopBtn.dataset.repertoireAction = "loop";
+    loopBtn.textContent = item.loop?.enabled === false ? "Loop Off" : "Loop";
+    const infoBtn = document.createElement("button");
+    infoBtn.type = "button";
+    infoBtn.dataset.repertoireAction = "info";
+    infoBtn.textContent = "Info";
+    actions.appendChild(playBtn);
+    actions.appendChild(loopBtn);
+    actions.appendChild(infoBtn);
+
+    row.appendChild(head);
+    row.appendChild(tags);
+    row.appendChild(actions);
+    el.repertoireList.appendChild(row);
+  });
+}
+
+function getRepertoireItemById(itemId) {
+  const id = String(itemId || "");
+  return repertoireState.items.find((item) => item.id === id) || null;
+}
+
+function closeRepertoireInfoModal() {
+  if (!el.repertoireInfoModal) return;
+  el.repertoireInfoModal.classList.add("is-hidden");
+  el.repertoireInfoModal.textContent = "";
+  repertoireState.infoItemId = "";
+}
+
+function renderRepertoireInfoModal(item) {
+  if (!el.repertoireInfoModal || !item) return;
+  const source = item.arrangement?.source || {};
+  const attribution = source.attribution || {};
+  el.repertoireInfoModal.innerHTML = "";
+  const title = document.createElement("strong");
+  title.textContent = `License: ${source.licenseSpdx || "Unknown"}`;
+  const provider = document.createElement("p");
+  provider.textContent = `Provider: ${source.provider || "Unknown"}`;
+  const attributionLine = document.createElement("p");
+  attributionLine.textContent = `Attribution: ${attribution.text || "Not provided"}`;
+  const link = document.createElement("a");
+  link.href = attribution.link || source.url || "#";
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = attribution.link || source.url || "Source";
+  const note = document.createElement("p");
+  note.textContent = "Public domain and licenses may vary by country; verify if distributing commercially.";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "btn-tonal";
+  close.dataset.repertoireInfoAction = "close";
+  close.textContent = "Close";
+  el.repertoireInfoModal.appendChild(title);
+  el.repertoireInfoModal.appendChild(provider);
+  el.repertoireInfoModal.appendChild(attributionLine);
+  el.repertoireInfoModal.appendChild(link);
+  el.repertoireInfoModal.appendChild(note);
+  el.repertoireInfoModal.appendChild(close);
+  el.repertoireInfoModal.classList.remove("is-hidden");
+  repertoireState.infoItemId = item.id;
+}
+
+function setRepertoireLoopRange(startBeat, endBeat) {
+  const minStart = 0;
+  const maxBeat = Math.max(1, Number(el.repertoireLoopEnd?.max || 64));
+  const safeStart = Math.max(minStart, Math.min(maxBeat - 1, Math.round(Number(startBeat) || 0)));
+  const safeEnd = Math.max(safeStart + 1, Math.min(maxBeat, Math.round(Number(endBeat) || maxBeat)));
+  repertoireState.loopStartBeat = safeStart;
+  repertoireState.loopEndBeat = safeEnd;
+  if (el.repertoireLoopStart) el.repertoireLoopStart.value = String(safeStart);
+  if (el.repertoireLoopEnd) el.repertoireLoopEnd.value = String(safeEnd);
+  updateRepertoireLoopLabel();
+}
+
+function getRepertoireLoopBounds(item, prepared) {
+  const duration = Math.max(1, Math.ceil(Number(prepared?.durationBeats) || Number(item?.loop?.endBeat) || 16));
+  const suggestedStart = Math.max(0, Math.round(Number(item?.loop?.startBeat) || 0));
+  const suggestedEnd = Math.max(suggestedStart + 1, Math.round(Number(item?.loop?.endBeat) || duration));
+  const start = Math.min(duration - 1, suggestedStart);
+  const end = Math.min(duration, Math.max(start + 1, suggestedEnd));
+  return { start, end, duration };
+}
+
+function updateRepertoireLoopControlsFromItem(item, prepared = null) {
+  if (!item) return;
+  const bounds = getRepertoireLoopBounds(item, prepared);
+  if (el.repertoireLoopStart) {
+    el.repertoireLoopStart.max = String(bounds.duration - 1);
+  }
+  if (el.repertoireLoopEnd) {
+    el.repertoireLoopEnd.max = String(bounds.duration);
+  }
+  setRepertoireLoopRange(bounds.start, bounds.end);
+  repertoireState.loopEnabled = item.loop?.enabled !== false;
+  if (el.repertoireLoopToggle) {
+    el.repertoireLoopToggle.checked = repertoireState.loopEnabled;
+  }
+}
+
+function updateRepertoireSelectionUi() {
+  renderRepertoireFeatured();
+  renderRepertoireFilterChips();
+  renderRepertoireList();
+  updateRepertoireTransportSummary();
+  renderRepertoireSuggestions();
+  updateExerciseRelatedStudyButton();
+}
+
+function selectRepertoireItem(itemId, options = {}) {
+  const item = getRepertoireItemById(itemId);
+  if (!item) return;
+  repertoireState.selectedId = item.id;
+  repertoireState.selectedItem = item;
+  repertoireState.prepared = null;
+  repertoireState.isPaused = false;
+  repertoireState.playheadBeat = 0;
+  if (options.applyDefaults === true) {
+    setTempoBpm(item.defaultBpm || appState.tempoBpm);
+  }
+  updateRepertoireLoopControlsFromItem(item);
+  closeRepertoireInfoModal();
+  updateRepertoireSelectionUi();
+}
+
+async function ensurePreparedSelectedRepertoireItem() {
+  const item = repertoireState.selectedItem;
+  if (!item) return null;
+  const existing = repertoireState.preparedById.get(item.id);
+  if (existing) {
+    repertoireState.prepared = existing;
+    updateRepertoireLoopControlsFromItem(item, existing);
+    return existing;
+  }
+  const prepared = await prepareRepertoireItem(item);
+  if (!prepared) return null;
+  repertoireState.preparedById.set(item.id, prepared);
+  repertoireState.prepared = prepared;
+  updateRepertoireLoopControlsFromItem(item, prepared);
+  return prepared;
+}
+
+function getActiveRepertoireLoopBounds(prepared, item) {
+  const duration = Math.max(1, Number(prepared?.durationBeats) || 16);
+  const start = Math.max(0, Math.min(duration - 1, Number(repertoireState.loopStartBeat) || 0));
+  const end = Math.max(start + 1, Math.min(duration, Number(repertoireState.loopEndBeat) || duration));
+  return { start, end, duration };
+}
+
+function scheduleRepertoireKeyboardFlash(midi, startAudioTime, durationSec) {
+  const nowSec = getSchedulerNowSeconds();
+  const onDelay = Math.max(0, Math.round((startAudioTime - nowSec) * 1000));
+  const flashMs = Math.max(60, Math.round(durationSec * 1000));
+  const timerId = window.setTimeout(() => {
+    scheduledFallbackNoteTimers.delete(timerId);
+    highlightKeyboard([midi], flashMs, false);
+  }, onDelay);
+  scheduledFallbackNoteTimers.add(timerId);
+}
+
+function getTransposedRepertoireMidi(midi, item) {
+  const transposed = Number(midi) + getRepertoireTransposeSemitones(item);
+  return clampMidiRange(transposed);
+}
+
+function shouldScheduleRepertoireNoteEvent(event) {
+  if (!event) return false;
+  if (repertoireState.muteMelody && event.role === "melody") return false;
+  if (repertoireState.onlyChords && Number(event.polyphony || 1) < 2) return false;
+  return true;
+}
+
+function scheduleRepertoireNoteChunk(prepared, beatFrom, beatTo, audioFrom, beatSeconds) {
+  const item = prepared?.sourceItem;
+  const events = Array.isArray(prepared?.noteEvents) ? prepared.noteEvents : [];
+  if (!events.length) return;
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    if (event.startBeat < beatFrom || event.startBeat >= beatTo) continue;
+    if (!shouldScheduleRepertoireNoteEvent(event)) continue;
+    const midi = getTransposedRepertoireMidi(event.midi, item);
+    if (!Number.isFinite(midi)) continue;
+    const eventAudioTime = audioFrom + ((event.startBeat - beatFrom) * beatSeconds);
+    const duration = Math.max(0.03, (Number(event.durationBeats) || 0.25) * beatSeconds * 0.96);
+    const velocity = Math.max(0.2, Math.min(1, Number(event.velocity) || 0.78));
+    scheduleSingleMidiNote(midi, eventAudioTime, duration, velocity);
+    scheduleRepertoireKeyboardFlash(midi, eventAudioTime, duration);
+  }
+}
+
+function buildRepertoireBassMidi(step, item) {
+  const rootMidi = getTransposedRepertoireMidi(step?.midi?.[0], item);
+  if (!Number.isFinite(rootMidi)) return null;
+  return clampMidiRange(rootMidi - 12);
+}
+
+function scheduleRepertoireProgressionChunk(prepared, beatFrom, beatTo, audioFrom, beatSeconds) {
+  const item = prepared?.sourceItem;
+  const steps = Array.isArray(prepared?.chordSteps) ? prepared.chordSteps : [];
+  if (!steps.length) return;
+  for (let i = 0; i < steps.length; i += 1) {
+    const step = steps[i];
+    if (step.startBeat < beatFrom || step.startBeat >= beatTo) continue;
+    const eventAudioTime = audioFrom + ((step.startBeat - beatFrom) * beatSeconds);
+    const duration = Math.max(0.12, step.beats * beatSeconds * 0.9);
+    const midi = step.midi
+      .map((note) => getTransposedRepertoireMidi(note, item))
+      .filter((note) => Number.isFinite(note));
+    if (!midi.length) continue;
+    scheduleChordAtTime(midi, eventAudioTime, duration, paletteSequenceToken);
+    if (!repertoireState.onlyChords) {
+      const bassMidi = buildRepertoireBassMidi(step, item);
+      if (Number.isFinite(bassMidi)) {
+        scheduleSingleMidiNote(bassMidi, eventAudioTime, Math.max(0.06, duration * 0.8), 0.54);
+      }
+    }
+  }
+}
+
+function scheduleRepertoireMetronomeChunk(beatFrom, beatTo, audioFrom, beatSeconds) {
+  if (!repertoireState.metronomeEnabled) return;
+  const firstBeat = Math.ceil(beatFrom - 1e-9);
+  const lastBeat = Math.floor(beatTo - 1e-9);
+  for (let beat = firstBeat; beat <= lastBeat; beat += 1) {
+    if (beat < beatFrom || beat >= beatTo) continue;
+    const isDownbeat = Math.abs((beat - repertoireState.loopStartBeat) % 4) < 1e-6;
+    const midi = isDownbeat ? 84 : 79;
+    const eventAudioTime = audioFrom + ((beat - beatFrom) * beatSeconds);
+    scheduleSingleMidiNote(midi, eventAudioTime, 0.03, 0.32);
+  }
+}
+
+function alignRepertoirePlaybackClock() {
+  if (!repertoireState.isPlaying || !repertoireState.prepared || !repertoireState.selectedItem) return;
+  const now = getSchedulerNowSeconds();
+  const beatSeconds = getHarmonyBeatSeconds();
+  const elapsedBeats = Math.max(0, (now - repertoireState.playStartAudioTime) / beatSeconds);
+  const bounds = getActiveRepertoireLoopBounds(repertoireState.prepared, repertoireState.selectedItem);
+  let liveBeat = repertoireState.playheadBeat + elapsedBeats;
+  if (repertoireState.loopEnabled) {
+    const span = Math.max(1e-6, bounds.end - bounds.start);
+    liveBeat = bounds.start + ((((liveBeat - bounds.start) % span) + span) % span);
+  } else {
+    liveBeat = Math.min(bounds.duration, liveBeat);
+  }
+  repertoireState.playheadBeat = liveBeat;
+  repertoireState.playStartAudioTime = now;
+  repertoireState.scheduleCursorBeat = liveBeat;
+  repertoireState.scheduleCursorAudioTime = now + REPERTOIRE_LEAD_SECONDS;
+}
+
+function clearRepertoireScheduler() {
+  if (!Number.isFinite(repertoireState.schedulerTimerId)) return;
+  window.clearInterval(repertoireState.schedulerTimerId);
+  repertoireState.schedulerTimerId = null;
+}
+
+function stopRepertoireVoices() {
+  if (toneSampler && typeof toneSampler.releaseAll === "function") {
+    try {
+      toneSampler.releaseAll();
+    } catch {
+      // Ignore release errors.
+    }
+  }
+  stopAudioPoolMap(htmlSamplePools);
+}
+
+function stopRepertoirePlayback(options = {}) {
+  clearRepertoireScheduler();
+  repertoireState.isPlaying = false;
+  if (!options.keepPausedState) {
+    repertoireState.isPaused = false;
+  }
+  if (options.resetPlayhead) {
+    repertoireState.playheadBeat = repertoireState.loopStartBeat;
+  }
+  repertoireState.scheduleCursorAudioTime = 0;
+  repertoireState.scheduleCursorBeat = repertoireState.playheadBeat;
+  stopRepertoireVoices();
+  updateRepertoirePlayPauseButton();
+}
+
+function tickRepertoireScheduler() {
+  if (!repertoireState.isPlaying || !repertoireState.prepared || !repertoireState.selectedItem) return;
+  const prepared = repertoireState.prepared;
+  const now = getSchedulerNowSeconds();
+  const lookAheadEnd = now + REPERTOIRE_SCHEDULE_LOOKAHEAD_SECONDS;
+  const loopBounds = getActiveRepertoireLoopBounds(prepared, repertoireState.selectedItem);
+
+  if (!Number.isFinite(repertoireState.scheduleCursorAudioTime) || repertoireState.scheduleCursorAudioTime < now) {
+    repertoireState.scheduleCursorAudioTime = now + REPERTOIRE_LEAD_SECONDS;
+  }
+
+  while (repertoireState.scheduleCursorAudioTime < lookAheadEnd) {
+    const beatSeconds = getHarmonyBeatSeconds();
+    const beatFrom = repertoireState.scheduleCursorBeat;
+    const boundary = repertoireState.loopEnabled ? loopBounds.end : loopBounds.duration;
+    const beatsUntilBoundary = Math.max(0, boundary - beatFrom);
+    const maxBeatsWindow = Math.max(0, (lookAheadEnd - repertoireState.scheduleCursorAudioTime) / beatSeconds);
+    const chunkBeats = Math.min(beatsUntilBoundary, maxBeatsWindow);
+
+    if (chunkBeats <= 1e-9) {
+      if (!repertoireState.loopEnabled && beatFrom >= loopBounds.duration - 1e-9) {
+        stopRepertoirePlayback({ resetPlayhead: true });
+        return;
+      }
+      if (repertoireState.loopEnabled && beatFrom >= loopBounds.end - 1e-9) {
+        repertoireState.scheduleCursorBeat = loopBounds.start;
+        continue;
+      }
+      break;
+    }
+
+    const beatTo = beatFrom + chunkBeats;
+    if (prepared.type === "chord_progression") {
+      scheduleRepertoireProgressionChunk(prepared, beatFrom, beatTo, repertoireState.scheduleCursorAudioTime, beatSeconds);
+    } else {
+      scheduleRepertoireNoteChunk(prepared, beatFrom, beatTo, repertoireState.scheduleCursorAudioTime, beatSeconds);
+    }
+    scheduleRepertoireMetronomeChunk(beatFrom, beatTo, repertoireState.scheduleCursorAudioTime, beatSeconds);
+
+    repertoireState.scheduleCursorAudioTime += chunkBeats * beatSeconds;
+    repertoireState.scheduleCursorBeat = beatTo;
+    repertoireState.playheadBeat = beatTo;
+
+    if (repertoireState.loopEnabled && repertoireState.scheduleCursorBeat >= loopBounds.end - 1e-9) {
+      repertoireState.scheduleCursorBeat = loopBounds.start;
+    } else if (!repertoireState.loopEnabled && repertoireState.scheduleCursorBeat >= loopBounds.duration - 1e-9) {
+      stopRepertoirePlayback({ resetPlayhead: true });
+      return;
+    }
+  }
+}
+
+async function startRepertoirePlayback(options = {}) {
+  if (!repertoireState.selectedItem) return false;
+  stopAllPlayback();
+  if (!ensureAudio()) return false;
+  if (isToneEngineAvailable() && (!toneEngineReady || !toneSampler)) {
+    await ensureToneEngine();
+  }
+  const prepared = await ensurePreparedSelectedRepertoireItem();
+  if (!prepared) return false;
+
+  clearRepertoireScheduler();
+  const loopBounds = getActiveRepertoireLoopBounds(prepared, repertoireState.selectedItem);
+  const now = getSchedulerNowSeconds();
+  const startBeat = Number.isFinite(options.startBeat)
+    ? Math.max(loopBounds.start, Math.min(loopBounds.end, Number(options.startBeat)))
+    : Math.max(loopBounds.start, Math.min(loopBounds.end, repertoireState.playheadBeat || loopBounds.start));
+  repertoireState.playheadBeat = startBeat;
+  repertoireState.scheduleCursorBeat = startBeat;
+  repertoireState.playStartAudioTime = now;
+  repertoireState.scheduleCursorAudioTime = now + REPERTOIRE_LEAD_SECONDS;
+  repertoireState.isPlaying = true;
+  repertoireState.isPaused = false;
+  updateRepertoirePlayPauseButton();
+
+  tickRepertoireScheduler();
+  repertoireState.schedulerTimerId = window.setInterval(tickRepertoireScheduler, REPERTOIRE_SCHEDULER_INTERVAL_MS);
+  return true;
+}
+
+function pauseRepertoirePlayback() {
+  if (!repertoireState.isPlaying) return;
+  repertoireState.playheadBeat = repertoireState.scheduleCursorBeat;
+  clearRepertoireScheduler();
+  repertoireState.isPlaying = false;
+  repertoireState.isPaused = true;
+  stopRepertoireVoices();
+  updateRepertoirePlayPauseButton();
+}
+
+function findExerciseForRepertoireItem(item) {
+  if (!item) return "";
+  const tags = Array.isArray(item.tags) ? item.tags : [];
+  for (let i = 0; i < tags.length; i += 1) {
+    const mapped = REPERTOIRE_TAG_TO_EXERCISE[tags[i]];
+    if (mapped) return mapped;
+  }
+  return "";
+}
+
+function highlightActiveExerciseButton() {
+  if (!el.exerciseList) return;
+  const buttons = el.exerciseList.querySelectorAll("button[data-ex]");
+  buttons.forEach((button) => {
+    button.classList.toggle("is-spotlight", button.dataset.ex === repertoireState.activeExerciseId);
+  });
+}
+
+function updateExerciseRelatedStudyButton() {
+  if (!el.playRelatedStudyBtn) return;
+  const relatedId = EXERCISE_RELATED_REPERTOIRE[repertoireState.activeExerciseId] || "";
+  if (!relatedId) {
+    el.playRelatedStudyBtn.classList.add("is-hidden");
+    el.playRelatedStudyBtn.textContent = "Play Related Study";
+    return;
+  }
+  const relatedItem = getRepertoireItemById(relatedId);
+  if (!relatedItem) {
+    el.playRelatedStudyBtn.classList.add("is-hidden");
+    return;
+  }
+  el.playRelatedStudyBtn.classList.remove("is-hidden");
+  el.playRelatedStudyBtn.textContent = `Play Related Study: ${relatedItem.title}`;
+}
+
+function buildRepertoireSuggestions(item) {
+  const suggestions = [];
+  const pushSuggestion = (entry) => {
+    if (!entry || !entry.tab || !entry.action) return;
+    const key = `${entry.tab}|${entry.action}|${JSON.stringify(entry.payload || {})}`;
+    if (suggestions.some((candidate) => candidate._key === key)) return;
+    suggestions.push({ ...entry, _key: key });
+  };
+
+  (Array.isArray(item?.lessonLinks) ? item.lessonLinks : []).forEach((link) => {
+    pushSuggestion({
+      tab: link.tab,
+      action: link.action,
+      payload: link.payload || {},
+      focus: link.focus || `${link.tab}`
+    });
+  });
+
+  const tags = Array.isArray(item?.tags) ? item.tags : [];
+  tags.forEach((tag) => {
+    const mapped = REPERTOIRE_TAG_TO_ACTIONS[tag];
+    if (!Array.isArray(mapped)) return;
+    mapped.forEach((entry) => {
+      pushSuggestion({
+        ...entry,
+        focus: entry.focus || tag
+      });
+    });
+  });
+
+  return suggestions.slice(0, 6);
+}
+
+function renderRepertoireSuggestions() {
+  if (!el.repertoireSuggestions) return;
+  const selected = repertoireState.selectedItem;
+  if (!selected || !repertoireState.suggestionEntries.length) {
+    el.repertoireSuggestions.innerHTML = "";
+    return;
+  }
+  el.repertoireSuggestions.innerHTML = "";
+  repertoireState.suggestionEntries.forEach((entry, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn-tonal repertoire-suggestion-btn";
+    button.dataset.repertoireSuggestionIndex = String(index);
+    button.textContent = `${entry.tab}: ${entry.focus || entry.action}`;
+    el.repertoireSuggestions.appendChild(button);
+  });
+}
+
+function findPaletteRowButtonByName(rowName) {
+  const rowButtons = Array.from(el.chordTableBody?.querySelectorAll(".axis-play-row") || []);
+  const normalized = String(rowName || "").trim().toLowerCase();
+  return rowButtons.find((btn) => String(btn.dataset.rowName || btn.textContent || "").trim().toLowerCase() === normalized) || null;
+}
+
+function findColumnIndexByHeaderLabel(label) {
+  const headerButtons = Array.from(el.chordTableHead?.querySelectorAll(".axis-play-col") || []);
+  const normalized = String(label || "").trim().toLowerCase();
+  for (let i = 0; i < headerButtons.length; i += 1) {
+    const candidate = String(headerButtons[i].dataset.columnRoman || headerButtons[i].textContent || "").trim().toLowerCase();
+    if (candidate === normalized) return i;
+  }
+  for (let i = 0; i < headerButtons.length; i += 1) {
+    const candidate = String(headerButtons[i].dataset.columnRoman || headerButtons[i].textContent || "").trim().toLowerCase();
+    if (candidate.includes(normalized) || normalized.includes(candidate)) return i;
+  }
+  return -1;
+}
+
+function triggerPaletteSuggestion(entry) {
+  const tabId = TAB_NAME_TO_ID[entry.tab] || TAB_NAME_TO_ID[String(entry.tab || "").toLowerCase()];
+  if (!tabId) return;
+  setPaletteTab(tabId);
+  const payload = entry.payload || {};
+  window.setTimeout(() => {
+    if (entry.action === "play_row") {
+      const rowButton = findPaletteRowButtonByName(payload.row);
+      rowButton?.click();
+      return;
+    }
+    if (entry.action === "play_cell") {
+      const rowButton = findPaletteRowButtonByName(payload.row);
+      const row = rowButton?.closest("tr");
+      if (!row) return;
+      const columnIndex = findColumnIndexByHeaderLabel(payload.col);
+      const cells = Array.from(row.querySelectorAll("td"));
+      const targetCell = columnIndex >= 0 ? cells[columnIndex] : cells[0];
+      targetCell?.click();
+    }
+  }, 20);
+}
+
+function scrollExerciseIntoView(exerciseId) {
+  const button = el.exerciseList?.querySelector(`button[data-ex="${exerciseId}"]`);
+  if (!button) return;
+  button.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function openRelatedExerciseForSelectedItem() {
+  const item = repertoireState.selectedItem;
+  if (!item) return;
+  const exerciseId = findExerciseForRepertoireItem(item);
+  if (!exerciseId) return;
+  void runGuidedExercise(exerciseId);
+  scrollExerciseIntoView(exerciseId);
+}
+
+async function initRepertoire() {
+  try {
+    repertoireState.loadError = "";
+    const library = await loadRepertoireLibrary();
+    repertoireState.items = library.items;
+    repertoireState.stylePresets = library.styles;
+    repertoireState.hasLoaded = true;
+    renderRepertoireFeatured();
+    renderRepertoireFilterChips();
+    renderRepertoireList();
+    const featured = repertoireState.items.find((item) => item.ui?.showInFeatured) || repertoireState.items[0] || null;
+    if (featured) {
+      selectRepertoireItem(featured.id, { applyDefaults: false });
+    }
+  } catch (error) {
+    repertoireState.hasLoaded = true;
+    repertoireState.loadError = error.message || "Failed to load library";
+    renderRepertoireFeatured();
+    if (el.repertoireList) {
+      el.repertoireList.innerHTML = "";
+      const msg = document.createElement("p");
+      msg.className = "repertoire-row-meta";
+      msg.textContent = `Repertoire unavailable: ${repertoireState.loadError}. Run from http://localhost:4010 (not file://).`;
+      el.repertoireList.appendChild(msg);
+    }
+  }
+}
+
+function bindRepertoireEvents() {
+  if (el.repertoireFeatured) {
+    el.repertoireFeatured.addEventListener("click", (event) => {
+      const card = event.target.closest("button[data-repertoire-featured-id]");
+      if (!card) return;
+      const itemId = card.dataset.repertoireFeaturedId;
+      if (!itemId) return;
+      selectRepertoireItem(itemId, { applyDefaults: false });
+      void startRepertoirePlayback({ startBeat: repertoireState.loopStartBeat });
+    });
+  }
+
+  if (el.repertoireFilterChips) {
+    el.repertoireFilterChips.addEventListener("click", (event) => {
+      const chip = event.target.closest("button[data-repertoire-filter]");
+      if (!chip) return;
+      repertoireState.filteredGenre = chip.dataset.repertoireFilter || "all";
+      renderRepertoireFilterChips();
+      renderRepertoireList();
+    });
+  }
+
+  if (el.repertoireSearchInput) {
+    el.repertoireSearchInput.addEventListener("input", () => {
+      repertoireState.searchQuery = String(el.repertoireSearchInput.value || "");
+      renderRepertoireList();
+    });
+  }
+
+  if (el.repertoireList) {
+    el.repertoireList.addEventListener("click", (event) => {
+      const row = event.target.closest(".repertoire-row[data-repertoire-id]");
+      if (!row) return;
+      const itemId = row.dataset.repertoireId;
+      if (!itemId) return;
+      selectRepertoireItem(itemId, { applyDefaults: false });
+      const actionBtn = event.target.closest("button[data-repertoire-action]");
+      if (!actionBtn) return;
+      const action = actionBtn.dataset.repertoireAction;
+      if (action === "play") {
+        void startRepertoirePlayback({ startBeat: repertoireState.loopStartBeat });
+        return;
+      }
+      if (action === "loop") {
+        repertoireState.loopEnabled = !repertoireState.loopEnabled;
+        if (el.repertoireLoopToggle) el.repertoireLoopToggle.checked = repertoireState.loopEnabled;
+        return;
+      }
+      if (action === "info") {
+        renderRepertoireInfoModal(repertoireState.selectedItem);
+      }
+    });
+  }
+
+  if (el.repertoireInfoModal) {
+    el.repertoireInfoModal.addEventListener("click", (event) => {
+      const closeBtn = event.target.closest("button[data-repertoire-info-action='close']");
+      if (closeBtn) closeRepertoireInfoModal();
+    });
+  }
+
+  if (el.repertoirePlayPauseBtn) {
+    el.repertoirePlayPauseBtn.addEventListener("click", () => {
+      if (!repertoireState.selectedItem) return;
+      if (repertoireState.isPlaying) {
+        pauseRepertoirePlayback();
+        return;
+      }
+      const startBeat = repertoireState.isPaused ? repertoireState.playheadBeat : repertoireState.loopStartBeat;
+      void startRepertoirePlayback({ startBeat });
+    });
+  }
+
+  if (el.repertoireStopBtn) {
+    el.repertoireStopBtn.addEventListener("click", () => {
+      stopRepertoirePlayback({ resetPlayhead: true });
+      repertoireState.playheadBeat = repertoireState.loopStartBeat;
+      repertoireState.isPaused = false;
+      updateRepertoirePlayPauseButton();
+    });
+  }
+
+  if (el.repertoireLoopToggle) {
+    el.repertoireLoopToggle.addEventListener("change", () => {
+      repertoireState.loopEnabled = Boolean(el.repertoireLoopToggle.checked);
+    });
+  }
+
+  if (el.repertoireLoopStart) {
+    el.repertoireLoopStart.addEventListener("input", () => {
+      setRepertoireLoopRange(el.repertoireLoopStart.value, repertoireState.loopEndBeat);
+      alignRepertoirePlaybackClock();
+    });
+  }
+
+  if (el.repertoireLoopEnd) {
+    el.repertoireLoopEnd.addEventListener("input", () => {
+      setRepertoireLoopRange(repertoireState.loopStartBeat, el.repertoireLoopEnd.value);
+      alignRepertoirePlaybackClock();
+    });
+  }
+
+  if (el.repertoireMuteMelodyToggle) {
+    el.repertoireMuteMelodyToggle.addEventListener("change", () => {
+      repertoireState.muteMelody = Boolean(el.repertoireMuteMelodyToggle.checked);
+    });
+  }
+
+  if (el.repertoireOnlyChordsToggle) {
+    el.repertoireOnlyChordsToggle.addEventListener("change", () => {
+      repertoireState.onlyChords = Boolean(el.repertoireOnlyChordsToggle.checked);
+    });
+  }
+
+  if (el.repertoireMetronomeToggle) {
+    el.repertoireMetronomeToggle.addEventListener("change", () => {
+      repertoireState.metronomeEnabled = Boolean(el.repertoireMetronomeToggle.checked);
+    });
+  }
+
+  if (el.repertoireShowChordsBtn) {
+    el.repertoireShowChordsBtn.addEventListener("click", () => {
+      setPaletteTab("chords");
+      markChordTableCell(appState.root, "major");
+    });
+  }
+
+  if (el.repertoireSuggestedBtn) {
+    el.repertoireSuggestedBtn.addEventListener("click", () => {
+      const selected = repertoireState.selectedItem;
+      repertoireState.suggestionEntries = selected ? buildRepertoireSuggestions(selected) : [];
+      renderRepertoireSuggestions();
+    });
+  }
+
+  if (el.repertoireSuggestions) {
+    el.repertoireSuggestions.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-repertoire-suggestion-index]");
+      if (!button) return;
+      const idx = Number(button.dataset.repertoireSuggestionIndex);
+      if (!Number.isFinite(idx)) return;
+      const entry = repertoireState.suggestionEntries[idx];
+      if (!entry) return;
+      triggerPaletteSuggestion(entry);
+    });
+  }
+
+  if (el.repertoireOpenExerciseBtn) {
+    el.repertoireOpenExerciseBtn.addEventListener("click", openRelatedExerciseForSelectedItem);
+  }
+
+  if (el.playRelatedStudyBtn) {
+    el.playRelatedStudyBtn.addEventListener("click", () => {
+      const relatedId = EXERCISE_RELATED_REPERTOIRE[repertoireState.activeExerciseId] || "";
+      const item = getRepertoireItemById(relatedId);
+      if (!item) return;
+      selectRepertoireItem(item.id, { applyDefaults: false });
+      void startRepertoirePlayback({ startBeat: repertoireState.loopStartBeat });
+    });
+  }
 }
 
 function renderProgressionStrip() {
@@ -1797,7 +5319,7 @@ function renderProgressionStrip() {
     div.textContent = step.symbol;
     div.addEventListener("click", () => {
       activateProgressionStep(idx);
-      playMidiNotes(step.midi, { hold: getHoldSeconds(), asChord: true, restrictToWindow: true });
+      playMidiNotes(step.midi, { hold: getHoldSeconds(), asChord: true, restrictToWindow: false });
       clearTimeout(clearStripStepTimer);
       clearStripStepTimer = setTimeout(clearProgressionStep, 340);
     });
@@ -1817,12 +5339,238 @@ function renderCadenceStrip() {
     div.textContent = step.symbol;
     div.addEventListener("click", () => {
       activateCadenceStep(idx);
-      playMidiNotes(step.midi, { hold: getHoldSeconds(), asChord: true, restrictToWindow: true });
+      playMidiNotes(step.midi, { hold: getHoldSeconds(), asChord: true, restrictToWindow: false });
       clearTimeout(clearStripStepTimer);
       clearStripStepTimer = setTimeout(clearCadenceStep, 340);
     });
     el.cadenceStrip.appendChild(div);
   });
+}
+
+async function playChordTableCellSequence(cells, label) {
+  if (!Array.isArray(cells) || cells.length === 0) return;
+  const playableCells = cells.filter((cell) => cell?.dataset?.root && cell?.dataset?.quality);
+  if (playableCells.length === 0) return;
+  const startCell = playableCells[0];
+  const startRoot = startCell.dataset.root;
+  const startQuality = startCell.dataset.quality;
+  const beatSeconds = getHarmonyBeatSeconds();
+  const stepSeconds = beatSeconds * 2;
+  const hold = Math.max(0.14, stepSeconds * 0.9);
+  const stepMs = Math.max(60, Math.round(stepSeconds * 1000));
+  for (let i = 0; i < playableCells.length; i += 1) {
+    const cell = playableCells[i];
+    const root = cell?.dataset?.root;
+    const quality = cell?.dataset?.quality;
+    if (!root || !quality) continue;
+    markChordTableCell(root, quality);
+    const midi = buildChordMidi(root, quality, "root position", 3);
+    playMidiNotes(midi, {
+      hold,
+      asChord: true,
+      highlightMs: getHighlightMs(hold, stepMs),
+      restrictToWindow: false
+    });
+    await wait(stepMs);
+  }
+
+  // Resolve by replaying the starting chord one octave higher for a full loop finish.
+  const resolvedMidi = buildChordMidi(startRoot, startQuality, "root position", 3).map((midi) => midi + 12);
+  const resolvedHold = Math.max(0.16, stepSeconds * 0.95);
+  playCircularResolveAtStartCell(startCell, resolvedMidi, resolvedHold);
+
+  if (el.chordDisplay) {
+    const shortLabel = playableCells.map((cell) => cell?.dataset?.label).filter(Boolean).join(" -> ");
+    const resolvedLabel = `${startRoot}${CHORDS[startQuality]?.short || ""}`;
+    el.chordDisplay.textContent = `${label}: ${shortLabel} -> ${resolvedLabel}↑`;
+  }
+  trackRep("chords", label);
+}
+
+function playCircularResolveAtStartCell(startCell, resolvedMidi, resolveHold, options = {}) {
+  if (!startCell || !Array.isArray(resolvedMidi) || resolvedMidi.length === 0) return;
+  const hold = Math.max(0.08, Number(resolveHold) || 0.2);
+  const restrictToWindow = options.restrictToWindow === true;
+  clearChordTableSelection();
+  startCell.classList.add("is-selected");
+  playMidiNotes(resolvedMidi, {
+    hold,
+    asChord: true,
+    highlightMs: getHighlightMs(hold, Math.round(hold * 1000)),
+    restrictToWindow
+  });
+  celebrateResolutionCell(startCell);
+}
+
+function cancelPaletteSequence() {
+  paletteSequenceToken += 1;
+  clearScheduledFallbackNoteTimers();
+  clearKeyboardHighlights();
+}
+
+function registerExploreTimer(timerId, type = "timeout") {
+  if (!Number.isFinite(Number(timerId))) return;
+  appState.exploreTimers.push({ id: timerId, type });
+}
+
+function clearExploreTimer(timerId) {
+  if (!Number.isFinite(Number(timerId))) return;
+  window.clearTimeout(timerId);
+  window.clearInterval(timerId);
+  appState.exploreTimers = appState.exploreTimers.filter((entry) => entry.id !== timerId);
+}
+
+function clearExploreTimers() {
+  appState.exploreTimers.forEach((entry) => {
+    window.clearTimeout(entry.id);
+    window.clearInterval(entry.id);
+  });
+  appState.exploreTimers = [];
+}
+
+function dominantRootForKey(key) {
+  return NOTES[(NOTES.indexOf(key) + DEGREE_TO_SEMITONE[4]) % 12];
+}
+
+function isDominantExplorationChord(root, quality) {
+  const normalizedQuality = String(quality || "");
+  if (normalizedQuality === "dom7") return true;
+  if (!normalizedQuality.includes("7")) return false;
+  return root === dominantRootForKey(el.keySelect?.value || appState.root);
+}
+
+function buildTensionFragmentNotes(root, level) {
+  const safeLevel = Math.max(0, Math.min(DOMINANT_TENSION_PATTERNS.length - 1, Number(level) || 0));
+  const pattern = DOMINANT_TENSION_PATTERNS[safeLevel];
+  const baseMidi = 12 * (3 + 1) + NOTES.indexOf(root);
+  const ascending = [...pattern.map((offset) => baseMidi + offset), baseMidi + 12];
+  const lastIdx = ascending.length - 1;
+  const candidateIdx = [0, 2, 3, 5, lastIdx];
+  const resolvedIdx = candidateIdx.filter((idx) => idx >= 0 && idx < ascending.length);
+  const uniqueMidi = [];
+  const seen = new Set();
+  resolvedIdx.forEach((idx) => {
+    const midi = ascending[idx];
+    if (seen.has(midi)) return;
+    seen.add(midi);
+    uniqueMidi.push(midi);
+  });
+  return uniqueMidi.map((midi) => midiToNoteName(midi));
+}
+
+function playHarmonySustainPulse(chordMidi) {
+  const midi = Array.isArray(chordMidi) ? chordMidi.filter((note) => Number.isFinite(note)) : [];
+  if (!midi.length) return;
+  const hold = Math.max(1.05, Math.min(1.75, getStepSeconds() * 3.2));
+  const velocity = 0.56;
+  const start = getSchedulerNowSeconds() + Math.max(0.002, getInteractiveStartLeadTimeSeconds());
+  midi.forEach((note) => {
+    scheduleSingleMidiNote(note, start, hold, velocity);
+  });
+}
+
+function playHarmonyTensionFragment(root, level) {
+  const notes = buildTensionFragmentNotes(root, level);
+  if (!notes.length) return;
+  void playPatternScheduled({
+    notes,
+    fingers: null,
+    startTimeSec: getSchedulerNowSeconds() + Math.max(0.004, getInteractiveStartLeadTimeSeconds()),
+    showFingers: false,
+    snapshot: false
+  });
+}
+
+function beginHarmonyExploration(chordContext) {
+  if (!chordContext?.root || !Array.isArray(chordContext?.midi)) return;
+  stopHarmonyExploration({ withResolution: false, clearLabel: false });
+  appState.isExploring = true;
+  appState.exploreLevel = 0;
+  appState.exploreStartTime = Date.now();
+  activeExploreChordContext = { ...chordContext };
+  updateExploreHarmonyUi();
+  setExploreTensionLabel(0);
+  if (el.chordDisplay) {
+    el.chordDisplay.textContent = `Exploring harmony: ${chordContext.label}`;
+  }
+
+  playHarmonySustainPulse(chordContext.midi);
+  const sustainIntervalId = window.setInterval(() => {
+    if (!appState.isExploring || !activeExploreChordContext) return;
+    playHarmonySustainPulse(activeExploreChordContext.midi);
+  }, Math.max(1300, Math.round(getStepSeconds() * 3600)));
+  registerExploreTimer(sustainIntervalId, "interval");
+
+  if (!isDominantExplorationChord(chordContext.root, chordContext.quality)) {
+    return;
+  }
+
+  playHarmonyTensionFragment(chordContext.root, appState.exploreLevel);
+  const cycleIntervalId = window.setInterval(() => {
+    if (!appState.isExploring || !activeExploreChordContext) return;
+    appState.exploreLevel = (appState.exploreLevel + 1) % TENSION_LEVEL_LABELS.length;
+    setExploreTensionLabel(appState.exploreLevel);
+    playHarmonyTensionFragment(activeExploreChordContext.root, appState.exploreLevel);
+  }, EXPLORATION_CYCLE_MS);
+  registerExploreTimer(cycleIntervalId, "interval");
+}
+
+function stopHarmonyExploration(options = {}) {
+  const withResolution = options.withResolution === true;
+  const clearLabel = options.clearLabel !== false;
+  const wasExploring = appState.isExploring;
+  clearExploreTimers();
+  appState.isExploring = false;
+  appState.exploreLevel = 0;
+  if (clearLabel) {
+    clearExploreTensionLabel();
+  }
+
+  const context = activeExploreChordContext;
+  activeExploreChordContext = null;
+  if (withResolution && wasExploring && context) {
+    const tonicRoot = el.keySelect?.value || appState.root;
+    const tonicMidi = buildChordMidi(tonicRoot, "major", "root position", 3);
+    const hold = Math.max(0.18, Math.min(0.5, getStepSeconds() * 1.3));
+    playMidiNotes(tonicMidi, { hold, asChord: true, restrictToWindow: false, highlightMs: getHighlightMs(hold, 120) });
+  }
+}
+
+function celebrateResolutionCell(cell) {
+  if (!cell) return;
+  cell.classList.remove("victory-resolve");
+  const existingBursts = cell.querySelectorAll(".resolve-burst");
+  existingBursts.forEach((burst) => burst.remove());
+  // Force restart so repeated plays retrigger glow animation.
+  void cell.offsetWidth;
+  cell.classList.add("victory-resolve");
+
+  const burst = document.createElement("span");
+  burst.className = "resolve-burst";
+  const noteGlyphs = ["♪", "♫", "♬"];
+  const particleCount = 8;
+
+  for (let i = 0; i < particleCount; i += 1) {
+    const note = document.createElement("span");
+    note.className = "resolve-note";
+    note.textContent = noteGlyphs[i % noteGlyphs.length];
+    const angle = (Math.PI * 2 * i) / particleCount + (Math.random() * 0.35 - 0.17);
+    const distance = 22 + Math.random() * 20;
+    const dx = Math.cos(angle) * distance;
+    const dy = Math.sin(angle) * distance;
+    note.style.setProperty("--dx", `${dx.toFixed(2)}px`);
+    note.style.setProperty("--dy", `${dy.toFixed(2)}px`);
+    note.style.setProperty("--delay", `${Math.round(Math.random() * 85)}ms`);
+    note.style.setProperty("--rot", `${Math.round((Math.random() - 0.5) * 80)}deg`);
+    burst.appendChild(note);
+  }
+
+  cell.appendChild(burst);
+
+  window.setTimeout(() => {
+    burst.remove();
+    cell.classList.remove("victory-resolve");
+  }, 950);
 }
 
 function initModeSwitch() {
@@ -1835,6 +5583,8 @@ function initModeSwitch() {
 }
 
 function setMode(mode) {
+  stopHarmonyExploration({ withResolution: false, clearLabel: true });
+  cancelPaletteSequence();
   document.body.dataset.activeMode = mode;
   const modeButtons = el.modeSwitch?.querySelectorAll("button[data-mode-target]") || [];
   modeButtons.forEach((btn) => {
@@ -2252,6 +6002,10 @@ function buildGuidedTheoryPlan(lesson) {
     };
   }
 
+  if (lesson?.artifact && Array.isArray(lesson.artifact.sequence) && lesson.artifact.sequence.length > 0) {
+    return buildGuidedPlanFromArtifactLesson(lesson.artifact, passCondition);
+  }
+
   const trackId = lesson.trackId || theoryState.trackId || "pop";
   const base = GUIDED_TRACK_DEFAULTS[trackId] || GUIDED_TRACK_DEFAULTS.pop;
   const plan = {
@@ -2310,6 +6064,32 @@ function buildGuidedTheoryPlan(lesson) {
   return plan;
 }
 
+function buildGuidedPlanFromArtifactLesson(artifact, passCondition) {
+  const key = String(artifact?.key || appState.root || "C");
+  const sequence = Array.isArray(artifact?.sequence) ? artifact.sequence : [];
+  const sequenceLabel = sequence.map((step) => step.chord || `${step.root}${step.quality}`).join(" -> ");
+  return {
+    objective: `Master the generated concept: ${artifact.title}`,
+    steps: [
+      "Hear the exact sequence and identify tension/release moments.",
+      "Recreate the sequence without looking at the labels.",
+      "Transpose it to one nearby key and keep timing steady."
+    ],
+    history: "This guided card was generated from your AI coach conversation and pinned into lesson mode.",
+    funFact: "Short looped concept drills produce faster transfer than isolated theory memorization.",
+    songs: [
+      `Artifact focus sequence: ${sequenceLabel || "custom harmony sequence"}.`,
+      "Apply the same movement to a song you already play."
+    ],
+    practice: {
+      mode: "artifact_harmonic",
+      key,
+      sequence
+    },
+    passCondition
+  };
+}
+
 function applyGuidedLessonSetup(plan) {
   const setup = plan.practice || {};
   const key = setup.key || appState.root;
@@ -2328,8 +6108,8 @@ function applyGuidedLessonSetup(plan) {
     el.cadenceSelect.value = setup.cadenceName;
     renderCadenceStrip();
   }
-  if (setup.mode === "scale" && setup.scaleType && el.scaleTypeSelect && SCALE_FAMILIES[setup.scaleType]) {
-    el.scaleTypeSelect.value = setup.scaleType;
+  if (setup.mode === "scale" && setup.scaleType && el.scaleTypeSelect) {
+    el.scaleTypeSelect.value = resolveScalePatternKey(setup.scaleType);
   }
   if (setup.mode === "chord") {
     appState.quality = setup.chordQuality || appState.quality;
@@ -2349,7 +6129,7 @@ async function playGuidedPlanExample(plan) {
   if (setup.mode === "progression") {
     const seq = buildProgressionChords(setup.key || appState.root, setup.progressionName || "I-vi-IV-V (Pop)");
     for (const step of seq) {
-      playMidiNotes(step.midi, { hold, asChord: true, highlightMs: getHighlightMs(hold, 170), restrictToWindow: true });
+      playMidiNotes(step.midi, { hold, asChord: true, highlightMs: getHighlightMs(hold, 170), restrictToWindow: false });
       await wait(220);
     }
     return seq.flatMap((step) => step.midi);
@@ -2358,24 +6138,41 @@ async function playGuidedPlanExample(plan) {
   if (setup.mode === "cadence") {
     const seq = buildCadenceChords(setup.key || appState.root, setup.cadenceName || "Authentic (V-I)");
     for (const step of seq) {
-      playMidiNotes(step.midi, { hold, asChord: true, highlightMs: getHighlightMs(hold, 170), restrictToWindow: true });
+      playMidiNotes(step.midi, { hold, asChord: true, highlightMs: getHighlightMs(hold, 170), restrictToWindow: false });
       await wait(230);
     }
     return seq.flatMap((step) => step.midi);
   }
 
   if (setup.mode === "scale") {
-    const intervals = SCALE_FAMILIES[setup.scaleType || "major (classical)"]?.intervals || SCALE_FAMILIES["major (classical)"].intervals;
-    const notes = buildScaleMidi(setup.key || appState.root, intervals, 3);
-    for (const midi of notes) {
-      playMidiNotes([midi], { hold: 0.38, asChord: true, highlightMs: 150 });
-      await wait(180);
-    }
+    const patternKey = resolveScalePatternKey(setup.scaleType);
+    const notes = buildScalePatternMidi(setup.key || appState.root, patternKey, 3);
+    await playPatternScheduled({
+      notes: notes.map((midi) => midiToNoteName(midi)),
+      fingers: buildScaleFingering(notes.map((midi) => midiToNoteName(midi)), "right"),
+      showFingers: true,
+      snapshot: false
+    });
     return notes;
   }
 
+  if (setup.mode === "artifact_harmonic" && Array.isArray(setup.sequence) && setup.sequence.length > 0) {
+    const beatSeconds = getHarmonyBeatSeconds();
+    const stepSeconds = beatSeconds * 2;
+    const hold = Math.max(0.14, stepSeconds * 0.9);
+    for (const step of setup.sequence) {
+      const root = String(step?.root || setup.key || appState.root);
+      const quality = String(step?.quality || "major");
+      const beats = Math.max(1, Math.min(8, Number(step?.beats) || 2));
+      const midi = buildChordMidi(root, quality, "root position", 3);
+      playMidiNotes(midi, { hold: Math.max(0.14, beatSeconds * beats * 0.9), asChord: true, highlightMs: getHighlightMs(hold, 170), restrictToWindow: false });
+      await wait(Math.max(120, Math.round(beatSeconds * beats * 1000)));
+    }
+    return setup.sequence.flatMap((step) => buildChordMidi(step.root, step.quality, "root position", 3));
+  }
+
   const chord = buildChordMidi(setup.key || appState.root, setup.chordQuality || appState.quality, setup.inversion || "root position", 3);
-  playMidiNotes(chord, { hold, asChord: true, highlightMs: getHighlightMs(hold, 170), restrictToWindow: true });
+  playMidiNotes(chord, { hold, asChord: true, highlightMs: getHighlightMs(hold, 170), restrictToWindow: false });
   await wait(220);
   return chord;
 }
@@ -2483,6 +6280,25 @@ function logGuidedTheoryAttempt() {
   }
 }
 
+function recordTheoryLessonCompletionEvent(lesson) {
+  if (!lesson?.id) return;
+  if (!Array.isArray(progress.recent)) progress.recent = [];
+  const day = todayKey();
+  const exists = progress.recent.some((entry) => (
+    entry?.area === "theory"
+    && entry?.lessonId === lesson.id
+    && entry?.date === day
+  ));
+  if (exists) return;
+  progress.recent.unshift({
+    area: "theory",
+    topic: lesson.title || "Theory lesson",
+    lessonId: lesson.id,
+    date: day
+  });
+  progress.recent = progress.recent.slice(0, 24);
+}
+
 function checkGuidedTheoryPass() {
   const lesson = getCurrentTheoryLesson();
   if (!lesson) return;
@@ -2493,9 +6309,14 @@ function checkGuidedTheoryPass() {
   const passed = needsExamples === 0 && needsAttempts === 0 && needsKeyPresses === 0;
 
   if (passed) {
+    const wasCompleted = Boolean(progress.theoryCompletedLessons?.[lesson.id]);
     stats.passed = true;
     progress.theoryCompletedLessons[lesson.id] = true;
+    if (!wasCompleted) {
+      recordTheoryLessonCompletionEvent(lesson);
+    }
     saveProgress();
+    markCoachLessonStackCompleted(lesson.id);
     renderTheoryLessonList();
     renderTheoryProgressSummary();
     renderProgress();
@@ -2626,7 +6447,7 @@ async function playSelectedConcept() {
     return;
   }
 
-  playMidiNotes(concept.midi, { hold, asChord: true, highlightMs: getHighlightMs(hold), restrictToWindow: true });
+  playMidiNotes(concept.midi, { hold, asChord: true, highlightMs: getHighlightMs(hold), restrictToWindow: false });
   el.conceptOutput.textContent = `${concept.label} in ${concept.key}: ${concept.symbols.join(" -> ")}`;
 }
 
@@ -2719,7 +6540,7 @@ function getSelectedConcept() {
 
 async function playConceptSequence(chords, hold) {
   for (let i = 0; i < chords.length; i += 1) {
-    playMidiNotes(chords[i].midi, { hold, asChord: true, restrictToWindow: true });
+    playMidiNotes(chords[i].midi, { hold, asChord: true, restrictToWindow: false });
     await wait(Math.max(220, hold * 560));
   }
 }
@@ -2777,7 +6598,7 @@ function playGlossaryExample() {
     ? NOTES[(NOTES.indexOf(key) + degreeToSemitone(item.example.degree)) % 12]
     : key;
   const midi = buildChordMidi(root, quality, "root position", 3);
-  playMidiNotes(midi, { hold: getHoldSeconds(), asChord: true, highlightMs: getHighlightMs(getHoldSeconds()), restrictToWindow: true });
+  playMidiNotes(midi, { hold: getHoldSeconds(), asChord: true, highlightMs: getHighlightMs(getHoldSeconds()), restrictToWindow: false });
 }
 
 function clearChordTableSelection() {
@@ -2848,6 +6669,228 @@ function buildChordMidi(root, quality, inversion = "root position", baseOctave =
 function buildScaleMidi(root, intervals, octave = 3) {
   const base = 12 * (octave + 1) + NOTES.indexOf(root);
   return intervals.map((interval) => base + interval);
+}
+
+function buildScalePatternMidi(root, patternKey, octave = 3) {
+  const resolvedPattern = resolveScalePatternKey(patternKey);
+  const intervals = SCALE_PATTERN_LIBRARY[resolvedPattern]?.intervals || SCALE_PATTERN_LIBRARY.major.intervals;
+  const base = 12 * (octave + 1) + NOTES.indexOf(root);
+  return [...intervals, 12].map((interval) => base + interval);
+}
+
+function buildScaleFingering(notes, hand = "right") {
+  const rightDefault = [1, 2, 3, 1, 2, 3, 4, 5];
+  const rightAlternative = [1, 2, 3, 4, 1, 2, 3, 5];
+  const leftDefault = [5, 4, 3, 2, 1, 3, 2, 1];
+  const leftAlternative = [5, 4, 3, 2, 1, 4, 3, 2];
+  const defaultPattern = hand === "left" ? leftDefault : rightDefault;
+  const altPattern = hand === "left" ? leftAlternative : rightAlternative;
+  if (!scaleFingeringHasThumbOnBlack(notes, defaultPattern)) return defaultPattern;
+  if (!scaleFingeringHasThumbOnBlack(notes, altPattern)) return altPattern;
+  return defaultPattern;
+}
+
+function scaleFingeringHasThumbOnBlack(notes, pattern) {
+  const length = Math.min(notes.length, pattern.length);
+  for (let i = 0; i < length; i += 1) {
+    if (pattern[i] !== 1) continue;
+    if (String(notes[i]).includes("#")) return true;
+  }
+  return false;
+}
+
+function getKeyEl(note) {
+  const midi = noteNameToMidi(note);
+  if (!Number.isFinite(midi)) return null;
+  return keyElsByMidi.get(midi) || null;
+}
+
+function showFingerOnKey(keyEl, fingerNum) {
+  if (!keyEl || !Number.isFinite(Number(fingerNum))) return;
+  let badge = keyEl.querySelector(".finger-number");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.className = "finger-number";
+    keyEl.appendChild(badge);
+  }
+  badge.textContent = String(fingerNum);
+}
+
+function highlightKey(note, fingerNum, showFingers = true) {
+  const keyEl = getKeyEl(note);
+  if (!keyEl) return;
+  keyEl.classList.add("active", "used-note");
+  if (showFingers && Number.isFinite(Number(fingerNum))) {
+    showFingerOnKey(keyEl, fingerNum);
+  }
+}
+
+function clearFingerOverlays() {
+  keyElsByMidi.forEach((keyEl) => {
+    const badge = keyEl.querySelector(".finger-number");
+    if (badge) badge.remove();
+  });
+}
+
+function clearPatternUiTimers() {
+  patternUiTimerIds.forEach((timerId) => window.clearTimeout(timerId));
+  patternUiTimerIds.clear();
+}
+
+function registerPatternUiTimer(timerId) {
+  patternUiTimerIds.add(timerId);
+}
+
+function clearPatternVisualState() {
+  keyElsByMidi.forEach((keyEl) => {
+    keyEl.classList.remove("active", "used-note", "dimmed");
+  });
+  clearChordDiffPreview();
+  reapplyTypingHeldHighlights();
+}
+
+function getSchedulerNowSeconds() {
+  if (isToneEngineAvailable() && typeof window.Tone?.now === "function") {
+    return window.Tone.now();
+  }
+  if (audioCtx) return audioCtx.currentTime;
+  return 0;
+}
+
+function scheduleSingleMidiNote(midi, startTimeSec, holdSeconds, velocity) {
+  if (isToneEngineAvailable() && toneEngineReady && toneSampler) {
+    try {
+      toneSampler.triggerAttackRelease(midiToNoteName(midi), holdSeconds, startTimeSec, velocity);
+      return true;
+    } catch {
+      toneEngineReady = false;
+      toneSampler = null;
+    }
+  }
+
+  if (shouldUseRnboPrimaryEngine() && rnboEngineActive) {
+    return scheduleRnboNote(midi, startTimeSec, holdSeconds, velocity);
+  }
+
+  if (sampleEngineReady && !htmlSampleEngineActive) {
+    playPianoVoice(midi, startTimeSec, holdSeconds, velocity);
+    return true;
+  }
+
+  if (htmlSampleEngineActive) {
+    const nowSec = getSchedulerNowSeconds();
+    const delayMs = Math.max(0, Math.round((startTimeSec - nowSec) * 1000));
+    const timerId = window.setTimeout(() => {
+      scheduledFallbackNoteTimers.delete(timerId);
+      playHtmlSampleForMidi(midi, holdSeconds, velocity);
+    }, delayMs);
+    scheduledFallbackNoteTimers.add(timerId);
+    return true;
+  }
+
+  return false;
+}
+
+async function playPatternScheduled({
+  notes,
+  fingers = null,
+  startTimeSec = null,
+  showFingers = true,
+  snapshot = true
+}) {
+  const noteList = Array.isArray(notes) ? notes : [];
+  const midiNotes = noteList
+    .map((note) => noteNameToMidi(note))
+    .filter((midi) => Number.isFinite(midi));
+  if (!midiNotes.length) return;
+  if (!ensureAudio()) return;
+
+  const runId = Date.now() + Math.floor(Math.random() * 1000);
+  activePatternRunId = runId;
+  clearPatternUiTimers();
+  clearFingerOverlays();
+  clearPatternVisualState();
+
+  if (isToneEngineAvailable() && (!toneEngineReady || !toneSampler)) {
+    await ensureToneEngine();
+  }
+
+  if (!toneEngineReady && shouldUseRnboPrimaryEngine() && !htmlSampleEngineActive && !rnboEngineActive && !rnboEngineFailedReason) {
+    await initializeRnboEngine();
+  }
+
+  const canSchedule = (isToneEngineAvailable() && toneEngineReady && toneSampler)
+    || (shouldUseRnboPrimaryEngine() && rnboEngineActive)
+    || (sampleEngineReady && !htmlSampleEngineActive)
+    || htmlSampleEngineActive;
+  if (!canSchedule) {
+    if (el.scaleOutput) {
+      el.scaleOutput.textContent = "Audio scheduler unavailable. Click a key once, then retry scale playback.";
+    }
+    activePatternRunId = 0;
+    return;
+  }
+
+  const stepSeconds = getStepSeconds();
+  const holdSeconds = Math.max(0.06, stepSeconds * 0.9);
+  const velocity = 0.76;
+  const nowSec = getSchedulerNowSeconds();
+  const safeStart = Number.isFinite(startTimeSec)
+    ? Math.max(startTimeSec, nowSec + 0.002)
+    : nowSec + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
+  const usedNotes = new Set();
+
+  midiNotes.forEach((midi, idx) => {
+    const note = midiToNoteName(midi);
+    const noteStart = safeStart + idx * stepSeconds;
+    scheduleSingleMidiNote(midi, noteStart, holdSeconds, velocity);
+    usedNotes.add(note);
+
+    const onDelayMs = Math.max(0, Math.round((noteStart - nowSec) * 1000));
+    const offDelayMs = Math.max(onDelayMs + 36, Math.round((noteStart + holdSeconds - nowSec) * 1000));
+    const fingerNum = Array.isArray(fingers) ? fingers[idx] : null;
+    const onTimerId = window.setTimeout(() => {
+      if (activePatternRunId !== runId) return;
+      highlightKey(note, fingerNum, showFingers);
+    }, onDelayMs);
+    const offTimerId = window.setTimeout(() => {
+      if (activePatternRunId !== runId) return;
+      const keyEl = getKeyEl(note);
+      if (keyEl) keyEl.classList.remove("active");
+    }, offDelayMs);
+    registerPatternUiTimer(onTimerId);
+    registerPatternUiTimer(offTimerId);
+  });
+
+  const patternDurationSeconds = (midiNotes.length - 1) * stepSeconds + holdSeconds;
+  const finalDelayMs = Math.max(0, Math.round((safeStart + patternDurationSeconds - nowSec) * 1000));
+  const finalizeTimerId = window.setTimeout(() => {
+    if (activePatternRunId !== runId) return;
+    keyElsByMidi.forEach((keyEl) => {
+      keyEl.classList.remove("active");
+      const keyNote = keyEl.dataset.note;
+      if (!snapshot) {
+        keyEl.classList.remove("dimmed", "used-note");
+        return;
+      }
+      if (keyNote && usedNotes.has(keyNote)) {
+        keyEl.classList.add("used-note");
+        keyEl.classList.remove("dimmed");
+      } else {
+        keyEl.classList.add("dimmed");
+      }
+    });
+
+    const cleanupTimerId = window.setTimeout(() => {
+      if (activePatternRunId !== runId) return;
+      clearFingerOverlays();
+      clearPatternVisualState();
+      clearPatternUiTimers();
+      activePatternRunId = 0;
+    }, snapshot ? 800 : 0);
+    registerPatternUiTimer(cleanupTimerId);
+  }, finalDelayMs);
+  registerPatternUiTimer(finalizeTimerId);
 }
 
 function buildProgressionChords(key, progressionName) {
@@ -2928,7 +6971,7 @@ function getHoldSeconds() {
 }
 
 function toneColor() {
-  const value = Number(el.toneInput.value);
+  const value = Number(el.toneInput?.value);
   return Number.isFinite(value) ? Math.min(95, Math.max(20, value)) : 62;
 }
 
@@ -3734,9 +7777,14 @@ function highlightKeyboardHold(midiNotes, restrictToWindow = false) {
 }
 
 function clearKeyboardHighlights() {
+  if (activePatternRunId) {
+    activePatternRunId = 0;
+    clearPatternUiTimers();
+    clearFingerOverlays();
+  }
   keyHighlightTimers.forEach((timerId) => clearTimeout(timerId));
   keyHighlightTimers.clear();
-  keyElsByMidi.forEach((keyEl) => keyEl.classList.remove("active"));
+  keyElsByMidi.forEach((keyEl) => keyEl.classList.remove("active", "used-note", "dimmed"));
   clearChordDiffPreview();
   reapplyTypingHeldHighlights();
 }
@@ -3785,11 +7833,22 @@ function mapMidiToWindow(midi, start, end) {
   return best;
 }
 
+function updateWindowKeyboardHint() {
+  if (!el.windowKeyboardHint || !el.highlightWindowStart) return;
+  const start = Number(el.highlightWindowStart.value);
+  if (!Number.isFinite(start)) return;
+  const mapping = WINDOW_KEYBOARD_NOTE_BINDINGS
+    .map((binding) => `${binding.label}:${midiToNoteName(start + binding.offset)}`)
+    .join("  ");
+  el.windowKeyboardHint.textContent = `Keyboard map: ${mapping}`;
+}
+
 function updateHighlightWindowLabel() {
   if (!el.highlightWindowStart || !el.highlightWindowLabel) return;
   const start = Number(el.highlightWindowStart.value);
   const end = start + HIGHLIGHT_WINDOW_SPAN_SEMITONES;
   el.highlightWindowLabel.textContent = `${midiToNoteName(start)} to ${midiToNoteName(end)} (8 white keys)`;
+  updateWindowKeyboardHint();
   updateHighlightWindowLine();
 }
 
@@ -3847,6 +7906,16 @@ function midiToNoteName(midi) {
   return `${note}${octave}`;
 }
 
+function noteNameToMidi(noteName) {
+  const match = /^([A-G])(#?)(-?\d+)$/.exec(String(noteName).trim());
+  if (!match) return null;
+  const baseMap = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const letter = match[1];
+  const sharp = match[2] === "#" ? 1 : 0;
+  const octave = Number(match[3]);
+  return 12 * (octave + 1) + baseMap[letter] + sharp;
+}
+
 function randomOf(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
@@ -3865,64 +7934,1163 @@ function renderLessonTracks() {
   });
 }
 
+function nowIsoString() {
+  return new Date().toISOString();
+}
 
+function createCoachMessage(role, content, extras = {}) {
+  return {
+    id: extras.id || `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    role,
+    content: String(content || ""),
+    createdAt: extras.createdAt || nowIsoString(),
+    mode: extras.mode || "",
+    warning: extras.warning || "",
+    artifact: extras.artifact || null,
+    pending: Boolean(extras.pending)
+  };
+}
 
-async function askCoach() {
-  const question = el.coachInput.value.trim();
-  if (!question) {
-    el.coachOutput.textContent = "Add a question first.";
+function defaultCoachThreadTitle(index = 0) {
+  return `Conversation ${index + 1}`;
+}
+
+function trimThreadTitleFromQuestion(question) {
+  const raw = String(question || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  return raw.length > 56 ? `${raw.slice(0, 56)}...` : raw;
+}
+
+function loadCoachThreads() {
+  try {
+    const raw = safeStorageGet(COACH_THREADS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((thread) => {
+        const id = String(thread?.id || "").trim();
+        const title = String(thread?.title || "").trim();
+        const messages = Array.isArray(thread?.messages)
+          ? thread.messages
+            .map((msg) => {
+              const role = msg?.role === "assistant" ? "assistant" : msg?.role === "user" ? "user" : "";
+              const content = String(msg?.content || "");
+              if (!role || !content.trim()) return null;
+              return createCoachMessage(role, content, {
+                id: String(msg?.id || "").trim() || undefined,
+                createdAt: String(msg?.createdAt || "").trim() || undefined,
+                mode: String(msg?.mode || "").trim(),
+                warning: String(msg?.warning || "").trim(),
+                artifact: msg?.artifact || null,
+                pending: false
+              });
+            })
+            .filter(Boolean)
+          : [];
+        if (!id) return null;
+        return {
+          id,
+          title: title || defaultCoachThreadTitle(0),
+          createdAt: String(thread?.createdAt || "").trim() || nowIsoString(),
+          updatedAt: String(thread?.updatedAt || "").trim() || nowIsoString(),
+          messages
+        };
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function saveCoachThreads() {
+  const serializable = coachState.threads.map((thread) => ({
+    id: thread.id,
+    title: thread.title,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+    messages: (Array.isArray(thread.messages) ? thread.messages : []).map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      createdAt: msg.createdAt,
+      mode: msg.mode || "",
+      warning: msg.warning || "",
+      artifact: msg.artifact || null
+    }))
+  }));
+  safeStorageSet(COACH_THREADS_STORAGE_KEY, JSON.stringify(serializable));
+}
+
+function loadCoachLessonStack() {
+  try {
+    const raw = safeStorageGet(COACH_LESSON_STACK_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => normalizeCoachLessonStackEntry(entry))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function saveCoachLessonStack() {
+  safeStorageSet(COACH_LESSON_STACK_STORAGE_KEY, JSON.stringify(coachState.lessonStack));
+}
+
+function normalizeCoachLessonStackEntry(entry) {
+  const normalizedArtifact = normalizeCoachArtifact(entry?.artifact || null);
+  const id = String(entry?.id || normalizedArtifact?.id || "").trim();
+  if (!id || !normalizedArtifact) return null;
+  const savedAt = String(entry?.savedAt || "").trim() || nowIsoString();
+  return {
+    id,
+    title: String(entry?.title || normalizedArtifact.title || "Lesson").trim() || "Lesson",
+    type: String(entry?.type || normalizedArtifact.type || "artifact").trim() || "artifact",
+    savedAt,
+    lastOpenedAt: String(entry?.lastOpenedAt || "").trim(),
+    trackId: String(entry?.trackId || "").trim(),
+    lessonId: String(entry?.lessonId || "").trim(),
+    completedAt: String(entry?.completedAt || "").trim(),
+    artifact: normalizedArtifact
+  };
+}
+
+function formatCoachDateTime(iso) {
+  const value = String(iso || "").trim();
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function getCoachStackEntryStatus(entry) {
+  const lessonId = String(entry?.lessonId || "").trim();
+  const isCompleted = Boolean(lessonId && progress.theoryCompletedLessons?.[lessonId]);
+  const runStats = lessonId ? getTheoryLessonRunStats(lessonId, false) : null;
+  const activity = Number(runStats?.starts || 0) + Number(runStats?.examplePlays || 0) + Number(runStats?.attempts || 0);
+
+  if (isCompleted) {
+    const completedAt = formatCoachDateTime(entry?.completedAt || "");
+    return {
+      label: "Completed",
+      className: "is-complete",
+      detail: completedAt ? `Completed ${completedAt}` : "Completed"
+    };
+  }
+  if (activity > 0) {
+    return {
+      label: "In Progress",
+      className: "",
+      detail: `${runStats.attempts || 0} attempts`
+    };
+  }
+  return {
+    label: "Saved",
+    className: "",
+    detail: formatCoachDateTime(entry?.savedAt || "") ? `Saved ${formatCoachDateTime(entry.savedAt)}` : "Saved"
+  };
+}
+
+function renderCoachLessonStack() {
+  if (!el.coachLessonStack) return;
+  el.coachLessonStack.innerHTML = "";
+  const stack = Array.isArray(coachState.lessonStack) ? coachState.lessonStack : [];
+  if (!stack.length) {
+    const empty = document.createElement("div");
+    empty.className = "coach-stack-empty";
+    empty.textContent = "No saved lesson artifacts yet. Use “Save to Stack” from any coach artifact.";
+    el.coachLessonStack.appendChild(empty);
     return;
   }
 
-  el.coachOutput.textContent = "Coach is thinking...";
-  let timeoutId;
+  stack.forEach((entry) => {
+    const normalized = normalizeCoachLessonStackEntry(entry);
+    if (!normalized) return;
+    const status = getCoachStackEntryStatus(normalized);
+
+    const card = document.createElement("article");
+    card.className = "coach-stack-card";
+    card.dataset.stackId = normalized.id;
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "coach-stack-title-row";
+    const title = document.createElement("div");
+    title.className = "coach-stack-title";
+    title.textContent = normalized.title;
+    const statusEl = document.createElement("div");
+    statusEl.className = `coach-stack-status ${status.className}`.trim();
+    statusEl.textContent = status.label;
+    titleRow.appendChild(title);
+    titleRow.appendChild(statusEl);
+    card.appendChild(titleRow);
+
+    const meta = document.createElement("div");
+    meta.className = "coach-stack-meta";
+    meta.textContent = `${normalized.type} • ${status.detail}`;
+    card.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "coach-stack-actions";
+
+    const continueBtn = document.createElement("button");
+    continueBtn.type = "button";
+    continueBtn.textContent = "Continue Lesson";
+    continueBtn.addEventListener("click", () => {
+      continueCoachLessonFromStack(normalized.id);
+    });
+    actions.appendChild(continueBtn);
+
+    const playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.textContent = "Play";
+    playBtn.addEventListener("click", () => {
+      void playCoachArtifact(normalized.artifact);
+    });
+    actions.appendChild(playBtn);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+      removeCoachLessonStackEntry(normalized.id);
+    });
+    actions.appendChild(removeBtn);
+
+    card.appendChild(actions);
+    el.coachLessonStack.appendChild(card);
+  });
+}
+
+function createCoachThread(initialTitle = "") {
+  const thread = {
+    id: `thread-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    title: initialTitle || defaultCoachThreadTitle(coachState.threads.length),
+    createdAt: nowIsoString(),
+    updatedAt: nowIsoString(),
+    messages: []
+  };
+  coachState.threads.unshift(thread);
+  coachState.activeThreadId = thread.id;
+  saveCoachThreads();
+  return thread;
+}
+
+function getActiveCoachThread() {
+  const found = coachState.threads.find((thread) => thread.id === coachState.activeThreadId);
+  if (found) return found;
+  return createCoachThread();
+}
+
+function initializeCoachThreads() {
+  coachState.lessonStack = loadCoachLessonStack();
+  coachState.threads = loadCoachThreads();
+  if (!coachState.threads.length) {
+    createCoachThread("Conversation 1");
+  } else if (!coachState.activeThreadId || !coachState.threads.some((thread) => thread.id === coachState.activeThreadId)) {
+    coachState.activeThreadId = coachState.threads[0].id;
+  }
+  renderCoachThreadSelect();
+  renderCoachMessages();
+  renderCoachLessonStack();
+}
+
+function renderCoachThreadSelect() {
+  if (!el.coachThreadSelect) return;
+  el.coachThreadSelect.innerHTML = "";
+  coachState.threads.forEach((thread) => {
+    const option = document.createElement("option");
+    option.value = thread.id;
+    option.textContent = thread.title || defaultCoachThreadTitle(0);
+    el.coachThreadSelect.appendChild(option);
+  });
+  el.coachThreadSelect.value = coachState.activeThreadId;
+}
+
+function formatCoachTimestamp(iso) {
+  const value = String(iso || "").trim();
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function renderCoachMessages() {
+  if (!el.coachMessages) return;
+  const thread = getActiveCoachThread();
+  el.coachMessages.innerHTML = "";
+  if (!thread.messages.length) {
+    const placeholder = document.createElement("div");
+    placeholder.className = "coach-message assistant";
+    placeholder.textContent = "Start a conversation. I will generate explanation and a playable lesson artifact.";
+    el.coachMessages.appendChild(placeholder);
+    return;
+  }
+
+  thread.messages.forEach((msg) => {
+    const bubble = document.createElement("div");
+    bubble.className = `coach-message ${msg.role}`;
+    bubble.dataset.msgId = msg.id;
+
+    const text = document.createElement("div");
+    text.className = "coach-message-text";
+    text.textContent = msg.content || "";
+    bubble.appendChild(text);
+
+    if (msg.role === "assistant" && msg.artifact) {
+      bubble.appendChild(buildCoachArtifactCardElement(msg.artifact));
+    }
+
+    const meta = document.createElement("span");
+    meta.className = "coach-message-meta";
+    const modeLabel = msg.mode ? ` • ${formatCoachMode(msg.mode)}` : "";
+    const pending = msg.pending ? " • typing..." : "";
+    meta.textContent = `${formatCoachTimestamp(msg.createdAt)}${modeLabel}${pending}`.trim();
+    bubble.appendChild(meta);
+
+    el.coachMessages.appendChild(bubble);
+  });
+
+  el.coachMessages.scrollTop = el.coachMessages.scrollHeight;
+}
+
+function pushCoachMessage(thread, msg) {
+  if (!thread || !msg) return;
+  thread.messages.push(msg);
+  thread.updatedAt = nowIsoString();
+  if (thread.messages.length > 60) {
+    thread.messages = thread.messages.slice(-60);
+  }
+}
+
+function updatePendingAssistantMessage(thread, messageId, patch = {}) {
+  if (!thread || !messageId) return;
+  const msg = thread.messages.find((entry) => entry.id === messageId);
+  if (!msg) return;
+  if (Object.prototype.hasOwnProperty.call(patch, "content")) {
+    msg.content = String(patch.content || "");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "mode")) {
+    msg.mode = patch.mode || "";
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "warning")) {
+    msg.warning = patch.warning || "";
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "artifact")) {
+    msg.artifact = patch.artifact || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "pending")) {
+    msg.pending = Boolean(patch.pending);
+  }
+}
+
+function normalizeCoachArtifact(artifact) {
+  if (!artifact || typeof artifact !== "object") return null;
+  const title = String(artifact.title || "").trim();
+  const type = String(artifact.type || "").trim();
+  const key = String(artifact.key || el.keySelect?.value || appState.root).trim();
+  const bpm = Math.max(30, Math.min(240, Number(artifact.bpm) || appState.tempoBpm));
+  const policyMode = String(artifact?.playbackPolicy?.mode || "fixed_sequence").trim();
+  const normalizedType = type.toLowerCase();
+  const supportsCircularSweep = /(row|palette|sweep|loop)/.test(normalizedType) && !normalizedType.includes("cadence");
+  const useCircularPolicy = policyMode === "circular_row_sweep" && supportsCircularSweep;
+  const sequence = Array.isArray(artifact.sequence)
+    ? artifact.sequence
+      .map((step) => {
+        const root = String(step?.root || "").trim();
+        const quality = String(step?.quality || "").trim();
+        const chord = String(step?.chord || "").trim();
+        const beats = Math.max(1, Math.min(8, Number(step?.beats) || 2));
+        if (!root || !quality) return null;
+        return { root, quality, chord: chord || `${root}${quality}`, beats };
+      })
+      .filter(Boolean)
+    : [];
+  if (!title || !type || !sequence.length) return null;
+  return {
+    id: String(artifact.id || `artifact-${Date.now()}`),
+    title,
+    type,
+    key,
+    bpm,
+    playbackPolicy: {
+      mode: useCircularPolicy ? "circular_row_sweep" : "fixed_sequence",
+      circularResolve: useCircularPolicy,
+      finalConfetti: useCircularPolicy
+    },
+    sequence,
+    quiz: {
+      prompt: String(artifact?.quiz?.prompt || "").trim() || `Play ${title} in another key.`,
+      conceptId: String(artifact?.quiz?.conceptId || "").trim() || "core-harmony"
+    },
+    actions: ["play", "try", "save_to_stack", "open_full_lesson"]
+  };
+}
+
+function coachNormalizeRoot(root) {
+  const text = String(root || "").trim();
+  if (!text) return "";
+  const cased = text.length > 1 ? `${text[0].toUpperCase()}${text.slice(1)}` : text.toUpperCase();
+  if (NOTES.includes(cased)) return cased;
+  if (FLAT_TO_SHARP[cased]) return FLAT_TO_SHARP[cased];
+  return "";
+}
+
+function coachDegreeInKey(root, key) {
+  const normalizedRoot = coachNormalizeRoot(root);
+  const normalizedKey = coachNormalizeRoot(key) || "C";
+  const keyIndex = NOTES.indexOf(normalizedKey);
+  const rootIndex = NOTES.indexOf(normalizedRoot);
+  if (keyIndex < 0 || rootIndex < 0) return null;
+  const distance = (rootIndex - keyIndex + 12) % 12;
+  const degreeIndex = DEGREE_TO_SEMITONE.indexOf(distance);
+  return degreeIndex >= 0 ? degreeIndex + 1 : null;
+}
+
+function coachIsCadenceArtifact(artifact) {
+  const type = String(artifact?.type || "").toLowerCase();
+  const conceptId = String(artifact?.quiz?.conceptId || "").toLowerCase();
+  return type.includes("cadence") || conceptId.includes("cadence");
+}
+
+function coachInferCadenceOptionId(artifact) {
+  const conceptId = String(artifact?.quiz?.conceptId || "").toLowerCase();
+  if (conceptId.includes("plagal")) return "plagal";
+  if (conceptId.includes("deceptive")) return "deceptive";
+  if (conceptId.includes("half")) return "half";
+  if (conceptId.includes("authentic")) return "authentic";
+
+  const steps = Array.isArray(artifact?.sequence) ? artifact.sequence : [];
+  if (steps.length >= 2) {
+    const from = steps[steps.length - 2];
+    const to = steps[steps.length - 1];
+    const fromDegree = coachDegreeInKey(from?.root, artifact?.key);
+    const toDegree = coachDegreeInKey(to?.root, artifact?.key);
+    if (fromDegree === 5 && toDegree === 6) return "deceptive";
+    if (fromDegree === 4 && toDegree === 1) return "plagal";
+    if (fromDegree === 5 && toDegree === 1) return "authentic";
+    if (toDegree === 5) return "half";
+  }
+
+  return "authentic";
+}
+
+function coachRotateCadenceOptions(artifactId) {
+  const base = [...COACH_CADENCE_QUIZ_OPTIONS];
+  const key = String(artifactId || "");
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+  }
+  const offset = Math.abs(hash) % base.length;
+  return base.map((_, idx) => base[(idx + offset) % base.length]);
+}
+
+function ensureCoachCadenceQuizSession(artifact) {
+  if (!artifact?.id || !coachIsCadenceArtifact(artifact)) return null;
+  const existing = coachState.quizSessions[artifact.id];
+  if (existing && Array.isArray(existing.options) && existing.options.length) {
+    return existing;
+  }
+  const correctOptionId = coachInferCadenceOptionId(artifact);
+  const session = {
+    id: `quiz-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    artifactId: artifact.id,
+    conceptId: String(artifact?.quiz?.conceptId || "").trim() || `cadence-${correctOptionId}`,
+    prompt: String(artifact?.quiz?.prompt || "").trim() || "Which cadence quality matches this artifact?",
+    options: coachRotateCadenceOptions(artifact.id),
+    correctOptionId,
+    attempts: 0,
+    lastSelectedId: "",
+    lastResult: null,
+    lastAttemptAt: ""
+  };
+  coachState.quizSessions[artifact.id] = session;
+  return session;
+}
+
+function getCoachConceptMastery(conceptId) {
+  const id = String(conceptId || "core-harmony").trim() || "core-harmony";
+  const raw = progress.conceptMastery[id];
+  if (!raw || typeof raw !== "object") {
+    return {
+      conceptId: id,
+      attempts: 0,
+      correct: 0,
+      incorrect: 0,
+      streak: 0,
+      mastered: false,
+      lastResult: "",
+      updatedAt: ""
+    };
+  }
+  return {
+    conceptId: id,
+    attempts: Number(raw.attempts) || 0,
+    correct: Number(raw.correct) || 0,
+    incorrect: Number(raw.incorrect) || 0,
+    streak: Number(raw.streak) || 0,
+    mastered: Boolean(raw.mastered),
+    lastResult: String(raw.lastResult || ""),
+    updatedAt: String(raw.updatedAt || "")
+  };
+}
+
+function getCoachArtifactAttemptStats(artifactId) {
+  const attempts = Array.isArray(progress.artifactAttempts) ? progress.artifactAttempts : [];
+  return attempts.reduce((acc, attempt) => {
+    if (attempt?.artifactId !== artifactId) return acc;
+    acc.total += 1;
+    if (attempt.isCorrect) acc.correct += 1;
+    return acc;
+  }, { total: 0, correct: 0 });
+}
+
+function recordCoachArtifactAttempt(artifact, session, selectedOptionId) {
+  if (!artifact?.id || !session?.id) return null;
+  const selectedId = String(selectedOptionId || "").trim();
+  const correctId = String(session.correctOptionId || "").trim();
+  const isCorrect = selectedId === correctId;
+  const attempt = {
+    id: `attempt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    createdAt: nowIsoString(),
+    artifactId: artifact.id,
+    conceptId: session.conceptId,
+    quizSessionId: session.id,
+    selectedOptionId: selectedId,
+    correctOptionId: correctId,
+    isCorrect
+  };
+  progress.artifactAttempts.unshift(attempt);
+  progress.artifactAttempts = progress.artifactAttempts.slice(0, COACH_MAX_ARTIFACT_ATTEMPTS);
+
+  const mastery = getCoachConceptMastery(session.conceptId);
+  mastery.attempts += 1;
+  if (isCorrect) {
+    mastery.correct += 1;
+    mastery.streak = Math.max(1, mastery.streak + 1);
+    mastery.lastResult = "correct";
+  } else {
+    mastery.incorrect += 1;
+    mastery.streak = 0;
+    mastery.lastResult = "incorrect";
+  }
+  mastery.updatedAt = attempt.createdAt;
+  const accuracy = mastery.attempts > 0 ? mastery.correct / mastery.attempts : 0;
+  mastery.mastered = mastery.correct >= COACH_MASTERY_CORRECT_TARGET && accuracy >= 0.75;
+  progress.conceptMastery[session.conceptId] = mastery;
+
+  session.attempts = (Number(session.attempts) || 0) + 1;
+  session.lastSelectedId = selectedId;
+  session.lastResult = isCorrect;
+  session.lastAttemptAt = attempt.createdAt;
+  saveProgress();
+
+  return { isCorrect, selectedId, correctId, mastery };
+}
+
+function renderCoachArtifactQuizPanel(container, artifact) {
+  if (!container) return;
+  container.innerHTML = "";
+  container.className = "coach-artifact-quiz";
+  if (!coachIsCadenceArtifact(artifact)) {
+    const hint = document.createElement("div");
+    hint.className = "coach-quiz-help";
+    hint.textContent = "Try: play this artifact in 3 keys, then explain the harmonic function out loud.";
+    container.appendChild(hint);
+    return;
+  }
+
+  const session = ensureCoachCadenceQuizSession(artifact);
+  if (!session) return;
+
+  const prompt = document.createElement("div");
+  prompt.className = "coach-quiz-prompt";
+  prompt.textContent = session.prompt || "Which cadence quality matches this artifact?";
+  container.appendChild(prompt);
+
+  const options = document.createElement("div");
+  options.className = "coach-quiz-options";
+  session.options.forEach((option) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "coach-quiz-option";
+    btn.textContent = option.label;
+    if (session.lastSelectedId === option.id) {
+      btn.classList.add("is-selected");
+    }
+    if (session.lastResult !== null && option.id === session.correctOptionId) {
+      btn.classList.add("is-correct");
+    }
+    if (session.lastResult === false && session.lastSelectedId === option.id && option.id !== session.correctOptionId) {
+      btn.classList.add("is-incorrect");
+    }
+    btn.addEventListener("click", () => {
+      const outcome = recordCoachArtifactAttempt(artifact, session, option.id);
+      if (outcome && el.coachOutput) {
+        const answerLabel = COACH_CADENCE_LABEL_BY_ID[outcome.correctId] || "Correct cadence";
+        el.coachOutput.textContent = outcome.isCorrect
+          ? `Correct. ${answerLabel}.`
+          : `Not yet. Correct answer: ${answerLabel}.`;
+      }
+      renderCoachArtifactQuizPanel(container, artifact);
+    });
+    options.appendChild(btn);
+  });
+  container.appendChild(options);
+
+  const result = document.createElement("div");
+  result.className = "coach-quiz-result";
+  if (session.lastResult === true) {
+    result.textContent = `Correct. ${COACH_CADENCE_LABEL_BY_ID[session.correctOptionId] || "Cadence identified."}`;
+  } else if (session.lastResult === false) {
+    result.textContent = `Try again. Correct answer: ${COACH_CADENCE_LABEL_BY_ID[session.correctOptionId] || "see highlighted option"}.`;
+  } else {
+    result.textContent = "Pick one answer to grade this cadence concept.";
+  }
+  container.appendChild(result);
+
+  const stats = getCoachArtifactAttemptStats(artifact.id);
+  const mastery = getCoachConceptMastery(session.conceptId);
+  const masteryLine = document.createElement("div");
+  masteryLine.className = "coach-quiz-mastery";
+  const accuracyPercent = mastery.attempts > 0 ? Math.round((mastery.correct / mastery.attempts) * 100) : 0;
+  const masteredSuffix = mastery.mastered ? " Mastered." : "";
+  masteryLine.textContent = `Artifact attempts: ${stats.correct}/${stats.total} correct. Concept mastery: ${mastery.correct}/${mastery.attempts} (${accuracyPercent}%).${masteredSuffix}`;
+  container.appendChild(masteryLine);
+}
+
+function findCoachArtifactStartCell(step) {
+  const root = String(step?.root || "").trim();
+  const quality = String(step?.quality || "").trim();
+  if (!root || !quality) return null;
+  return findChordCell(root, quality) || null;
+}
+
+function scheduleCoachCircularResolveCelebration(cell, atTimeSec, token) {
+  if (!cell) return;
+  const nowSec = getSchedulerNowSeconds();
+  const delayMs = Math.max(0, Math.round((atTimeSec - nowSec) * 1000));
+  window.setTimeout(() => {
+    if (token !== paletteSequenceToken) return;
+    clearChordTableSelection();
+    cell.classList.add("is-selected");
+    celebrateResolutionCell(cell);
+  }, delayMs);
+}
+
+function buildCoachArtifactCardElement(artifact) {
+  const normalized = normalizeCoachArtifact(artifact);
+  if (!normalized) return document.createElement("div");
+  const card = document.createElement("div");
+  card.className = "coach-artifact-card";
+
+  const title = document.createElement("div");
+  title.className = "coach-artifact-title";
+  title.textContent = normalized.title;
+  card.appendChild(title);
+
+  const summary = document.createElement("div");
+  summary.className = "coach-artifact-summary";
+  const sequenceLabel = normalized.sequence.map((step) => step.chord || `${step.root}${step.quality}`).join(" -> ");
+  summary.textContent = `${normalized.key} • ${normalized.bpm} BPM • ${sequenceLabel}`;
+  card.appendChild(summary);
+
+  const actions = document.createElement("div");
+  actions.className = "coach-artifact-actions";
+
+  const playBtn = document.createElement("button");
+  playBtn.type = "button";
+  playBtn.textContent = "Play";
+  playBtn.addEventListener("click", () => {
+    void playCoachArtifact(normalized);
+  });
+  actions.appendChild(playBtn);
+
+  const tryBtn = document.createElement("button");
+  tryBtn.type = "button";
+  tryBtn.textContent = "Try";
+  const quizPanel = document.createElement("div");
+  quizPanel.className = "coach-artifact-quiz";
+  renderCoachArtifactQuizPanel(quizPanel, normalized);
+  tryBtn.addEventListener("click", () => {
+    startCoachArtifactTry(normalized, quizPanel);
+  });
+  actions.appendChild(tryBtn);
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.textContent = "Save to Stack";
+  saveBtn.addEventListener("click", () => {
+    saveCoachArtifactToStack(normalized);
+  });
+  actions.appendChild(saveBtn);
+
+  const openLessonBtn = document.createElement("button");
+  openLessonBtn.type = "button";
+  openLessonBtn.textContent = "Open Full Lesson";
+  openLessonBtn.addEventListener("click", () => {
+    openCoachArtifactFullLesson(normalized);
+  });
+  actions.appendChild(openLessonBtn);
+
+  card.appendChild(actions);
+  card.appendChild(quizPanel);
+  return card;
+}
+
+async function playCoachArtifact(artifact) {
+  if (!artifact || !Array.isArray(artifact.sequence) || !artifact.sequence.length) return;
+  const ready = await ensureHarmonicPlaybackReady();
+  if (!ready) return;
+  cancelPaletteSequence();
+  const token = ++paletteSequenceToken;
+  const startTimeSec = getSchedulerNowSeconds() + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
+  const steps = artifact.sequence.map((step) => ({
+    root: step.root,
+    quality: step.quality,
+    beats: Number(step.beats) || 2
+  }));
+  const payload = { steps };
+  const useCircularPolicy = artifact?.playbackPolicy?.mode === "circular_row_sweep";
+  if (useCircularPolicy && steps[0]?.root && steps[0]?.quality) {
+    const startCell = findCoachArtifactStartCell(steps[0]);
+    let endTimeSec = scheduleHarmonicEventPlayback(payload, startTimeSec, token, null);
+    endTimeSec += getHarmonySubdivisionSeconds();
+    const resolveHold = Math.max(0.14, getHarmonyBeatSeconds() * 1.8);
+    const resolvedMidi = buildChordMidi(steps[0].root, steps[0].quality, "root position", 3).map((midi) => midi + 12);
+    scheduleChordAtTime(resolvedMidi, endTimeSec, resolveHold, token);
+    if (startCell) {
+      scheduleHarmonicCellSelection(startCell, endTimeSec, resolveHold, token);
+      scheduleCoachCircularResolveCelebration(startCell, endTimeSec, token);
+    }
+  } else {
+    scheduleHarmonicEventPlayback(payload, startTimeSec, token, null);
+  }
+  if (el.coachOutput) {
+    el.coachOutput.textContent = `Playing artifact: ${artifact.title}`;
+  }
+}
+
+function startCoachArtifactTry(artifact, quizPanel = null) {
+  const session = ensureCoachCadenceQuizSession(artifact);
+  if (quizPanel) {
+    renderCoachArtifactQuizPanel(quizPanel, artifact);
+  }
+  if (el.coachOutput) {
+    if (session) {
+      el.coachOutput.textContent = `${session.prompt} Choose one option below to grade your answer.`;
+      return;
+    }
+    el.coachOutput.textContent = artifact?.quiz?.prompt || `Try this concept: ${artifact?.title || "lesson artifact"}.`;
+  }
+}
+
+function mapArtifactToLessonTrack(artifact) {
+  const type = String(artifact?.type || "").toLowerCase();
+  if (type.includes("cadence")) return "classical";
+  if (type.includes("arpeggio")) return "jazz";
+  if (type.includes("scale")) return "classical";
+  return "pop";
+}
+
+function mapArtifactTopic(artifact) {
+  const type = String(artifact?.type || "").toLowerCase();
+  if (type.includes("cadence")) return "cadences";
+  if (type.includes("arpeggio")) return "voicings";
+  if (type.includes("scale")) return "progressions";
+  return "progressions";
+}
+
+function upsertCoachArtifactLesson(artifact) {
+  const trackId = mapArtifactToLessonTrack(artifact);
+  if (!progress.theoryCustomLessons[trackId]) {
+    progress.theoryCustomLessons[trackId] = [];
+  }
+  const lessonId = `coach-artifact-${artifact.id}`;
+  const bucket = progress.theoryCustomLessons[trackId];
+  const lesson = {
+    id: lessonId,
+    trackId,
+    customTopic: mapArtifactTopic(artifact),
+    customLevel: "noob",
+    title: artifact.title,
+    description: `Generated from AI coach. Key ${artifact.key}.`,
+    resources: [{ label: "Generated Artifact", url: "" }],
+    videoUrl: "",
+    narration: `Practice ${artifact.title} at ${artifact.bpm} BPM in ${artifact.key}.`,
+    infographicType: artifact.type.includes("cadence") ? "ii-v-i" : "functional",
+    customTokens: artifact.sequence.map((step) => step.chord).slice(0, 7),
+    artifact
+  };
+  const idx = bucket.findIndex((entry) => entry.id === lessonId);
+  if (idx >= 0) {
+    bucket[idx] = lesson;
+  } else {
+    bucket.unshift(lesson);
+    progress.theoryCustomLessons[trackId] = bucket.slice(0, 40);
+  }
+  saveProgress();
+  return { trackId, lessonId };
+}
+
+function upsertCoachStackEntry(artifact, options = {}) {
+  const normalizedArtifact = normalizeCoachArtifact(artifact);
+  if (!normalizedArtifact?.id) return null;
+  const ensureLesson = options.ensureLesson === true;
+  const bumpToTop = options.bumpToTop !== false;
+  const now = nowIsoString();
+  const index = coachState.lessonStack.findIndex((entry) => entry.id === normalizedArtifact.id);
+  const existing = index >= 0 ? normalizeCoachLessonStackEntry(coachState.lessonStack[index]) : null;
+  const nextEntry = {
+    id: normalizedArtifact.id,
+    title: normalizedArtifact.title,
+    type: normalizedArtifact.type,
+    savedAt: existing?.savedAt || now,
+    lastOpenedAt: existing?.lastOpenedAt || "",
+    trackId: existing?.trackId || "",
+    lessonId: existing?.lessonId || "",
+    completedAt: existing?.completedAt || "",
+    artifact: normalizedArtifact
+  };
+
+  if (ensureLesson) {
+    const linked = upsertCoachArtifactLesson(normalizedArtifact);
+    nextEntry.trackId = linked.trackId;
+    nextEntry.lessonId = linked.lessonId;
+  }
+
+  if (index >= 0) {
+    coachState.lessonStack[index] = nextEntry;
+    if (bumpToTop && index > 0) {
+      coachState.lessonStack.splice(index, 1);
+      coachState.lessonStack.unshift(nextEntry);
+    }
+  } else {
+    coachState.lessonStack.unshift(nextEntry);
+  }
+
+  coachState.lessonStack = coachState.lessonStack
+    .map((entry) => normalizeCoachLessonStackEntry(entry))
+    .filter(Boolean)
+    .slice(0, 120);
+  saveCoachLessonStack();
+  renderCoachLessonStack();
+  return {
+    entry: nextEntry,
+    exists: index >= 0
+  };
+}
+
+function saveCoachArtifactToStack(artifact) {
+  const result = upsertCoachStackEntry(artifact, { ensureLesson: false, bumpToTop: true });
+  if (!result) return;
+  if (el.coachOutput) {
+    el.coachOutput.textContent = result.exists
+      ? `Updated in lesson stack: ${result.entry.title}`
+      : `Saved to lesson stack: ${result.entry.title}`;
+  }
+}
+
+function removeCoachLessonStackEntry(entryId) {
+  const id = String(entryId || "").trim();
+  if (!id) return;
+  const next = coachState.lessonStack.filter((entry) => entry.id !== id);
+  if (next.length === coachState.lessonStack.length) return;
+  coachState.lessonStack = next;
+  saveCoachLessonStack();
+  renderCoachLessonStack();
+  if (el.coachOutput) {
+    el.coachOutput.textContent = "Removed lesson from stack.";
+  }
+}
+
+function openTheoryLessonFromCoachStack(trackId, lessonId, title = "Lesson") {
+  if (!trackId || !lessonId) return false;
+  setMode("theory");
+  if (el.theoryTrackSelect) {
+    el.theoryTrackSelect.value = trackId;
+  }
+  theoryState.trackId = trackId;
+  theoryState.lessonId = lessonId;
+  theoryState.isEditingLesson = false;
+  theoryState.activeRunLessonId = "";
+  theoryState.runKeyboardPresses = 0;
+  renderTheoryLessonList();
+  renderTheoryLessonDetail();
+  renderTheoryProgressSummary();
+  if (el.coachOutput) {
+    el.coachOutput.textContent = `Opened full lesson: ${title}`;
+  }
+  return true;
+}
+
+function continueCoachLessonFromStack(entryId) {
+  const id = String(entryId || "").trim();
+  if (!id) return;
+  const existing = coachState.lessonStack.find((entry) => entry.id === id);
+  const normalized = normalizeCoachLessonStackEntry(existing);
+  if (!normalized) {
+    if (el.coachOutput) {
+      el.coachOutput.textContent = "Lesson stack entry is unavailable.";
+    }
+    return;
+  }
+  const result = upsertCoachStackEntry(normalized.artifact, {
+    ensureLesson: true,
+    bumpToTop: true
+  });
+  if (!result?.entry?.trackId || !result?.entry?.lessonId) {
+    if (el.coachOutput) {
+      el.coachOutput.textContent = "Unable to continue lesson from this artifact.";
+    }
+    return;
+  }
+  result.entry.lastOpenedAt = nowIsoString();
+  coachState.lessonStack[0] = normalizeCoachLessonStackEntry(result.entry);
+  saveCoachLessonStack();
+  renderCoachLessonStack();
+  openTheoryLessonFromCoachStack(result.entry.trackId, result.entry.lessonId, result.entry.title);
+}
+
+function markCoachLessonStackCompleted(lessonId) {
+  const id = String(lessonId || "").trim();
+  if (!id) return;
+  let changed = false;
+  coachState.lessonStack = coachState.lessonStack.map((entry) => {
+    const normalized = normalizeCoachLessonStackEntry(entry);
+    if (!normalized) return entry;
+    if (normalized.lessonId !== id) return normalized;
+    if (!normalized.completedAt) {
+      normalized.completedAt = nowIsoString();
+      changed = true;
+    }
+    return normalized;
+  });
+  if (changed) {
+    saveCoachLessonStack();
+    renderCoachLessonStack();
+  }
+}
+
+function openCoachArtifactFullLesson(artifact) {
+  if (!artifact) return;
+  const result = upsertCoachStackEntry(artifact, {
+    ensureLesson: true,
+    bumpToTop: true
+  });
+  if (!result?.entry) return;
+  result.entry.lastOpenedAt = nowIsoString();
+  coachState.lessonStack[0] = normalizeCoachLessonStackEntry(result.entry);
+  saveCoachLessonStack();
+  renderCoachLessonStack();
+  if (result.entry.trackId && result.entry.lessonId) {
+    openTheoryLessonFromCoachStack(result.entry.trackId, result.entry.lessonId, result.entry.title);
+  }
+}
+
+function formatCoachMode(mode) {
+  const key = String(mode || "").toLowerCase();
+  if (key === "ollama") return "Local Gemma (Ollama)";
+  if (key === "openai") return "OpenAI";
+  if (key === "pollinations") return "Cloud fallback model";
+  if (key === "offline") return "Local smart tutor";
+  return "Unknown";
+}
+
+function setCoachStatus(text) {
+  if (!el.coachStatus) return;
+  el.coachStatus.textContent = text;
+}
+
+async function refreshCoachStatus() {
+  if (!el.coachStatus) return;
+  try {
+    const res = await fetch("/api/coach/status", { cache: "no-store" });
+    if (!res.ok) {
+      setCoachStatus("Coach provider: status unavailable.");
+      return;
+    }
+    const status = await res.json();
+    if (status?.ollama?.reachable && status?.ollama?.modelInstalled) {
+      setCoachStatus(`Coach provider ready: Local Gemma (${status.ollama.model})`);
+      return;
+    }
+    if (status?.openaiConfigured) {
+      setCoachStatus(`Coach provider ready: OpenAI (${status.openaiModel || "configured model"})`);
+      return;
+    }
+    if (status?.pollinations?.reachable) {
+      setCoachStatus("Coach provider ready: Cloud fallback model (no key required)");
+      return;
+    }
+    setCoachStatus("Coach provider ready: Local smart tutor (offline mode)");
+  } catch {
+    setCoachStatus("Coach provider: status check failed.");
+  }
+}
+
+function coachRequestContext() {
+  const cadenceName = getSelectedCadenceName();
+  const cadenceProfile = getCadenceProfile(cadenceName);
+  return {
+    progress,
+    key: el.keySelect.value,
+    progression: el.progressionSelect.value,
+    cadence: cadenceName,
+    cadenceEmotion: cadenceProfile.emotion,
+    chord: `${appState.root}${CHORDS[appState.quality].short}`,
+    arpeggio: `${el.arpRootSelect.value} ${el.arpTypeSelect.value}`,
+    scale: `${el.scaleRootSelect.value} ${scalePatternLabel(resolveScalePatternKey(el.scaleTypeSelect.value))}`,
+    tempo: appState.tempoBpm
+  };
+}
+
+function buildCoachConversationPayload(thread, question) {
+  const messages = thread.messages
+    .filter((entry) => entry.role === "user" || entry.role === "assistant")
+    .map((entry) => ({ role: entry.role, content: entry.content }))
+    .slice(-COACH_MAX_CONTEXT_MESSAGES);
+  return {
+    threadId: thread.id,
+    question,
+    context: coachRequestContext(),
+    messages
+  };
+}
+
+async function streamCoachResponse(payload, { onMeta, onDelta, onDone }) {
+  const res = await fetch("/api/coach/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`Coach stream failed (${res.status})`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    lines.forEach((line) => {
+      const chunk = line.trim();
+      if (!chunk) return;
+      let eventPayload;
+      try {
+        eventPayload = JSON.parse(chunk);
+      } catch {
+        return;
+      }
+      if (eventPayload.type === "meta" && typeof onMeta === "function") onMeta(eventPayload);
+      if (eventPayload.type === "delta" && typeof onDelta === "function") onDelta(eventPayload);
+      if (eventPayload.type === "done" && typeof onDone === "function") onDone(eventPayload);
+    });
+  }
+  if (buffer.trim()) {
+    try {
+      const trailing = JSON.parse(buffer.trim());
+      if (trailing.type === "done" && typeof onDone === "function") onDone(trailing);
+    } catch {
+      // Ignore malformed trailing buffer.
+    }
+  }
+}
+
+
+
+async function askCoach() {
+  if (coachState.isStreaming) return;
+  const question = el.coachInput.value.trim();
+  if (!question) {
+    if (el.coachOutput) el.coachOutput.textContent = "Add a question first.";
+    return;
+  }
+
+  const thread = getActiveCoachThread();
+  if (!thread.messages.length || !thread.title || thread.title.startsWith("Conversation")) {
+    thread.title = trimThreadTitleFromQuestion(question) || thread.title || defaultCoachThreadTitle(0);
+  }
+  const userMessage = createCoachMessage("user", question);
+  pushCoachMessage(thread, userMessage);
+  const assistantMessage = createCoachMessage("assistant", "", { pending: true, mode: "stream" });
+  pushCoachMessage(thread, assistantMessage);
+  coachState.isStreaming = true;
+  saveCoachThreads();
+  renderCoachThreadSelect();
+  renderCoachMessages();
+  if (el.coachInput) el.coachInput.value = "";
+  if (el.coachOutput) el.coachOutput.textContent = "Streaming response...";
+  setCoachStatus("Coach provider: requesting response...");
 
   try {
-    const cadenceName = getSelectedCadenceName();
-    const cadenceProfile = getCadenceProfile(cadenceName);
-    const controller = new AbortController();
-    timeoutId = setTimeout(() => controller.abort(), 9000);
-    const res = await fetch("/api/coach", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        question,
-        context: {
-          progress,
-          key: el.keySelect.value,
-          progression: el.progressionSelect.value,
-          cadence: cadenceName,
-          cadenceEmotion: cadenceProfile.emotion,
-          chord: `${appState.root}${CHORDS[appState.quality].short}`,
-          arpeggio: `${el.arpRootSelect.value} ${el.arpTypeSelect.value}`,
-          scale: `${el.scaleRootSelect.value} ${el.scaleTypeSelect.value}`,
-          tempo: Number(el.tempoInput.value) || 90
-        }
-      })
+    const payload = buildCoachConversationPayload(thread, question);
+    let finalDone = null;
+    await streamCoachResponse(payload, {
+      onMeta: (meta) => {
+        const modeLabel = formatCoachMode(meta.mode);
+        setCoachStatus(`Coach provider used: ${modeLabel}`);
+      },
+      onDelta: (delta) => {
+        const current = thread.messages.find((msg) => msg.id === assistantMessage.id)?.content || "";
+        updatePendingAssistantMessage(thread, assistantMessage.id, { content: `${current}${delta.text || ""}` });
+        renderCoachMessages();
+      },
+      onDone: (donePayload) => {
+        finalDone = donePayload;
+      }
     });
-    clearTimeout(timeoutId);
 
-    const raw = await res.text();
-    let data = {};
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      el.coachOutput.textContent = buildClientCoachFallback(question);
-      return;
+    const normalizedArtifact = normalizeCoachArtifact(finalDone?.artifact || null);
+    const finalText = String(finalDone?.assistantText || finalDone?.answer || "").trim()
+      || buildClientCoachFallback(question);
+    updatePendingAssistantMessage(thread, assistantMessage.id, {
+      content: finalText,
+      mode: String(finalDone?.mode || "offline"),
+      warning: String(finalDone?.warning || "").trim(),
+      artifact: normalizedArtifact,
+      pending: false
+    });
+
+    if (el.coachOutput) {
+      if (normalizedArtifact) {
+        el.coachOutput.textContent = `Artifact ready: ${normalizedArtifact.title}`;
+      } else {
+        el.coachOutput.textContent = "Coach response received.";
+      }
     }
-
-    if (!res.ok) {
-      el.coachOutput.textContent = buildClientCoachFallback(question);
-      return;
-    }
-
-    const answer = data.answer || "Coach did not return an answer.";
-    el.coachOutput.textContent = answer;
+    const modeLabel = formatCoachMode(finalDone?.mode);
+    setCoachStatus(`Coach provider used: ${modeLabel}`);
   } catch (err) {
-    el.coachOutput.textContent = buildClientCoachFallback(question);
+    updatePendingAssistantMessage(thread, assistantMessage.id, {
+      content: buildClientCoachFallback(question),
+      mode: "offline",
+      warning: "",
+      artifact: null,
+      pending: false
+    });
+    if (el.coachOutput) {
+      el.coachOutput.textContent = "Coach stream unavailable, fallback response shown.";
+    }
+    setCoachStatus("Coach provider used: Client fallback");
   } finally {
-    clearTimeout(timeoutId);
+    coachState.isStreaming = false;
+    thread.updatedAt = nowIsoString();
+    saveCoachThreads();
+    renderCoachThreadSelect();
+    renderCoachMessages();
   }
 }
 
@@ -4005,7 +9173,7 @@ function renderPersonalizedSequence() {
   const plan = {
     chords: `Play ${appState.root}${CHORDS[appState.quality].short} in all inversions, slow and connected.`,
     progressions: `Loop ${el.progressionSelect?.value || "I-vi-IV-V (Pop)"} in ${el.keySelect?.value || appState.root}, say chord function out loud.`,
-    scales: `Run ${el.scaleRootSelect?.value || appState.root} ${el.scaleTypeSelect?.value || "major (classical)"} @ ${el.tempoInput?.value || 90} BPM with relaxed hand shape.`,
+    scales: `Run ${el.scaleRootSelect?.value || appState.root} ${scalePatternLabel(resolveScalePatternKey(el.scaleTypeSelect?.value))} @ ${appState.tempoBpm} BPM with relaxed hand shape.`,
     arpeggios: `Practice ${el.arpRootSelect?.value || appState.root} ${el.arpTypeSelect?.value || "major triad"} with ${el.handSelect?.value || "right"} hand first, then both hands.`
   };
 
@@ -4024,6 +9192,8 @@ function loadProgress() {
       return {
         ...defaultProgress,
         areas: { ...defaultProgress.areas },
+        conceptMastery: { ...defaultProgress.conceptMastery },
+        artifactAttempts: [...defaultProgress.artifactAttempts],
         theoryCompletedLessons: { ...defaultProgress.theoryCompletedLessons },
         theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson },
         theoryCustomLessons: { ...defaultProgress.theoryCustomLessons },
@@ -4037,6 +9207,8 @@ function loadProgress() {
       ...defaultProgress,
       ...parsed,
       areas: { ...defaultProgress.areas, ...(parsed.areas || {}) },
+      conceptMastery: { ...defaultProgress.conceptMastery, ...(parsed.conceptMastery || {}) },
+      artifactAttempts: Array.isArray(parsed.artifactAttempts) ? parsed.artifactAttempts : [],
       theoryCompletedLessons: { ...defaultProgress.theoryCompletedLessons, ...(parsed.theoryCompletedLessons || {}) },
       theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson, ...(parsed.theoryAudioByLesson || {}) },
       theoryCustomLessons: { ...defaultProgress.theoryCustomLessons, ...(parsed.theoryCustomLessons || {}) },
@@ -4047,6 +9219,8 @@ function loadProgress() {
     return {
       ...defaultProgress,
       areas: { ...defaultProgress.areas },
+      conceptMastery: { ...defaultProgress.conceptMastery },
+      artifactAttempts: [...defaultProgress.artifactAttempts],
       theoryCompletedLessons: { ...defaultProgress.theoryCompletedLessons },
       theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson },
       theoryCustomLessons: { ...defaultProgress.theoryCustomLessons },
@@ -4066,6 +9240,8 @@ function resetProgressState() {
   progress = {
     ...defaultProgress,
     areas: { ...defaultProgress.areas },
+    conceptMastery: { ...defaultProgress.conceptMastery },
+    artifactAttempts: [...defaultProgress.artifactAttempts],
     theoryCompletedLessons: { ...defaultProgress.theoryCompletedLessons },
     theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson },
     theoryCustomLessons: { ...defaultProgress.theoryCustomLessons },
@@ -4094,6 +9270,11 @@ function hardResetProgress(event) {
   }
 
   resetProgressState();
+  coachState.threads = [];
+  coachState.activeThreadId = "";
+  coachState.lessonStack = [];
+  coachState.quizSessions = {};
+  initializeCoachThreads();
   forceRenderStatsZero();
   renderProgress();
   if (el.chordDisplay) el.chordDisplay.textContent = "";
@@ -4549,7 +9730,7 @@ class CadenceGame {
     // Play the dominant to set up tension
     setTimeout(() => {
       const midi = buildChordMidi(dominantRoot, "major", "root position", 3);
-      playMidiNotes(midi, { hold: 1, asChord: true, restrictToWindow: true });
+      playMidiNotes(midi, { hold: 1, asChord: true, restrictToWindow: false });
     }, 500);
   }
 
