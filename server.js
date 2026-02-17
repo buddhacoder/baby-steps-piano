@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -1062,6 +1063,14 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'GET' && reqUrl.pathname === '/api/repertoire/midi') {
     handleRepertoireMidiProxy(req, res, reqUrl);
+    return;
+  }
+
+  if (req.method === 'GET' && reqUrl.pathname === '/api/config') {
+    sendJson(res, 200, {
+      supabaseUrl: process.env.SUPABASE_URL || '',
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
+    });
     return;
   }
 

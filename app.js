@@ -14,23 +14,35 @@ const STANDARD_BLACK_TO_WHITE_WIDTH_RATIO = STANDARD_BLACK_KEY_MM / STANDARD_WHI
 const KEYBOARD_FIRST_MIDI = 48;
 const KEYBOARD_LAST_MIDI = 83;
 const HIGHLIGHT_WINDOW_SPAN_SEMITONES = 12;
-const WINDOW_KEYBOARD_NOTE_BINDINGS = [
-  { code: "KeyA", offset: 0, label: "A" },
-  { code: "KeyW", offset: 1, label: "W" },
-  { code: "KeyS", offset: 2, label: "S" },
-  { code: "KeyE", offset: 3, label: "E" },
-  { code: "KeyD", offset: 4, label: "D" },
-  { code: "KeyF", offset: 5, label: "F" },
-  { code: "KeyI", offset: 6, label: "I" },
-  { code: "KeyJ", offset: 7, label: "J" },
-  { code: "KeyO", offset: 8, label: "O" },
-  { code: "KeyK", offset: 9, label: "K" },
-  { code: "KeyP", offset: 10, label: "P" },
-  { code: "KeyL", offset: 11, label: "L" },
-  { code: "Semicolon", offset: 12, label: ";" }
+const LEFT_HAND_BINDINGS = [
+  { code: "KeyA", type: "white", index: 0, label: "A" },
+  { code: "KeyW", type: "black", index: 0, label: "W" },
+  { code: "KeyS", type: "white", index: 1, label: "S" },
+  { code: "KeyE", type: "black", index: 1, label: "E" },
+  { code: "KeyD", type: "white", index: 2, label: "D" },
+  { code: "KeyF", type: "white", index: 3, label: "F" },
+  { code: "KeyR", type: "black", index: 2, label: "R" },
 ];
+const RIGHT_HAND_BINDINGS = [
+  { code: "KeyJ", type: "white", index: 0, label: "J" },
+  { code: "KeyU", type: "black", index: 0, label: "U" },
+  { code: "KeyK", type: "white", index: 1, label: "K" },
+  { code: "KeyI", type: "black", index: 1, label: "I" },
+  { code: "KeyL", type: "white", index: 2, label: "L" },
+  { code: "Semicolon", type: "white", index: 3, label: ";" },
+  { code: "KeyO", type: "black", index: 2, label: "O" },
+];
+/* Backward compat: keep combined list for any remaining consumers */
+const WINDOW_KEYBOARD_NOTE_BINDINGS = [...LEFT_HAND_BINDINGS, ...RIGHT_HAND_BINDINGS];
+
+/* Map keyboard code → { hand, binding } for quick lookup */
+const HAND_BINDING_BY_CODE = new Map();
+LEFT_HAND_BINDINGS.forEach(b => HAND_BINDING_BY_CODE.set(b.code, { hand: "left", binding: b }));
+RIGHT_HAND_BINDINGS.forEach(b => HAND_BINDING_BY_CODE.set(b.code, { hand: "right", binding: b }));
+
+/* Legacy map — kept so any remaining callers still work */
 const WINDOW_KEYBOARD_OFFSETS_BY_CODE = new Map(
-  WINDOW_KEYBOARD_NOTE_BINDINGS.map((binding) => [binding.code, binding.offset])
+  WINDOW_KEYBOARD_NOTE_BINDINGS.map((binding, i) => [binding.code, i < LEFT_HAND_BINDINGS.length ? binding.index : binding.index])
 );
 const LOCAL_SAMPLE_BASE = (() => {
   try {
@@ -167,7 +179,7 @@ const COLOR_PALETTE_ROWS = [
   { id: "diminishedWH", name: "Diminished (Whole-Half)", intervals: [0, 2, 3, 5, 6, 8, 9, 11] },
   { id: "harmonicMajor", name: "Harmonic Major", intervals: [0, 2, 4, 5, 7, 8, 11] }
 ];
-const HARMONIC_PALETTE_TABS = ["secondary", "borrowed", "substitution", "cadences"];
+const HARMONIC_PALETTE_TABS = ["secondary", "borrowed", "substitution"];
 const ENHARMONIC_FLAT_MAP = {
   "C#": "Db",
   "D#": "Eb",
@@ -286,7 +298,10 @@ const CADENCES = {
   "Plagal (IV-I)": [3, 0],
   "Half (I-V)": [0, 4],
   "Deceptive (V-vi)": [4, 5],
-  "ii-V-I (Jazz cadence)": [1, 4, 0]
+  "ii-V-I (Jazz cadence)": [1, 4, 0],
+  "Backdoor (bVII-I)": [10, 0],
+  "Double Plagal (bVII-IV-I)": [10, 3, 0],
+  "Tritone Sub (bII-I)": [1, 0]
 };
 
 const CADENCE_PROFILES = {
@@ -314,6 +329,21 @@ const CADENCE_PROFILES = {
     theory: "Pre-dominant to dominant to tonic with voice-leading-rich functional pull.",
     emotion: "Sophisticated release with confident forward motion.",
     useCase: "Jazz turnarounds, standards, and harmonic setup for improvisation."
+  },
+  "Backdoor (bVII-I)": {
+    theory: "Flat-seven dominant resolves directly to tonic, bypassing the usual V chord.",
+    emotion: "Smooth, unexpected, and pleasantly surprising.",
+    useCase: "Jazz endings, pop outros, and surprise resolutions."
+  },
+  "Double Plagal (bVII-IV-I)": {
+    theory: "Two plagal-style motions chain together for a rock-influenced descent.",
+    emotion: "Earthy, anthem-like, and powerful.",
+    useCase: "Rock anthems, folk progressions, and strong chorus endings."
+  },
+  "Tritone Sub (bII-I)": {
+    theory: "The tritone substitution replaces V with bII for chromatic half-step resolution.",
+    emotion: "Sleek, chromatic, and harmonically advanced.",
+    useCase: "Jazz intros, sophisticated endings, and chromatic color."
   }
 };
 
@@ -779,6 +809,21 @@ const defaultProgress = {
   recent: []
 };
 
+const BADGE_DEFINITIONS = [
+  { id: "first_chord", label: "First Chord", icon: "🎹", rule: p => (p.areas?.chords || 0) >= 1 },
+  { id: "chord_explorer", label: "Chord Explorer", icon: "🎵", rule: p => (p.areas?.chords || 0) >= 50 },
+  { id: "scale_runner", label: "Scale Runner", icon: "🏃", rule: p => (p.areas?.scales || 0) >= 25 },
+  { id: "theory_student", label: "Theory Student", icon: "📚", rule: p => Object.keys(p.theoryCompletedLessons || {}).length >= 3 },
+  { id: "cadence_master", label: "Cadence Master", icon: "🎯", rule: p => (p.conceptMastery?.cadence || 0) >= 10 },
+  { id: "streak_3", label: "3-Day Streak", icon: "🔥", rule: p => (p.streakDays || 0) >= 3 },
+  { id: "streak_7", label: "Weekly Warrior", icon: "⚡", rule: p => (p.streakDays || 0) >= 7 },
+  { id: "lesson_complete", label: "Lesson Graduate", icon: "🎓", rule: p => Object.values(p.theoryCompletedLessons || {}).some(v => v) }
+];
+
+const earnedBadgesLocal = new Set(
+  JSON.parse(safeStorageGet("baby-steps-badges-v1") || "[]")
+);
+
 let el = {};
 
 const appState = {
@@ -786,7 +831,10 @@ const appState = {
   quality: "major",
   inversion: "root position",
   paletteTab: "chords",
-  exploreHarmonyEnabled: false,
+  chordMode: "palette",
+  cadenceMode: 1,
+  bpm: 100,
+  metronomeRunning: false,
   isExploring: false,
   exploreLevel: 0,
   exploreTimers: [],
@@ -876,7 +924,7 @@ let focusTimerId;
 let clearStripStepTimer;
 let clearModeEnterTimer;
 let resetInFlight = false;
-let highlightWindowDragging = false;
+let highlightDragHand = null; /* "left" | "right" | null */
 let lastRestrictedChordWindowMidi = null;
 let lastChordPaletteSelectionAtMs = null;
 let audioUnlockBound = false;
@@ -933,8 +981,12 @@ function init() {
     subdivisionSelect: byId("subdivisionSelect"),
     keyboard: byId("keyboard"),
     paletteTabSwitch: byId("paletteTabSwitch"),
-    exploreHarmonyControl: byId("exploreHarmonyControl"),
-    exploreHarmonyCheckbox: byId("exploreHarmonyCheckbox"),
+    metronome: byId("metronome"),
+    metronomeDecBtn: byId("metronomeDecBtn"),
+    metronomeIncBtn: byId("metronomeIncBtn"),
+    metronomeBpmBtn: byId("metronomeBpmBtn"),
+    metronomeBpmDisplay: byId("metronomeBpmDisplay"),
+    metronomeToggleBtn: byId("metronomeToggleBtn"),
     exploreTensionLabel: byId("exploreTensionLabel"),
     chordTableTitle: byId("chordTableTitle"),
     chordTableHead: byId("chordTableHead"),
@@ -944,10 +996,13 @@ function init() {
     chordDisplay: byId("chordDisplay"),
     progressionOutput: byId("progressionOutput"),
     audioStatus: byId("audioStatus"),
-    highlightWindowStart: byId("highlightWindowStart"),
+    highlightStartLeft: byId("highlightStartLeft"),
+    highlightStartRight: byId("highlightStartRight"),
     highlightWindowTrack: byId("highlightWindowTrack"),
-    highlightWindowGlow: byId("highlightWindowGlow"),
-    highlightWindowLabel: byId("highlightWindowLabel"),
+    highlightGlowLeft: byId("highlightGlowLeft"),
+    highlightGlowRight: byId("highlightGlowRight"),
+    highlightLabelLeft: byId("highlightLabelLeft"),
+    highlightLabelRight: byId("highlightLabelRight"),
     windowKeyboardHint: byId("windowKeyboardHint"),
     arpRootSelect: byId("arpRootSelect"),
     arpTypeSelect: byId("arpTypeSelect"),
@@ -964,12 +1019,13 @@ function init() {
     coachInput: byId("coachInput"),
     coachAskBtn: byId("coachAskBtn"),
     coachUseContextBtn: byId("coachUseContextBtn"),
-    coachThreadSelect: byId("coachThreadSelect"),
+    coachThreadPills: byId("coachThreadPills"),
     coachNewThreadBtn: byId("coachNewThreadBtn"),
     coachMessages: byId("coachMessages"),
-    coachStatus: byId("coachStatus"),
-    coachOutput: byId("coachOutput"),
-    coachLessonStack: byId("coachLessonStack"),
+    coachTyping: byId("coachTyping"),
+    kanbanTodo: byId("kanbanTodo"),
+    kanbanActive: byId("kanbanActive"),
+    kanbanDone: byId("kanbanDone"),
     lessonCards: byId("lessonCards"),
     statSessions: byId("statSessions"),
     statStreak: byId("statStreak"),
@@ -1053,7 +1109,54 @@ function init() {
     theoryCancelEditBtn: byId("theoryCancelEditBtn"),
     theoryInfographic: byId("theoryInfographic"),
     theoryVideoFrame: byId("theoryVideoFrame"),
-    theoryResources: byId("theoryResources")
+    theoryResources: byId("theoryResources"),
+    authSignInBtn: byId("authSignInBtn"),
+    authUserPill: byId("authUserPill"),
+    authAvatar: byId("authAvatar"),
+    authDisplayName: byId("authDisplayName"),
+    authSignOutBtn: byId("authSignOutBtn"),
+    profileSection: byId("profileSection"),
+    profileAvatar: byId("profileAvatar"),
+    profileName: byId("profileName"),
+    profileEmail: byId("profileEmail"),
+    masteryChords: byId("masteryChords"),
+    masteryScales: byId("masteryScales"),
+    masteryLessons: byId("masteryLessons"),
+    masteryCadences: byId("masteryCadences"),
+    badgeGrid: byId("badgeGrid"),
+    chordModeSelect: byId("chordModeSelect"),
+    paletteTableWrap: byId("paletteTableWrap"),
+    circleOfFifthsContainer: byId("circleOfFifthsContainer"),
+    cofSvg: byId("cofSvg"),
+    cofInfo: byId("cofInfo"),
+    cadenceModePanel: byId("cadenceModePanel"),
+    cadenceModeButtons: byId("cadenceModeButtons"),
+    cadenceGrid: byId("cadenceGrid"),
+    scannerUploadZone: byId("scannerUploadZone"),
+    scannerFileInput: byId("scannerFileInput"),
+    scannerPreview: byId("scannerPreview"),
+    scannerCanvas: byId("scannerCanvas"),
+    scannerPrevPage: byId("scannerPrevPage"),
+    scannerNextPage: byId("scannerNextPage"),
+    scannerPageInfo: byId("scannerPageInfo"),
+    scannerExtractBtn: byId("scannerExtractBtn"),
+    scannerProcessing: byId("scannerProcessing"),
+    scannerNotation: byId("scannerNotation"),
+    scoreDisplay: byId("scoreDisplay"),
+    scannerPlayBtn: byId("scannerPlayBtn"),
+    scannerStopBtn: byId("scannerStopBtn"),
+    scannerLoopToggle: byId("scannerLoopToggle"),
+    scannerSpeedSlider: byId("scannerSpeedSlider"),
+    scannerSpeedValue: byId("scannerSpeedValue"),
+    scannerAnalysis: byId("scannerAnalysis"),
+    analysisKey: byId("analysisKey"),
+    analysisTime: byId("analysisTime"),
+    analysisTempo: byId("analysisTempo"),
+    analysisDifficulty: byId("analysisDifficulty"),
+    analysisChordFlow: byId("analysisChordFlow"),
+    analysisPatternList: byId("analysisPatternList"),
+    scannerSkills: byId("scannerSkills"),
+    skillTagsContainer: byId("skillTagsContainer")
   };
 
   renderButtonGroup(el.rootBtnGroup, NOTES, "root");
@@ -1094,9 +1197,9 @@ function init() {
   renderTheoryContent();
   renderProgress();
   syncRepertoireControlState();
-  updateHighlightWindowLabel();
+  updateHighlightLabels();
   updateWindowKeyboardHint();
-  updateHighlightWindowLine();
+  updateHighlightGlows();
   bindAudioUnlock();
   void ensureAudio({ resume: false });
   void ensureChordAssetManifest();
@@ -1255,6 +1358,14 @@ function setRootContext(root) {
   if (appState.paletteTab === "chords") {
     markChordTableCell(appState.root, appState.quality);
   }
+  // Refresh Circle of Fifths / Cadences mode if active
+  if (appState.chordMode === "circle") {
+    renderCircleOfFifths();
+    updateChordModeTitle();
+  } else if (appState.chordMode === "cadences") {
+    renderCadenceCatalog();
+    updateChordModeTitle();
+  }
 }
 
 function renderPaletteTabButtons() {
@@ -1267,31 +1378,9 @@ function renderPaletteTabButtons() {
   });
 }
 
-function syncExploreHarmonyControls() {
-  if (el.exploreHarmonyCheckbox) {
-    el.exploreHarmonyCheckbox.checked = Boolean(appState.exploreHarmonyEnabled);
-  }
-}
-
-function updateExploreHarmonyUi() {
-  const isChordsTab = appState.paletteTab === "chords";
-  if (el.exploreHarmonyControl) {
-    el.exploreHarmonyControl.classList.toggle("is-hidden", !isChordsTab);
-  }
-  if (el.exploreTensionLabel) {
-    if (!isChordsTab || !appState.isExploring) {
-      el.exploreTensionLabel.classList.add("is-hidden");
-      el.exploreTensionLabel.textContent = "";
-    }
-  }
-}
-
-function setExploreTensionLabel(level) {
-  if (!el.exploreTensionLabel) return;
-  const safeLevel = Math.max(0, Math.min(TENSION_LEVEL_LABELS.length - 1, Number(level) || 0));
-  el.exploreTensionLabel.textContent = `Tension Level: ${TENSION_LEVEL_LABELS[safeLevel]}`;
-  el.exploreTensionLabel.classList.remove("is-hidden");
-}
+function syncExploreHarmonyControls() { /* removed */ }
+function updateExploreHarmonyUi() { /* removed */ }
+function setExploreTensionLabel() { /* removed */ }
 
 function clearExploreTensionLabel() {
   if (!el.exploreTensionLabel) return;
@@ -1300,7 +1389,8 @@ function clearExploreTensionLabel() {
 }
 
 function setPaletteTab(tab) {
-  if (!["chords", "scales", "arpeggios", "modes", "pentatonic", "color", ...HARMONIC_PALETTE_TABS].includes(tab)) return;
+  const validPaletteTabs = ["chords", "scales", "arpeggios", "modes", "pentatonic", "color", "secondary", "borrowed", "substitution"];
+  if (!validPaletteTabs.includes(tab)) return;
   appState.paletteTab = tab;
   stopHarmonyExploration({ withResolution: false, clearLabel: true });
   cancelPaletteSequence();
@@ -1335,6 +1425,408 @@ function renderActivePaletteTable() {
     return;
   }
   renderChordTable();
+}
+
+/* ── Chord Mode (Dropdown) Switching ── */
+
+const COF_KEYS_MAJOR = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
+const COF_KEYS_MINOR = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm"];
+
+function setChordMode(mode) {
+  if (!["palette", "circle", "cadences"].includes(mode)) return;
+  appState.chordMode = mode;
+  if (el.chordModeSelect) el.chordModeSelect.value = mode;
+
+  // Toggle visibility of the three views
+  const showPalette = mode === "palette";
+  const showCircle = mode === "circle";
+  const showCadences = mode === "cadences";
+
+  if (el.paletteTabSwitch) el.paletteTabSwitch.classList.toggle("is-hidden", !showPalette);
+  if (el.paletteTableWrap) el.paletteTableWrap.classList.toggle("is-hidden", !showPalette);
+  // exploreHarmonyControl removed
+
+  if (el.circleOfFifthsContainer) el.circleOfFifthsContainer.classList.toggle("is-hidden", !showCircle);
+  if (el.cadenceModePanel) el.cadenceModePanel.classList.toggle("is-hidden", !showCadences);
+
+  // Update title suffix
+  updateChordModeTitle();
+
+  // Render the active view
+  if (showCircle) renderCircleOfFifths();
+  if (showCadences) renderCadenceCatalog();
+}
+
+function updateChordModeTitle() {
+  if (!el.chordTableTitle) return;
+  const key = el.keySelect ? el.keySelect.value : "C";
+  if (appState.chordMode === "palette") {
+    // Title is set by the individual palette renderers — leave it alone
+    return;
+  }
+  if (appState.chordMode === "circle") {
+    el.chordTableTitle.textContent = `— Key of ${key}`;
+  } else if (appState.chordMode === "cadences") {
+    el.chordTableTitle.textContent = `in ${key}`;
+  }
+}
+
+/* ── Circle of Fifths ── */
+
+function renderCircleOfFifths() {
+  if (!el.cofSvg) return;
+  const activeKey = el.keySelect ? el.keySelect.value : "C";
+  const cx = 200, cy = 200;
+  const outerR = 170, innerR = 115, coreR = 60;
+  const wedgeAngle = (2 * Math.PI) / 12;
+  const startOffset = -Math.PI / 2 - wedgeAngle / 2;
+
+  let svgContent = '';
+
+  // Outer ring — major keys
+  for (let i = 0; i < 12; i++) {
+    const key = COF_KEYS_MAJOR[i];
+    const a1 = startOffset + i * wedgeAngle;
+    const a2 = a1 + wedgeAngle;
+    const isActive = key === activeKey;
+
+    const x1o = cx + outerR * Math.cos(a1);
+    const y1o = cy + outerR * Math.sin(a1);
+    const x2o = cx + outerR * Math.cos(a2);
+    const y2o = cy + outerR * Math.sin(a2);
+    const x1i = cx + innerR * Math.cos(a1);
+    const y1i = cy + innerR * Math.sin(a1);
+    const x2i = cx + innerR * Math.cos(a2);
+    const y2i = cy + innerR * Math.sin(a2);
+
+    const path = `M${x1i},${y1i} L${x1o},${y1o} A${outerR},${outerR} 0 0,1 ${x2o},${y2o} L${x2i},${y2i} A${innerR},${innerR} 0 0,0 ${x1i},${y1i} Z`;
+    const cls = `cof-wedge cof-major${isActive ? ' active' : ''}`;
+    svgContent += `<path class="${cls}" d="${path}" data-cof-key="${key}" />`;
+
+    // Label
+    const midA = a1 + wedgeAngle / 2;
+    const labelR = (outerR + innerR) / 2;
+    const lx = cx + labelR * Math.cos(midA);
+    const ly = cy + labelR * Math.sin(midA);
+    svgContent += `<text class="cof-label cof-label-major${isActive ? ' active' : ''}" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" data-cof-key="${key}">${key}</text>`;
+  }
+
+  // Inner ring — minor keys
+  for (let i = 0; i < 12; i++) {
+    const key = COF_KEYS_MINOR[i];
+    const majorKey = COF_KEYS_MAJOR[i];
+    const relatedActive = majorKey === activeKey;
+    const a1 = startOffset + i * wedgeAngle;
+    const a2 = a1 + wedgeAngle;
+
+    const x1o = cx + innerR * Math.cos(a1);
+    const y1o = cy + innerR * Math.sin(a1);
+    const x2o = cx + innerR * Math.cos(a2);
+    const y2o = cy + innerR * Math.sin(a2);
+    const x1i = cx + coreR * Math.cos(a1);
+    const y1i = cy + coreR * Math.sin(a1);
+    const x2i = cx + coreR * Math.cos(a2);
+    const y2i = cy + coreR * Math.sin(a2);
+
+    const path = `M${x1i},${y1i} L${x1o},${y1o} A${innerR},${innerR} 0 0,1 ${x2o},${y2o} L${x2i},${y2i} A${coreR},${coreR} 0 0,0 ${x1i},${y1i} Z`;
+    const cls = `cof-wedge cof-minor${relatedActive ? ' related' : ''}`;
+    svgContent += `<path class="${cls}" d="${path}" data-cof-key="${majorKey}" />`;
+
+    const midA = a1 + wedgeAngle / 2;
+    const labelR = (innerR + coreR) / 2;
+    const lx = cx + labelR * Math.cos(midA);
+    const ly = cy + labelR * Math.sin(midA);
+    svgContent += `<text class="cof-label cof-label-minor${relatedActive ? ' related' : ''}" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" data-cof-key="${majorKey}">${key}</text>`;
+  }
+
+  // Center label
+  svgContent += `<circle cx="${cx}" cy="${cy}" r="${coreR}" class="cof-center" />`;
+  svgContent += `<text class="cof-center-label" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${activeKey}</text>`;
+
+  el.cofSvg.innerHTML = svgContent;
+
+  // Click handler
+  el.cofSvg.onclick = (e) => {
+    const target = e.target.closest('[data-cof-key]');
+    if (!target) return;
+    const newKey = target.dataset.cofKey;
+    if (el.keySelect) {
+      el.keySelect.value = newKey;
+      el.keySelect.dispatchEvent(new Event('change'));
+    }
+    renderCircleOfFifths();
+    updateChordModeTitle();
+    renderCofInfo(newKey);
+  };
+
+  renderCofInfo(activeKey);
+}
+
+function renderCofInfo(key) {
+  if (!el.cofInfo) return;
+  const scaleSteps = [0, 2, 4, 5, 7, 9, 11];
+  const keyIdx = NOTES.indexOf(key);
+  if (keyIdx < 0) return;
+
+  const romanNumerals = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+  const chordQualities = ['major', 'minor', 'minor', 'major', 'major', 'minor', 'diminished'];
+
+  const diatonicChords = scaleSteps.map((step, i) => {
+    const note = NOTES[(keyIdx + step) % 12];
+    return { numeral: romanNumerals[i], note, quality: chordQualities[i] };
+  });
+
+  const fifthIdx = (keyIdx + 7) % 12;
+  const fourthIdx = (keyIdx + 5) % 12;
+  const relMinIdx = (keyIdx + 9) % 12;
+
+  el.cofInfo.innerHTML = `
+    <div class="cof-info-grid">
+      <div class="cof-info-block">
+        <h4>Diatonic Chords in ${key} Major</h4>
+        <div class="cof-chord-chips">
+          ${diatonicChords.map(c => `<button class="cof-chord-chip" data-cof-play-chord="${c.note}" data-cof-play-quality="${c.quality}" type="button"><span class="cof-numeral">${c.numeral}</span><span class="cof-note">${c.note}</span></button>`).join('')}
+        </div>
+      </div>
+      <div class="cof-info-block">
+        <h4>Key Relationships</h4>
+        <ul class="cof-relationships">
+          <li><strong>Dominant (V):</strong> ${NOTES[fifthIdx]}</li>
+          <li><strong>Subdominant (IV):</strong> ${NOTES[fourthIdx]}</li>
+          <li><strong>Relative Minor:</strong> ${NOTES[relMinIdx]}m</li>
+        </ul>
+      </div>
+    </div>
+  `;
+
+  // Chord chip click to play
+  el.cofInfo.querySelectorAll('.cof-chord-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const root = chip.dataset.cofPlayChord;
+      const quality = chip.dataset.cofPlayQuality;
+      const midiNotes = getMidiChord(root, quality, 'root position');
+      playMidiNotes(midiNotes, { hold: getHoldSeconds(), asChord: true, restrictToWindow: false });
+    });
+  });
+}
+
+/* ── Cadences Mode ── */
+
+/* ── Modal Cadence Engine ── */
+
+const IONIAN_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
+
+function getModalIntervals(mode) {
+  // Mode 1 = Ionian, 2 = Dorian, ... 7 = Locrian
+  // Rotate the Ionian intervals so the mode's root becomes 0
+  const offset = IONIAN_INTERVALS[mode - 1];
+  return IONIAN_INTERVALS.map(i => ((i - offset) + 12) % 12).sort((a, b) => a - b);
+}
+
+function buildModalDiatonicChord(key, mode, degree, qualityOverride) {
+  // degree is 0-based scale degree in the current mode
+  const intervals = getModalIntervals(mode);
+  const keyIdx = NOTES.indexOf(key);
+
+  // Root of this degree
+  const rootSemitone = intervals[degree % 7];
+  const root = NOTES[(keyIdx + rootSemitone) % 12];
+
+  // Determine quality from interval stacking (3rd and 5th above this degree)
+  let quality;
+  if (qualityOverride) {
+    quality = qualityOverride;
+  } else {
+    const third = ((intervals[(degree + 2) % 7] - rootSemitone) + 12) % 12;
+    const fifth = ((intervals[(degree + 4) % 7] - rootSemitone) + 12) % 12;
+    if (third === 4 && fifth === 7) quality = "major";
+    else if (third === 3 && fifth === 7) quality = "minor";
+    else if (third === 3 && fifth === 6) quality = "diminished";
+    else if (third === 4 && fifth === 8) quality = "augmented";
+    else quality = "major";
+  }
+
+  const midi = buildChordMidi(root, quality, "root position", 3);
+  return {
+    root,
+    quality,
+    degree,
+    symbol: chordSymbol(root, quality),
+    midi,
+    degreeLabel: degree + 1
+  };
+}
+
+// Template format: each cadence is an array of {deg, q?} objects
+// deg = 0-based scale degree, q = optional quality override
+// Last element is always degree 0 (tonic resolution)
+
+const MODE_CADENCE_TEMPLATES = {
+  // Ionian (major) — richest cadence vocabulary
+  1: [
+    [{ deg: 3 }, { deg: 4 }, { deg: 0 }],                           // IV-V-I
+    [{ deg: 4 }, { deg: 4, q: "dom7" }, { deg: 0 }],                  // V-V7-I
+    [{ deg: 3 }, { deg: 4, q: "dom7" }, { deg: 0 }],                  // IV-V7-I
+    [{ deg: 3 }, { deg: 3, q: "sus2" }, { deg: 0 }],                  // IV-IVsus2-I
+    [{ deg: 1, q: "min7" }, { deg: 4, q: "dom7" }, { deg: 0 }],         // ii7-V7-I
+    [{ deg: 1, q: "dom7" }, { deg: 4, q: "dom7" }, { deg: 0 }],         // II7-V7-I (secondary dom)
+    [{ deg: 4 }, { deg: 6, q: "diminished" }, { deg: 0 }],             // V-vii°-I
+    [{ deg: 4, q: "sus4" }, { deg: 4, q: "dom7" }, { deg: 0 }],         // Vsus4-V7-I
+    [{ deg: 5 }, { deg: 4 }, { deg: 0 }],                            // vi-V-I
+    [{ deg: 3 }, { deg: 3, q: "minor" }, { deg: 0 }],                  // IV-iv-I (borrowed iv)
+    [{ deg: 5, q: "major" }, { deg: 3 }, { deg: 0 }],                  // bVI-IV-I (modal mix)
+    [{ deg: 5, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bVI-bVII-I
+    [{ deg: 5, q: "maj7" }, { deg: 5, q: "major" }, { deg: 0 }],         // vi(b6)maj7-bVI-I
+    [{ deg: 1, q: "diminished" }, { deg: 4, q: "dom7" }, { deg: 0 }]     // ii°-V7-I (chromatic)
+  ],
+
+  // Dorian (minor with natural 6th)
+  2: [
+    [{ deg: 3, q: "major" }, { deg: 4, q: "minor" }, { deg: 0 }],       // IV-v-i
+    [{ deg: 2, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bIII-bVII-i
+    [{ deg: 5, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bVI-bVII-i
+    [{ deg: 5, q: "maj7" }, { deg: 5, q: "major" }, { deg: 0 }],         // bVImaj7-bVI-i
+    [{ deg: 4, q: "minor" }, { deg: 4, q: "major" }, { deg: 0 }],        // v-V-i (borrowed V)
+    [{ deg: 1, q: "diminished" }, { deg: 4, q: "dom7" }, { deg: 0 }]     // ii°-V7-i
+  ],
+
+  // Phrygian (minor with b2)
+  3: [
+    [{ deg: 1, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bII-bVII-i
+    [{ deg: 5, q: "major" }, { deg: 1, q: "major" }, { deg: 0 }],        // bVI-bII-i
+    [{ deg: 6, q: "major" }, { deg: 1, q: "major" }, { deg: 0 }],        // bVII-bII-i
+    [{ deg: 3, q: "major" }, { deg: 1, q: "major" }, { deg: 0 }]         // IV-bII-i (Phrygian cadence)
+  ],
+
+  // Lydian (major with #4)
+  4: [
+    [{ deg: 1, q: "major" }, { deg: 4 }, { deg: 0 }],                  // II-V-I
+    [{ deg: 4 }, { deg: 4, q: "dom7" }, { deg: 0 }],                   // V-V7-I
+    [{ deg: 1, q: "major" }, { deg: 4, q: "dom7" }, { deg: 0 }],         // II-V7-I
+    [{ deg: 3, q: "minor" }, { deg: 4 }, { deg: 0 }],                  // iv-V-I
+    [{ deg: 1, q: "dom7" }, { deg: 4, q: "dom7" }, { deg: 0 }],          // II7-V7-I
+    [{ deg: 6 }, { deg: 4 }, { deg: 0 }],                             // vii-V-I
+    [{ deg: 3, q: "diminished" }, { deg: 4 }, { deg: 0 }],              // #iv°-V-I
+    [{ deg: 5 }, { deg: 4 }, { deg: 0 }],                             // vi-V-I
+    [{ deg: 1, q: "major" }, { deg: 1, q: "sus2" }, { deg: 0 }],         // II-IIsus2-I
+    [{ deg: 4, q: "sus4" }, { deg: 4, q: "dom7" }, { deg: 0 }],          // Vsus4-V7-I
+    [{ deg: 5, q: "major" }, { deg: 4 }, { deg: 0 }],                  // bVI-V-I
+    [{ deg: 5, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bVI-bVII-I
+    [{ deg: 2 }, { deg: 4, q: "dom7" }, { deg: 0 }],                   // iii-V7-I
+    [{ deg: 1, q: "diminished" }, { deg: 4, q: "dom7" }, { deg: 0 }]     // ii°-V7-I
+  ],
+
+  // Mixolydian (major with b7)
+  5: [
+    [{ deg: 6, q: "major" }, { deg: 4 }, { deg: 0 }],                  // bVII-V-I
+    [{ deg: 3 }, { deg: 4 }, { deg: 0 }],                             // IV-V-I
+    [{ deg: 6, q: "major" }, { deg: 3 }, { deg: 0 }],                  // bVII-IV-I
+    [{ deg: 4 }, { deg: 4, q: "dom7" }, { deg: 0 }],                   // V-V7-I (borrowed leading tone)
+    [{ deg: 1 }, { deg: 4 }, { deg: 0 }],                             // ii-V-I
+    [{ deg: 3 }, { deg: 6, q: "major" }, { deg: 0 }],                  // IV-bVII-I
+    [{ deg: 5 }, { deg: 6, q: "major" }, { deg: 0 }],                  // vi-bVII-I
+    [{ deg: 5, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bVI-bVII-I
+    [{ deg: 1, q: "min7" }, { deg: 4, q: "dom7" }, { deg: 0 }],          // ii7-V7-I
+    [{ deg: 6, q: "major" }, { deg: 0 }]                           // bVII-I (modal)
+  ],
+
+  // Aeolian (natural minor)
+  6: [
+    [{ deg: 3, q: "major" }, { deg: 4, q: "minor" }, { deg: 0 }],       // IV-v-i
+    [{ deg: 5, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bVI-bVII-i
+    [{ deg: 2, q: "major" }, { deg: 6, q: "major" }, { deg: 0 }],        // bIII-bVII-i
+    [{ deg: 5, q: "major" }, { deg: 3, q: "major" }, { deg: 0 }],        // bVI-IV-i
+    [{ deg: 4, q: "minor" }, { deg: 4, q: "major" }, { deg: 0 }],        // v-V-i (borrowed V)
+    [{ deg: 1, q: "diminished" }, { deg: 4, q: "dom7" }, { deg: 0 }]     // ii°-V7-i (harmonic minor)
+  ],
+
+  // Locrian — diminished tonic, no stable cadences
+  7: []
+};
+
+function generateModalCadences(key, mode) {
+  const templates = MODE_CADENCE_TEMPLATES[mode] || [];
+  return templates.map(template => {
+    return template.map(step => buildModalDiatonicChord(key, mode, step.deg, step.q || null));
+  });
+}
+
+function renderCadenceCatalog() {
+  if (!el.cadenceGrid) return;
+  const key = el.keySelect ? el.keySelect.value : "C";
+  const mode = appState.cadenceMode;
+
+  // Update mode buttons
+  if (el.cadenceModeButtons) {
+    el.cadenceModeButtons.querySelectorAll('.cadence-mode-btn').forEach(btn => {
+      const isActive = parseInt(btn.dataset.cadenceMode) === mode;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+  }
+
+  const cadences = generateModalCadences(key, mode);
+
+  if (cadences.length === 0) {
+    el.cadenceGrid.innerHTML = `
+      <div class="cadence-empty">
+        <p>No cadences for Mode ${mode} (Locrian)</p>
+        <p class="cadence-empty-sub">The diminished tonic prevents stable cadential resolution.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Build grid: 4 cadences per visual row
+  let html = '<div class="cadence-row-wrap">';
+  cadences.forEach((cadence, cadIdx) => {
+    html += `<div class="cadence-sequence" data-cadence-idx="${cadIdx}">`;
+    cadence.forEach((chord, chordIdx) => {
+      const isTonic = chordIdx === cadence.length - 1;
+      const cls = `cadence-cell${isTonic ? ' cadence-tonic' : ''}`;
+      html += `<button class="${cls}" data-cadence-idx="${cadIdx}" data-chord-idx="${chordIdx}" type="button">
+        <span class="cadence-cell-symbol">${chord.symbol}</span>
+        <span class="cadence-cell-degree">${chord.degreeLabel}</span>
+      </button>`;
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+
+  el.cadenceGrid.innerHTML = html;
+
+  // Wire individual cell clicks (play single chord)
+  el.cadenceGrid.querySelectorAll('.cadence-cell').forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cIdx = parseInt(cell.dataset.cadenceIdx);
+      const chIdx = parseInt(cell.dataset.chordIdx);
+      const chord = cadences[cIdx]?.[chIdx];
+      if (chord) {
+        playMidiNotes(chord.midi, { hold: getHoldSeconds(), asChord: true, restrictToWindow: false });
+      }
+    });
+  });
+
+  // Wire sequence clicks (play full cadence) — on the sequence container
+  el.cadenceGrid.querySelectorAll('.cadence-sequence').forEach(seq => {
+    seq.addEventListener('click', async (e) => {
+      // Only play sequence if clicking the background, not a cell
+      if (e.target.closest('.cadence-cell')) return;
+      const cIdx = parseInt(seq.dataset.cadenceIdx);
+      const cadence = cadences[cIdx];
+      if (!cadence) return;
+      const hold = getHoldSeconds();
+      // Highlight sequence
+      seq.classList.add('playing');
+      for (let i = 0; i < cadence.length; i++) {
+        playMidiNotes(cadence[i].midi, { hold, asChord: true, restrictToWindow: false });
+        await wait(Math.max(220, hold * 560));
+      }
+      seq.classList.remove('playing');
+      trackRep("progressions", `Mode${mode} ${key} cadence`);
+    });
+  });
 }
 
 function openKeyCenterDrawer() {
@@ -1395,14 +1887,22 @@ function bindEvents() {
     });
   }
 
-  if (el.exploreHarmonyCheckbox) {
-    el.exploreHarmonyCheckbox.addEventListener("change", () => {
-      appState.exploreHarmonyEnabled = Boolean(el.exploreHarmonyCheckbox.checked);
-      if (!appState.exploreHarmonyEnabled) {
-        stopHarmonyExploration({ withResolution: false, clearLabel: true });
-      }
+  if (el.chordModeSelect) {
+    el.chordModeSelect.addEventListener("change", () => {
+      setChordMode(el.chordModeSelect.value);
     });
   }
+
+  if (el.cadenceModeButtons) {
+    el.cadenceModeButtons.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-cadence-mode]");
+      if (!btn) return;
+      appState.cadenceMode = parseInt(btn.dataset.cadenceMode);
+      renderCadenceCatalog();
+    });
+  }
+
+  // Explore harmony removed
 
   el.playProgressionBtn.addEventListener("click", async () => {
     const progression = buildProgressionChords(el.keySelect.value, el.progressionSelect.value);
@@ -1506,28 +2006,45 @@ function bindEvents() {
     renderPersonalizedSequence();
   });
 
-  if (el.highlightWindowStart) {
-    el.highlightWindowStart.addEventListener("input", () => {
+  if (el.highlightStartLeft) {
+    el.highlightStartLeft.addEventListener("input", () => {
       clearKeyboardHighlights();
-      updateHighlightWindowLabel();
-      updateHighlightWindowLine();
+      updateHighlightLabels();
+      updateHighlightGlows();
+    });
+  }
+  if (el.highlightStartRight) {
+    el.highlightStartRight.addEventListener("input", () => {
+      clearKeyboardHighlights();
+      updateHighlightLabels();
+      updateHighlightGlows();
     });
   }
 
-  if (el.highlightWindowTrack && el.highlightWindowStart) {
-    const beginDrag = (event) => {
+  if (el.highlightWindowTrack) {
+    const beginDrag = (hand) => (event) => {
       event.preventDefault();
-      highlightWindowDragging = true;
-      setHighlightWindowFromClientX(event.clientX);
-      window.addEventListener("pointermove", onHighlightWindowPointerMove);
-      window.addEventListener("pointerup", endHighlightWindowDrag);
-      window.addEventListener("pointercancel", endHighlightWindowDrag);
+      highlightDragHand = hand;
+      setHighlightFromClientX(hand, event.clientX);
+      window.addEventListener("pointermove", onHighlightPointerMove);
+      window.addEventListener("pointerup", endHighlightDrag);
+      window.addEventListener("pointercancel", endHighlightDrag);
     };
-    el.highlightWindowTrack.addEventListener("pointerdown", beginDrag);
-    if (el.highlightWindowGlow) {
-      el.highlightWindowGlow.addEventListener("pointerdown", beginDrag);
-    }
-    window.addEventListener("resize", updateHighlightWindowLine);
+    /* track click: pick closest hand */
+    el.highlightWindowTrack.addEventListener("pointerdown", (event) => {
+      const rect = el.highlightWindowTrack.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const ratio = (event.clientX - rect.left) / rect.width;
+      const leftVal = el.highlightStartLeft ? Number(el.highlightStartLeft.value) : 48;
+      const rightVal = el.highlightStartRight ? Number(el.highlightStartRight.value) : 60;
+      const leftNorm = (leftVal - KEYBOARD_FIRST_MIDI) / (KEYBOARD_LAST_MIDI - KEYBOARD_FIRST_MIDI);
+      const rightNorm = (rightVal - KEYBOARD_FIRST_MIDI) / (KEYBOARD_LAST_MIDI - KEYBOARD_FIRST_MIDI);
+      const hand = Math.abs(ratio - leftNorm) < Math.abs(ratio - rightNorm) ? "left" : "right";
+      beginDrag(hand)(event);
+    });
+    if (el.highlightGlowLeft) el.highlightGlowLeft.addEventListener("pointerdown", beginDrag("left"));
+    if (el.highlightGlowRight) el.highlightGlowRight.addEventListener("pointerdown", beginDrag("right"));
+    window.addEventListener("resize", updateHighlightGlows);
   }
 
   if (el.cadenceSelect) {
@@ -1587,7 +2104,7 @@ function bindEvents() {
     let pointerIsDown = true;
     let explorationTriggered = false;
     let holdExploreTimerId = null;
-    if (appState.exploreHarmonyEnabled) {
+    if (false) { // exploreHarmonyEnabled removed
       appState.exploreStartTime = Date.now();
       holdExploreTimerId = window.setTimeout(() => {
         if (!pointerIsDown) return;
@@ -1846,11 +2363,13 @@ function bindEvents() {
 
   initializeCoachThreads();
 
-  if (el.coachThreadSelect) {
-    el.coachThreadSelect.addEventListener("change", () => {
-      coachState.activeThreadId = el.coachThreadSelect.value;
+  if (el.coachThreadPills) {
+    el.coachThreadPills.addEventListener("click", (e) => {
+      const pill = e.target.closest(".coach-thread-pill");
+      if (!pill) return;
+      coachState.activeThreadId = pill.dataset.threadId;
       saveCoachThreads();
-      renderCoachThreadSelect();
+      renderCoachThreadPills();
       renderCoachMessages();
     });
   }
@@ -1858,7 +2377,7 @@ function bindEvents() {
   if (el.coachNewThreadBtn) {
     el.coachNewThreadBtn.addEventListener("click", () => {
       createCoachThread();
-      renderCoachThreadSelect();
+      renderCoachThreadPills();
       renderCoachMessages();
     });
   }
@@ -1871,7 +2390,7 @@ function bindEvents() {
       void askCoach();
     });
   }
-  refreshCoachStatus();
+  renderCoachKanban();
 
   el.completeSessionBtn.addEventListener("click", () => {
     markSessionComplete();
@@ -2306,12 +2825,22 @@ function shouldIgnoreWindowPianoKeyEvent(event) {
   return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
+/* Map a white-key-index or black-key-index to a semitone offset within an octave */
+function bindingToSemitoneOffset(binding) {
+  const whiteOffsets = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
+  const blackOffsets = [1, 3, 6, 8, 10];          // C# D# F# G# A#
+  const offsets = binding.type === "white" ? whiteOffsets : blackOffsets;
+  return offsets[binding.index] ?? 0;
+}
+
 function getWindowMappedMidiForCode(code) {
-  const offset = WINDOW_KEYBOARD_OFFSETS_BY_CODE.get(code);
-  if (offset === undefined) return null;
-  const start = Number(el.highlightWindowStart?.value);
+  const entry = HAND_BINDING_BY_CODE.get(code);
+  if (!entry) return null;
+  const { hand, binding } = entry;
+  const startEl = hand === "left" ? el.highlightStartLeft : el.highlightStartRight;
+  const start = Number(startEl?.value);
   if (!Number.isFinite(start)) return null;
-  const midi = start + offset;
+  const midi = start + bindingToSemitoneOffset(binding);
   if (midi < KEYBOARD_FIRST_MIDI || midi > KEYBOARD_LAST_MIDI) return null;
   return midi;
 }
@@ -2390,15 +2919,116 @@ function showChordTransitionDiff(diff) {
   added.forEach((midi) => applyDiff(midi, "diff-added"));
 }
 
+/* ── Circle-of-Fifths key order for the radial picker ── */
+const COF_ORDER = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
+
+function cornerKeyButtonHtml() {
+  const current = el.keySelect ? el.keySelect.value : "C";
+  return `<button class="corner-key-btn" aria-label="Key: ${current}" title="Click to cycle key, hold for circle selector">${current}</button>`;
+}
+
+function wireCornerKeyButton() {
+  const btn = document.querySelector('.corner-key-btn');
+  if (!btn) return;
+  let pressTimer = null;
+  let longPressed = false;
+
+  btn.addEventListener('pointerdown', (e) => {
+    longPressed = false;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      showCornerCofOverlay(btn);
+    }, 500);
+  });
+
+  btn.addEventListener('pointerup', () => {
+    clearTimeout(pressTimer);
+    if (!longPressed) {
+      // click → cycle to next key
+      const current = el.keySelect ? el.keySelect.value : "C";
+      const idx = NOTES.indexOf(current);
+      const next = NOTES[(idx + 1) % NOTES.length];
+      setRootContext(next);
+    }
+  });
+
+  btn.addEventListener('pointerleave', () => {
+    clearTimeout(pressTimer);
+  });
+}
+
+function showCornerCofOverlay(anchorBtn) {
+  dismissCornerCofOverlay();
+  const overlay = document.createElement('div');
+  overlay.className = 'corner-cof-overlay';
+  const current = el.keySelect ? el.keySelect.value : "C";
+  const radius = 72;
+  const centerX = 90;
+  const centerY = 90;
+
+  // background circle
+  let svgContent = `<circle cx="${centerX}" cy="${centerY}" r="${radius + 12}" fill="rgba(30,40,70,0.85)" stroke="rgba(100,140,220,0.3)" stroke-width="1"/>`;
+
+  COF_ORDER.forEach((note, i) => {
+    const angle = (i * 30 - 90) * (Math.PI / 180);
+    const x = centerX + radius * Math.cos(angle);
+    const y = centerY + radius * Math.sin(angle);
+    const isActive = note === current;
+    svgContent += `
+      <g class="cof-note-group" data-note="${note}" style="cursor:pointer">
+        <circle cx="${x}" cy="${y}" r="16" fill="${isActive ? '#4A90D9' : 'rgba(60,80,130,0.7)'}" stroke="${isActive ? '#fff' : 'rgba(150,170,220,0.4)'}" stroke-width="${isActive ? 2 : 1}"/>
+        <text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="${isActive ? '#fff' : '#c8d8f0'}" font-size="11" font-weight="${isActive ? '700' : '500'}" font-family="Plus Jakarta Sans, sans-serif">${note}</text>
+      </g>`;
+  });
+
+  overlay.innerHTML = `<svg viewBox="0 0 180 180" width="180" height="180">${svgContent}</svg>`;
+
+  // position overlay
+  const rect = anchorBtn.getBoundingClientRect();
+  overlay.style.position = 'fixed';
+  overlay.style.left = `${rect.left - 20}px`;
+  overlay.style.top = `${rect.bottom + 6}px`;
+  overlay.style.zIndex = '9999';
+  document.body.appendChild(overlay);
+
+  // click handler for note selection
+  overlay.addEventListener('click', (e) => {
+    const group = e.target.closest('.cof-note-group');
+    if (group) {
+      setRootContext(group.dataset.note);
+      dismissCornerCofOverlay();
+    }
+  });
+
+  // dismiss on outside click
+  setTimeout(() => {
+    document.addEventListener('pointerdown', handleCofOutsideClick);
+  }, 10);
+}
+
+function handleCofOutsideClick(e) {
+  const overlay = document.querySelector('.corner-cof-overlay');
+  if (overlay && !overlay.contains(e.target)) {
+    dismissCornerCofOverlay();
+  }
+}
+
+function dismissCornerCofOverlay() {
+  const existing = document.querySelector('.corner-cof-overlay');
+  if (existing) existing.remove();
+  document.removeEventListener('pointerdown', handleCofOutsideClick);
+}
+
 function renderChordTable() {
   const key = el.keySelect.value;
   el.chordTableTitle.textContent = `Chords in ${key} Major`;
 
   const degreeRoots = DEGREE_TO_SEMITONE.map((semi) => NOTES[(NOTES.indexOf(key) + semi) % 12]);
 
-  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${degreeRoots.map((root, idx) => (
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${degreeRoots.map((root, idx) => (
     `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${ROMAN[idx]}" data-column-root="${root}">${ROMAN[idx]}<br>${root}</button></th>`
   )).join("")}`;
+  wireCornerKeyButton();
 
   const rows = [
     { name: "Sus2", quality: "sus2" },
@@ -2424,9 +3054,10 @@ function renderArpeggioTable() {
   el.chordTableTitle.textContent = `Arpeggios in ${key} Major`;
   const degreeRoots = DEGREE_TO_SEMITONE.map((semi) => NOTES[(NOTES.indexOf(key) + semi) % 12]);
 
-  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${degreeRoots.map((root, idx) => (
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${degreeRoots.map((root, idx) => (
     `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${ROMAN[idx]}" data-column-root="${root}">${ROMAN[idx]}<br>${root}</button></th>`
   )).join("")}`;
+  wireCornerKeyButton();
 
   el.chordTableBody.innerHTML = ARPEGGIO_TRIAD_ROWS.map((row, rowIndex) => {
     const cells = degreeRoots.map((root, idx) => {
@@ -2478,9 +3109,10 @@ function renderScalarPaletteTable(paletteTab) {
   if (!config) return;
   const key = el.keySelect.value;
   el.chordTableTitle.textContent = config.title;
-  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${PALETTE_SCALAR_COLUMN_DEGREES
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${PALETTE_SCALAR_COLUMN_DEGREES
     .map((degree, idx) => `<th class="axis-col-cell degree-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${degree}">${degree}</button></th>`)
     .join("")}`;
+  wireCornerKeyButton();
 
   el.chordTableBody.innerHTML = config.rows.map((row, rowIndex) => {
     const ascending = buildAscendingScaleMidiFromIntervals(key, row.intervals, 3, true);
@@ -2888,9 +3520,10 @@ function renderHarmonicPaletteTable(paletteTab) {
   const config = getHarmonicPaletteConfig(paletteTab);
   if (!config) return;
   el.chordTableTitle.textContent = config.title;
-  el.chordTableHead.innerHTML = `<th class="axis-corner-cell"></th>${config.columns.map((columnLabel, idx) => (
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${config.columns.map((columnLabel, idx) => (
     `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${columnLabel}">${columnLabel}</button></th>`
   )).join("")}`;
+  wireCornerKeyButton();
   el.chordTableBody.innerHTML = config.rows.map((row, rowIndex) => {
     const cells = row.cells.map((cell) => {
       const label = cell?.label || "";
@@ -6208,8 +6841,8 @@ function renderGuidedTheoryLesson(lesson) {
     el.theoryGuidedStatus.textContent = isCompleted
       ? "Lesson completed. You can still replay or run more attempts."
       : hasActiveRun
-      ? `Lesson run active. Keyboard presses this run: ${theoryState.runKeyboardPresses}.`
-      : "Press Start Lesson to auto-load the drill and begin measured practice.";
+        ? `Lesson run active. Keyboard presses this run: ${theoryState.runKeyboardPresses}.`
+        : "Press Start Lesson to auto-load the drill and begin measured practice.";
   }
 }
 
@@ -6966,8 +7599,7 @@ function chooseDiatonicQuality(degree, progressionName, index) {
 }
 
 function getHoldSeconds() {
-  const seconds = Number(el.voiceLengthInput.value);
-  return Number.isFinite(seconds) ? Math.min(4, Math.max(0.4, seconds)) : 1.7;
+  return 60 / Math.max(30, appState.bpm);
 }
 
 function toneColor() {
@@ -7811,7 +8443,7 @@ function clearChordDiffPreview() {
 }
 
 function limitMidiToHighlightWindow(midiNotes) {
-  const start = Number(el.highlightWindowStart?.value);
+  const start = Number(el.highlightStartRight?.value);
   if (!Number.isFinite(start)) return midiNotes;
   const end = start + HIGHLIGHT_WINDOW_SPAN_SEMITONES;
   const mapped = midiNotes.map((midi) => mapMidiToWindow(midi, start, end)).filter((midi) => midi !== null);
@@ -7834,64 +8466,81 @@ function mapMidiToWindow(midi, start, end) {
 }
 
 function updateWindowKeyboardHint() {
-  if (!el.windowKeyboardHint || !el.highlightWindowStart) return;
-  const start = Number(el.highlightWindowStart.value);
-  if (!Number.isFinite(start)) return;
-  const mapping = WINDOW_KEYBOARD_NOTE_BINDINGS
-    .map((binding) => `${binding.label}:${midiToNoteName(start + binding.offset)}`)
-    .join("  ");
-  el.windowKeyboardHint.textContent = `Keyboard map: ${mapping}`;
+  if (!el.windowKeyboardHint) return;
+  const leftStart = Number(el.highlightStartLeft?.value);
+  const rightStart = Number(el.highlightStartRight?.value);
+  const formatHand = (bindings, start) => {
+    if (!Number.isFinite(start)) return "";
+    return bindings
+      .map(b => `${b.label}:${midiToNoteName(start + bindingToSemitoneOffset(b))}`)
+      .join("  ");
+  };
+  const lh = formatHand(LEFT_HAND_BINDINGS, leftStart);
+  const rh = formatHand(RIGHT_HAND_BINDINGS, rightStart);
+  el.windowKeyboardHint.textContent = `LH  ${lh}  |  RH  ${rh}`;
 }
 
-function updateHighlightWindowLabel() {
-  if (!el.highlightWindowStart || !el.highlightWindowLabel) return;
-  const start = Number(el.highlightWindowStart.value);
-  const end = start + HIGHLIGHT_WINDOW_SPAN_SEMITONES;
-  el.highlightWindowLabel.textContent = `${midiToNoteName(start)} to ${midiToNoteName(end)} (8 white keys)`;
+function updateHighlightLabels() {
+  const leftStart = Number(el.highlightStartLeft?.value);
+  const rightStart = Number(el.highlightStartRight?.value);
+  if (el.highlightLabelLeft && Number.isFinite(leftStart)) {
+    const end = leftStart + HIGHLIGHT_WINDOW_SPAN_SEMITONES;
+    el.highlightLabelLeft.textContent = `LH: ${midiToNoteName(leftStart)}–${midiToNoteName(end)}`;
+  }
+  if (el.highlightLabelRight && Number.isFinite(rightStart)) {
+    const end = rightStart + HIGHLIGHT_WINDOW_SPAN_SEMITONES;
+    el.highlightLabelRight.textContent = `RH: ${midiToNoteName(rightStart)}–${midiToNoteName(end)}`;
+  }
   updateWindowKeyboardHint();
-  updateHighlightWindowLine();
+  updateHighlightGlows();
 }
 
-function updateHighlightWindowLine() {
-  if (!el.highlightWindowStart || !el.highlightWindowGlow) return;
-  const min = Number(el.highlightWindowStart.min || KEYBOARD_FIRST_MIDI);
-  const max = Number(el.highlightWindowStart.max || (KEYBOARD_LAST_MIDI - HIGHLIGHT_WINDOW_SPAN_SEMITONES));
-  const start = Number(el.highlightWindowStart.value);
+function updateHighlightGlow(glowEl, startEl) {
+  if (!startEl || !glowEl) return;
+  const min = Number(startEl.min || KEYBOARD_FIRST_MIDI);
+  const max = Number(startEl.max || (KEYBOARD_LAST_MIDI - HIGHLIGHT_WINDOW_SPAN_SEMITONES));
+  const start = Number(startEl.value);
   const totalVisibleKeys = KEYBOARD_LAST_MIDI - KEYBOARD_FIRST_MIDI + 1;
   const windowKeys = HIGHLIGHT_WINDOW_SPAN_SEMITONES + 1;
   if (totalVisibleKeys <= 0 || windowKeys <= 0) return;
   const normalizedStart = Math.min(Math.max(start, min), max);
   const leftPct = ((normalizedStart - KEYBOARD_FIRST_MIDI) / totalVisibleKeys) * 100;
   const widthPct = (windowKeys / totalVisibleKeys) * 100;
-  el.highlightWindowGlow.style.left = `${leftPct}%`;
-  el.highlightWindowGlow.style.width = `${Math.max(0, widthPct)}%`;
+  glowEl.style.left = `${leftPct}%`;
+  glowEl.style.width = `${Math.max(0, widthPct)}%`;
 }
 
-function setHighlightWindowFromClientX(clientX) {
-  if (!el.highlightWindowTrack || !el.highlightWindowStart) return;
+function updateHighlightGlows() {
+  updateHighlightGlow(el.highlightGlowLeft, el.highlightStartLeft);
+  updateHighlightGlow(el.highlightGlowRight, el.highlightStartRight);
+}
+
+function setHighlightFromClientX(hand, clientX) {
+  const startEl = hand === "left" ? el.highlightStartLeft : el.highlightStartRight;
+  if (!el.highlightWindowTrack || !startEl) return;
   const rect = el.highlightWindowTrack.getBoundingClientRect();
   if (rect.width <= 0) return;
-  const min = Number(el.highlightWindowStart.min || KEYBOARD_FIRST_MIDI);
-  const max = Number(el.highlightWindowStart.max || (KEYBOARD_LAST_MIDI - HIGHLIGHT_WINDOW_SPAN_SEMITONES));
+  const min = Number(startEl.min || KEYBOARD_FIRST_MIDI);
+  const max = Number(startEl.max || (KEYBOARD_LAST_MIDI - HIGHLIGHT_WINDOW_SPAN_SEMITONES));
   const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
   const midiRange = max - min;
   const next = Math.round(min + ratio * midiRange);
-  el.highlightWindowStart.value = String(Math.min(max, Math.max(min, next)));
+  startEl.value = String(Math.min(max, Math.max(min, next)));
   clearKeyboardHighlights();
-  updateHighlightWindowLabel();
-  updateHighlightWindowLine();
+  updateHighlightLabels();
+  updateHighlightGlows();
 }
 
-function onHighlightWindowPointerMove(event) {
-  if (!highlightWindowDragging) return;
-  setHighlightWindowFromClientX(event.clientX);
+function onHighlightPointerMove(event) {
+  if (!highlightDragHand) return;
+  setHighlightFromClientX(highlightDragHand, event.clientX);
 }
 
-function endHighlightWindowDrag() {
-  highlightWindowDragging = false;
-  window.removeEventListener("pointermove", onHighlightWindowPointerMove);
-  window.removeEventListener("pointerup", endHighlightWindowDrag);
-  window.removeEventListener("pointercancel", endHighlightWindowDrag);
+function endHighlightDrag() {
+  highlightDragHand = null;
+  window.removeEventListener("pointermove", onHighlightPointerMove);
+  window.removeEventListener("pointerup", endHighlightDrag);
+  window.removeEventListener("pointercancel", endHighlightDrag);
 }
 
 function getHighlightMs(holdSeconds, explicitMs) {
@@ -8099,15 +8748,18 @@ function getCoachStackEntryStatus(entry) {
   };
 }
 
-function renderCoachLessonStack() {
-  if (!el.coachLessonStack) return;
-  el.coachLessonStack.innerHTML = "";
+function renderCoachKanban() {
+  if (!el.kanbanTodo || !el.kanbanActive || !el.kanbanDone) return;
+  el.kanbanTodo.innerHTML = "";
+  el.kanbanActive.innerHTML = "";
+  el.kanbanDone.innerHTML = "";
+
   const stack = Array.isArray(coachState.lessonStack) ? coachState.lessonStack : [];
   if (!stack.length) {
     const empty = document.createElement("div");
-    empty.className = "coach-stack-empty";
-    empty.textContent = "No saved lesson artifacts yet. Use “Save to Stack” from any coach artifact.";
-    el.coachLessonStack.appendChild(empty);
+    empty.className = "kanban-empty";
+    empty.textContent = "No lessons yet";
+    el.kanbanTodo.appendChild(empty);
     return;
   }
 
@@ -8116,56 +8768,80 @@ function renderCoachLessonStack() {
     if (!normalized) return;
     const status = getCoachStackEntryStatus(normalized);
 
-    const card = document.createElement("article");
-    card.className = "coach-stack-card";
+    const card = document.createElement("div");
+    card.className = "kanban-card";
     card.dataset.stackId = normalized.id;
 
-    const titleRow = document.createElement("div");
-    titleRow.className = "coach-stack-title-row";
-    const title = document.createElement("div");
-    title.className = "coach-stack-title";
-    title.textContent = normalized.title;
-    const statusEl = document.createElement("div");
-    statusEl.className = `coach-stack-status ${status.className}`.trim();
-    statusEl.textContent = status.label;
-    titleRow.appendChild(title);
-    titleRow.appendChild(statusEl);
-    card.appendChild(titleRow);
+    const titleEl = document.createElement("div");
+    titleEl.className = "kanban-card-title";
+    titleEl.textContent = normalized.title;
+    card.appendChild(titleEl);
 
-    const meta = document.createElement("div");
-    meta.className = "coach-stack-meta";
-    meta.textContent = `${normalized.type} • ${status.detail}`;
-    card.appendChild(meta);
+    const metaRow = document.createElement("div");
+    metaRow.className = "kanban-card-meta";
+
+    const badge = document.createElement("span");
+    const badgeType = (normalized.type || "lesson").toLowerCase();
+    badge.className = `kanban-card-badge ${badgeType.includes("quiz") ? "quiz" : badgeType.includes("drill") ? "drill" : "lesson"}`;
+    badge.textContent = normalized.type || "Lesson";
+    metaRow.appendChild(badge);
+
+    const dateEl = document.createElement("span");
+    dateEl.className = "kanban-card-date";
+    dateEl.textContent = formatCoachDateTime(normalized.createdAt || normalized.savedAt);
+    metaRow.appendChild(dateEl);
+    card.appendChild(metaRow);
 
     const actions = document.createElement("div");
-    actions.className = "coach-stack-actions";
+    actions.className = "kanban-card-actions";
 
     const continueBtn = document.createElement("button");
     continueBtn.type = "button";
-    continueBtn.textContent = "Continue Lesson";
-    continueBtn.addEventListener("click", () => {
+    continueBtn.textContent = "Continue";
+    continueBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       continueCoachLessonFromStack(normalized.id);
     });
     actions.appendChild(continueBtn);
 
     const playBtn = document.createElement("button");
     playBtn.type = "button";
-    playBtn.textContent = "Play";
-    playBtn.addEventListener("click", () => {
+    playBtn.textContent = "▶ Play";
+    playBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       void playCoachArtifact(normalized.artifact);
     });
     actions.appendChild(playBtn);
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
-    removeBtn.textContent = "Remove";
-    removeBtn.addEventListener("click", () => {
+    removeBtn.textContent = "✕";
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       removeCoachLessonStackEntry(normalized.id);
     });
     actions.appendChild(removeBtn);
 
     card.appendChild(actions);
-    el.coachLessonStack.appendChild(card);
+
+    // Distribute into lanes based on status
+    if (status.className === "is-complete") {
+      el.kanbanDone.appendChild(card);
+    } else if (normalized.attempts > 0 || status.label?.toLowerCase().includes("progress")) {
+      el.kanbanActive.appendChild(card);
+    } else {
+      el.kanbanTodo.appendChild(card);
+    }
+  });
+
+  // Add empty placeholders for empty lanes
+  [el.kanbanTodo, el.kanbanActive, el.kanbanDone].forEach((lane) => {
+    if (!lane.children.length) {
+      const empty = document.createElement("div");
+      empty.className = "kanban-empty";
+      empty.textContent = "—";
+      lane.appendChild(empty);
+    }
   });
 }
 
@@ -8197,21 +8873,23 @@ function initializeCoachThreads() {
   } else if (!coachState.activeThreadId || !coachState.threads.some((thread) => thread.id === coachState.activeThreadId)) {
     coachState.activeThreadId = coachState.threads[0].id;
   }
-  renderCoachThreadSelect();
+  renderCoachThreadPills();
   renderCoachMessages();
-  renderCoachLessonStack();
+  renderCoachKanban();
 }
 
-function renderCoachThreadSelect() {
-  if (!el.coachThreadSelect) return;
-  el.coachThreadSelect.innerHTML = "";
+function renderCoachThreadPills() {
+  if (!el.coachThreadPills) return;
+  el.coachThreadPills.innerHTML = "";
   coachState.threads.forEach((thread) => {
-    const option = document.createElement("option");
-    option.value = thread.id;
-    option.textContent = thread.title || defaultCoachThreadTitle(0);
-    el.coachThreadSelect.appendChild(option);
+    const pill = document.createElement("button");
+    pill.className = `coach-thread-pill${thread.id === coachState.activeThreadId ? " is-active" : ""}`;
+    pill.dataset.threadId = thread.id;
+    pill.textContent = thread.title || defaultCoachThreadTitle(0);
+    pill.role = "tab";
+    pill.setAttribute("aria-selected", thread.id === coachState.activeThreadId ? "true" : "false");
+    el.coachThreadPills.appendChild(pill);
   });
-  el.coachThreadSelect.value = coachState.activeThreadId;
 }
 
 function formatCoachTimestamp(iso) {
@@ -8782,7 +9460,7 @@ function upsertCoachStackEntry(artifact, options = {}) {
     .filter(Boolean)
     .slice(0, 120);
   saveCoachLessonStack();
-  renderCoachLessonStack();
+  renderCoachKanban();
   return {
     entry: nextEntry,
     exists: index >= 0
@@ -8806,7 +9484,7 @@ function removeCoachLessonStackEntry(entryId) {
   if (next.length === coachState.lessonStack.length) return;
   coachState.lessonStack = next;
   saveCoachLessonStack();
-  renderCoachLessonStack();
+  renderCoachKanban();
   if (el.coachOutput) {
     el.coachOutput.textContent = "Removed lesson from stack.";
   }
@@ -8856,7 +9534,7 @@ function continueCoachLessonFromStack(entryId) {
   result.entry.lastOpenedAt = nowIsoString();
   coachState.lessonStack[0] = normalizeCoachLessonStackEntry(result.entry);
   saveCoachLessonStack();
-  renderCoachLessonStack();
+  renderCoachKanban();
   openTheoryLessonFromCoachStack(result.entry.trackId, result.entry.lessonId, result.entry.title);
 }
 
@@ -8876,7 +9554,7 @@ function markCoachLessonStackCompleted(lessonId) {
   });
   if (changed) {
     saveCoachLessonStack();
-    renderCoachLessonStack();
+    renderCoachKanban();
   }
 }
 
@@ -8890,7 +9568,7 @@ function openCoachArtifactFullLesson(artifact) {
   result.entry.lastOpenedAt = nowIsoString();
   coachState.lessonStack[0] = normalizeCoachLessonStackEntry(result.entry);
   saveCoachLessonStack();
-  renderCoachLessonStack();
+  renderCoachKanban();
   if (result.entry.trackId && result.entry.lessonId) {
     openTheoryLessonFromCoachStack(result.entry.trackId, result.entry.lessonId, result.entry.title);
   }
@@ -8905,36 +9583,12 @@ function formatCoachMode(mode) {
   return "Unknown";
 }
 
-function setCoachStatus(text) {
-  if (!el.coachStatus) return;
-  el.coachStatus.textContent = text;
+function setCoachStatus(_text) {
+  /* Status bar removed in chat UI redesign — kept as no-op for callers */
 }
 
 async function refreshCoachStatus() {
-  if (!el.coachStatus) return;
-  try {
-    const res = await fetch("/api/coach/status", { cache: "no-store" });
-    if (!res.ok) {
-      setCoachStatus("Coach provider: status unavailable.");
-      return;
-    }
-    const status = await res.json();
-    if (status?.ollama?.reachable && status?.ollama?.modelInstalled) {
-      setCoachStatus(`Coach provider ready: Local Gemma (${status.ollama.model})`);
-      return;
-    }
-    if (status?.openaiConfigured) {
-      setCoachStatus(`Coach provider ready: OpenAI (${status.openaiModel || "configured model"})`);
-      return;
-    }
-    if (status?.pollinations?.reachable) {
-      setCoachStatus("Coach provider ready: Cloud fallback model (no key required)");
-      return;
-    }
-    setCoachStatus("Coach provider ready: Local smart tutor (offline mode)");
-  } catch {
-    setCoachStatus("Coach provider: status check failed.");
-  }
+  /* No visible status bar in new chat UI */
 }
 
 function coachRequestContext() {
@@ -9014,10 +9668,7 @@ async function streamCoachResponse(payload, { onMeta, onDelta, onDone }) {
 async function askCoach() {
   if (coachState.isStreaming) return;
   const question = el.coachInput.value.trim();
-  if (!question) {
-    if (el.coachOutput) el.coachOutput.textContent = "Add a question first.";
-    return;
-  }
+  if (!question) return;
 
   const thread = getActiveCoachThread();
   if (!thread.messages.length || !thread.title || thread.title.startsWith("Conversation")) {
@@ -9029,21 +9680,18 @@ async function askCoach() {
   pushCoachMessage(thread, assistantMessage);
   coachState.isStreaming = true;
   saveCoachThreads();
-  renderCoachThreadSelect();
+  renderCoachThreadPills();
   renderCoachMessages();
   if (el.coachInput) el.coachInput.value = "";
-  if (el.coachOutput) el.coachOutput.textContent = "Streaming response...";
-  setCoachStatus("Coach provider: requesting response...");
+  if (el.coachTyping) el.coachTyping.hidden = false;
 
   try {
     const payload = buildCoachConversationPayload(thread, question);
     let finalDone = null;
     await streamCoachResponse(payload, {
-      onMeta: (meta) => {
-        const modeLabel = formatCoachMode(meta.mode);
-        setCoachStatus(`Coach provider used: ${modeLabel}`);
-      },
+      onMeta: (_meta) => { },
       onDelta: (delta) => {
+        if (el.coachTyping) el.coachTyping.hidden = true;
         const current = thread.messages.find((msg) => msg.id === assistantMessage.id)?.content || "";
         updatePendingAssistantMessage(thread, assistantMessage.id, { content: `${current}${delta.text || ""}` });
         renderCoachMessages();
@@ -9063,16 +9711,6 @@ async function askCoach() {
       artifact: normalizedArtifact,
       pending: false
     });
-
-    if (el.coachOutput) {
-      if (normalizedArtifact) {
-        el.coachOutput.textContent = `Artifact ready: ${normalizedArtifact.title}`;
-      } else {
-        el.coachOutput.textContent = "Coach response received.";
-      }
-    }
-    const modeLabel = formatCoachMode(finalDone?.mode);
-    setCoachStatus(`Coach provider used: ${modeLabel}`);
   } catch (err) {
     updatePendingAssistantMessage(thread, assistantMessage.id, {
       content: buildClientCoachFallback(question),
@@ -9081,15 +9719,12 @@ async function askCoach() {
       artifact: null,
       pending: false
     });
-    if (el.coachOutput) {
-      el.coachOutput.textContent = "Coach stream unavailable, fallback response shown.";
-    }
-    setCoachStatus("Coach provider used: Client fallback");
   } finally {
     coachState.isStreaming = false;
+    if (el.coachTyping) el.coachTyping.hidden = true;
     thread.updatedAt = nowIsoString();
     saveCoachThreads();
-    renderCoachThreadSelect();
+    renderCoachThreadPills();
     renderCoachMessages();
   }
 }
@@ -9232,6 +9867,140 @@ function loadProgress() {
 
 function saveProgress() {
   safeStorageSet(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+  evaluateBadges();
+  debouncedCloudSync();
+}
+
+let _cloudSyncTimer = null;
+function debouncedCloudSync() {
+  if (_cloudSyncTimer) clearTimeout(_cloudSyncTimer);
+  _cloudSyncTimer = setTimeout(() => {
+    _cloudSyncTimer = null;
+    if (window.BabyStepsAuth && window.BabyStepsAuth.isSignedIn()) {
+      const threads = coachState.threads || [];
+      const stack = coachState.lessonStack || [];
+      window.BabyStepsAuth.saveProgressToCloud(progress, threads, stack);
+    }
+  }, 2000);
+}
+
+function evaluateBadges() {
+  BADGE_DEFINITIONS.forEach(badge => {
+    if (earnedBadgesLocal.has(badge.id)) return;
+    try {
+      if (badge.rule(progress)) {
+        earnedBadgesLocal.add(badge.id);
+        safeStorageSet("baby-steps-badges-v1", JSON.stringify([...earnedBadgesLocal]));
+        showBadgeToast(badge);
+        if (window.BabyStepsAuth && window.BabyStepsAuth.isSignedIn()) {
+          window.BabyStepsAuth.awardBadgeCloud(badge.id);
+        }
+        renderBadgeGrid();
+      }
+    } catch (e) { /* badge rule error – skip */ }
+  });
+}
+
+function showBadgeToast(badge) {
+  let toast = document.querySelector(".badge-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.className = "badge-toast";
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `<span class="badge-toast-icon">${badge.icon}</span> Badge earned: ${badge.label}`;
+  toast.classList.remove("show");
+  void toast.offsetWidth; // reflow
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 3500);
+}
+
+function renderBadgeGrid() {
+  if (!el.badgeGrid) return;
+  el.badgeGrid.innerHTML = BADGE_DEFINITIONS.map(b => {
+    const earned = earnedBadgesLocal.has(b.id);
+    return `<div class="badge-card ${earned ? 'earned' : ''}" title="${b.label}">
+      <span class="badge-icon">${b.icon}</span>
+      <span class="badge-label">${b.label}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderProfilePanel() {
+  if (!el.profileSection) return;
+  const user = window.BabyStepsAuth ? window.BabyStepsAuth.getUser() : null;
+  if (!user) {
+    el.profileSection.classList.add("is-hidden");
+    return;
+  }
+  el.profileSection.classList.remove("is-hidden");
+  const meta = user.user_metadata || {};
+  if (el.profileAvatar) el.profileAvatar.src = meta.avatar_url || meta.picture || "";
+  if (el.profileName) el.profileName.textContent = meta.full_name || meta.name || "Pianist";
+  if (el.profileEmail) el.profileEmail.textContent = user.email || "";
+  updateMasteryStats();
+  renderBadgeGrid();
+}
+
+function updateMasteryStats() {
+  if (el.masteryChords) el.masteryChords.textContent = progress.areas?.chords || 0;
+  if (el.masteryScales) el.masteryScales.textContent = progress.areas?.scales || 0;
+  if (el.masteryLessons) el.masteryLessons.textContent = Object.keys(progress.theoryCompletedLessons || {}).filter(k => progress.theoryCompletedLessons[k]).length;
+  if (el.masteryCadences) el.masteryCadences.textContent = progress.conceptMastery?.cadence || 0;
+}
+
+function initAuth() {
+  if (!window.BabyStepsAuth) return;
+
+  if (el.authSignInBtn) {
+    el.authSignInBtn.addEventListener("click", () => window.BabyStepsAuth.signInWithGoogle());
+  }
+  if (el.authSignOutBtn) {
+    el.authSignOutBtn.addEventListener("click", () => window.BabyStepsAuth.signOut());
+  }
+
+  window.BabyStepsAuth.onAuthChange(async (state) => {
+    const user = state.user;
+    if (user) {
+      // Signed in
+      if (el.authSignInBtn) el.authSignInBtn.classList.add("is-hidden");
+      if (el.authUserPill) {
+        el.authUserPill.classList.remove("is-hidden");
+        const meta = user.user_metadata || {};
+        if (el.authAvatar) el.authAvatar.src = meta.avatar_url || meta.picture || "";
+        if (el.authDisplayName) el.authDisplayName.textContent = (meta.full_name || meta.name || "Pianist").split(" ")[0];
+      }
+
+      // Ensure profile exists
+      window.BabyStepsAuth.ensureProfile();
+
+      // First-login migration: push local data to cloud if cloud is empty
+      const localThreads = coachState.threads || [];
+      const localStack = coachState.lessonStack || [];
+      await window.BabyStepsAuth.migrateLocalToCloud(progress, localThreads, localStack);
+
+      // Load cloud data (cloud wins)
+      const cloudData = await window.BabyStepsAuth.loadProgressFromCloud();
+      if (cloudData && cloudData.progress && Object.keys(cloudData.progress).length > 0) {
+        progress = { ...defaultProgress, ...cloudData.progress };
+        safeStorageSet(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+      }
+
+      // Load cloud badges
+      const cloudBadges = await window.BabyStepsAuth.loadBadgesFromCloud();
+      cloudBadges.forEach(b => earnedBadgesLocal.add(b.badge_id));
+      safeStorageSet("baby-steps-badges-v1", JSON.stringify([...earnedBadgesLocal]));
+
+      renderProfilePanel();
+    } else {
+      // Signed out
+      if (el.authSignInBtn) el.authSignInBtn.classList.remove("is-hidden");
+      if (el.authUserPill) el.authUserPill.classList.add("is-hidden");
+      if (el.profileSection) el.profileSection.classList.add("is-hidden");
+    }
+  });
+
+  window.BabyStepsAuth.init();
 }
 
 function resetProgressState() {
@@ -9375,8 +10144,8 @@ function updateAudioStatusText(priority = "") {
   el.audioStatus.classList.toggle(
     "audio-status-error",
     priority === "error"
-      || (!htmlSampleEngineActive && failed >= total && total > 0)
-      || (shouldUseRnboPrimaryEngine() && Boolean(rnboEngineFailedReason) && !rnboEngineActive)
+    || (!htmlSampleEngineActive && failed >= total && total > 0)
+    || (shouldUseRnboPrimaryEngine() && Boolean(rnboEngineFailedReason) && !rnboEngineActive)
   );
 }
 
@@ -9689,7 +10458,12 @@ function sampleNoteToMidi(sampleNote) {
   return 12 * (octave + 1) + semitone;
 }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  init();
+  initAuth();
+  renderBadgeGrid();
+  updateMasteryStats();
+});
 window.hardResetProgress = hardResetProgress;
 
 class CadenceGame {
@@ -9775,4 +10549,467 @@ class CadenceGame {
     window.clearTimeout(this.nextLevelTimerId);
     this.nextLevelTimerId = null;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   METRONOME
+   ═══════════════════════════════════════════════════════════════ */
+let metronomeIntervalId = null;
+
+function setBpm(newBpm) {
+  appState.bpm = Math.max(30, Math.min(240, Math.round(newBpm)));
+  if (el.metronomeBpmDisplay) {
+    el.metronomeBpmDisplay.textContent = appState.bpm;
+  }
+  // Update pendulum swing speed via CSS custom property
+  const metronomeEl = el.metronome;
+  if (metronomeEl) {
+    metronomeEl.style.setProperty('--swing-duration', `${60 / appState.bpm}s`);
+  }
+  // If running, restart interval at new tempo
+  if (appState.metronomeRunning) {
+    stopMetronomeTick();
+    startMetronomeTick();
+  }
+}
+
+function startMetronome() {
+  appState.metronomeRunning = true;
+  if (el.metronome) el.metronome.classList.add('is-running');
+  if (el.metronomeToggleBtn) {
+    el.metronomeToggleBtn.querySelector('.metronome-toggle-icon').textContent = '⏸';
+  }
+  startMetronomeTick();
+}
+
+function stopMetronome() {
+  appState.metronomeRunning = false;
+  if (el.metronome) el.metronome.classList.remove('is-running');
+  if (el.metronomeToggleBtn) {
+    el.metronomeToggleBtn.querySelector('.metronome-toggle-icon').textContent = '▶';
+  }
+  stopMetronomeTick();
+}
+
+function startMetronomeTick() {
+  stopMetronomeTick();
+  const intervalMs = (60 / appState.bpm) * 1000;
+  playMetronomeTick();
+  metronomeIntervalId = setInterval(playMetronomeTick, intervalMs);
+}
+
+function stopMetronomeTick() {
+  if (metronomeIntervalId !== null) {
+    clearInterval(metronomeIntervalId);
+    metronomeIntervalId = null;
+  }
+}
+
+function playMetronomeTick() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.06);
+  } catch { /* silent fail */ }
+}
+
+function initMetronome() {
+  if (el.metronome) {
+    el.metronome.style.setProperty('--swing-duration', `${60 / appState.bpm}s`);
+  }
+
+  if (el.metronomeDecBtn) {
+    el.metronomeDecBtn.addEventListener('click', () => setBpm(appState.bpm - 5));
+  }
+  if (el.metronomeIncBtn) {
+    el.metronomeIncBtn.addEventListener('click', () => setBpm(appState.bpm + 5));
+  }
+  if (el.metronomeToggleBtn) {
+    el.metronomeToggleBtn.addEventListener('click', () => {
+      appState.metronomeRunning ? stopMetronome() : startMetronome();
+    });
+  }
+  // Tap to edit BPM
+  if (el.metronomeBpmBtn) {
+    el.metronomeBpmBtn.addEventListener('dblclick', () => {
+      const input = prompt('Enter BPM (30-240):', String(appState.bpm));
+      if (input !== null) {
+        const val = parseInt(input, 10);
+        if (!isNaN(val)) setBpm(val);
+      }
+    });
+  }
+}
+
+// Wire metronome after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMetronome);
+} else {
+  // DOM is already loaded, but el might not be set yet — defer
+  requestAnimationFrame(initMetronome);
+}
+
+/* ═══════════════════════════════════════════
+ * ▸ SHEET MUSIC SCANNER MODULE
+ * ═══════════════════════════════════════════ */
+
+const scannerState = {
+  pdfDoc: null,
+  currentPage: 1,
+  totalPages: 0,
+  abcNotation: "",
+  analysis: null,
+  synthControl: null,
+  isPlaying: false,
+  abcjsLoaded: false,
+  pdfjsLoaded: false
+};
+
+/* — lazy-load pdf.js — */
+async function loadPdfJs() {
+  if (scannerState.pdfjsLoaded) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      scannerState.pdfjsLoaded = true;
+      res();
+    };
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+/* — lazy-load abcjs — */
+async function loadAbcjs() {
+  if (scannerState.abcjsLoaded) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-basic-min.js";
+    s.onload = () => { scannerState.abcjsLoaded = true; res(); };
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+/* — render a PDF page to canvas — */
+async function renderPdfPage(pageNum) {
+  if (!scannerState.pdfDoc) return;
+  const page = await scannerState.pdfDoc.getPage(pageNum);
+  const scale = 1.5;
+  const viewport = page.getViewport({ scale });
+  const canvas = el.scannerCanvas;
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d");
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  el.scannerPageInfo.textContent = `Page ${pageNum} / ${scannerState.totalPages}`;
+}
+
+/* — handle uploaded file — */
+async function handleScannerFile(file) {
+  if (!file) return;
+
+  // Show preview, hide other sections
+  el.scannerPreview.hidden = false;
+  el.scannerNotation.hidden = true;
+  el.scannerAnalysis.hidden = true;
+  el.scannerSkills.hidden = true;
+
+  if (file.type === "application/pdf") {
+    await loadPdfJs();
+    const arrayBuffer = await file.arrayBuffer();
+    scannerState.pdfDoc = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    scannerState.totalPages = scannerState.pdfDoc.numPages;
+    scannerState.currentPage = 1;
+    await renderPdfPage(1);
+  } else if (file.type.startsWith("image/")) {
+    // Direct image — render to canvas
+    const img = new Image();
+    img.onload = () => {
+      const canvas = el.scannerCanvas;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext("2d").drawImage(img, 0, 0);
+      scannerState.pdfDoc = null;
+      scannerState.totalPages = 1;
+      scannerState.currentPage = 1;
+      el.scannerPageInfo.textContent = "Image";
+    };
+    img.src = URL.createObjectURL(file);
+  }
+}
+
+/* — extract music using Gemini Vision — */
+async function extractMusicFromCanvas() {
+  el.scannerProcessing.hidden = false;
+  el.scannerPreview.hidden = true;
+
+  try {
+    const canvas = el.scannerCanvas;
+    const imageData = canvas.toDataURL("image/png").split(",")[1]; // base64
+
+    const res = await fetch("/api/scanner/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: imageData })
+    });
+
+    if (!res.ok) {
+      // Fallback — generate sample data for demo
+      console.warn("Scanner API unavailable, using demo data");
+      processScannerResult({
+        abc: "X:1\nT:Sample Score\nM:4/4\nL:1/4\nK:C\nC D E F | G A B c | c B A G | F E D C |",
+        analysis: {
+          key: "C Major",
+          time_sig: "4/4",
+          tempo: "120",
+          difficulty: "Beginner",
+          chords: [
+            { measure: 1, symbol: "C" },
+            { measure: 2, symbol: "G" },
+            { measure: 3, symbol: "Am" },
+            { measure: 4, symbol: "F" }
+          ],
+          patterns: ["Stepwise motion", "Scale passage", "I-V-vi-IV progression"],
+          hand_analysis: { left: "Root position triads", right: "Scalar melody" }
+        }
+      });
+      return;
+    }
+
+    const data = await res.json();
+    processScannerResult(data);
+  } catch (err) {
+    console.error("Scanner extraction error:", err);
+    // Fallback demo
+    processScannerResult({
+      abc: "X:1\nT:Extracted Score\nM:4/4\nL:1/4\nK:C\nC E G c | B A G F | E D C2 |",
+      analysis: {
+        key: "C Major", time_sig: "4/4", tempo: "100", difficulty: "Beginner",
+        chords: [{ measure: 1, symbol: "C" }, { measure: 2, symbol: "G7" }, { measure: 3, symbol: "C" }],
+        patterns: ["Arpeggio", "Descending scale"],
+        hand_analysis: { left: "Root notes", right: "Arpeggiated melody" }
+      }
+    });
+  } finally {
+    el.scannerProcessing.hidden = true;
+  }
+}
+
+/* — process scanner result — */
+async function processScannerResult(data) {
+  scannerState.abcNotation = data.abc || "";
+  scannerState.analysis = data.analysis || {};
+
+  // Render notation
+  await loadAbcjs();
+  if (scannerState.abcNotation && el.scoreDisplay) {
+    el.scannerNotation.hidden = false;
+    window.ABCJS.renderAbc("scoreDisplay", scannerState.abcNotation, {
+      responsive: "resize",
+      add_classes: true
+    });
+  }
+
+  // Render theory analysis
+  renderScannerAnalysis(scannerState.analysis);
+
+  // Render skill recommendations
+  renderScannerSkills(scannerState.analysis);
+}
+
+/* — render theory analysis — */
+function renderScannerAnalysis(analysis) {
+  if (!analysis) return;
+  el.scannerAnalysis.hidden = false;
+
+  const setCardValue = (card, value) => {
+    if (!card) return;
+    const valEl = card.querySelector(".analysis-card-value");
+    if (valEl) valEl.textContent = value || "—";
+  };
+
+  setCardValue(el.analysisKey, analysis.key);
+  setCardValue(el.analysisTime, analysis.time_sig);
+  setCardValue(el.analysisTempo, analysis.tempo ? `${analysis.tempo} BPM` : null);
+  setCardValue(el.analysisDifficulty, analysis.difficulty);
+
+  // Chord flow
+  if (el.analysisChordFlow && Array.isArray(analysis.chords)) {
+    el.analysisChordFlow.innerHTML = "";
+    analysis.chords.forEach((chord) => {
+      const pill = document.createElement("span");
+      pill.className = "chord-pill";
+      pill.textContent = chord.symbol || chord;
+      if (typeof chord === "object" && chord.measure === 1) pill.classList.add("is-tonic");
+      el.analysisChordFlow.appendChild(pill);
+    });
+  }
+
+  // Patterns
+  if (el.analysisPatternList && Array.isArray(analysis.patterns)) {
+    el.analysisPatternList.innerHTML = "";
+    analysis.patterns.forEach((pattern) => {
+      const badge = document.createElement("span");
+      badge.className = "pattern-badge";
+      badge.textContent = pattern;
+      el.analysisPatternList.appendChild(badge);
+    });
+  }
+}
+
+/* — match skills to THEORY_CURRICULUM — */
+function renderScannerSkills(analysis) {
+  if (!analysis || !el.skillTagsContainer) return;
+  el.scannerSkills.hidden = false;
+  el.skillTagsContainer.innerHTML = "";
+
+  // Build skill matches from detected patterns
+  const skillSet = new Set();
+  const patterns = analysis.patterns || [];
+  const chords = (analysis.chords || []).map(c => typeof c === "object" ? c.symbol : c);
+
+  // Match key-based skills
+  if (analysis.key) {
+    skillSet.add(`${analysis.key} Scale`);
+    skillSet.add(`Key of ${analysis.key}`);
+  }
+
+  // Match chord-based skills
+  chords.forEach(ch => {
+    if (ch) skillSet.add(`${ch} Chord`);
+  });
+
+  // Match pattern-based skills
+  patterns.forEach(p => {
+    skillSet.add(p);
+  });
+
+  // Add hand analysis skills
+  if (analysis.hand_analysis) {
+    if (analysis.hand_analysis.left) skillSet.add(`LH: ${analysis.hand_analysis.left}`);
+    if (analysis.hand_analysis.right) skillSet.add(`RH: ${analysis.hand_analysis.right}`);
+  }
+
+  skillSet.forEach((skill) => {
+    const tag = document.createElement("button");
+    tag.type = "button";
+    tag.className = "skill-tag";
+    tag.textContent = skill;
+    tag.addEventListener("click", () => {
+      // Switch to theory mode and search for this skill
+      const pill = document.querySelector('.mode-pill[data-mode-target="theory"]');
+      if (pill) pill.click();
+    });
+    el.skillTagsContainer.appendChild(tag);
+  });
+}
+
+/* — scanner playback with abcjs — */
+function scannerPlay() {
+  if (!scannerState.abcNotation || !window.ABCJS) return;
+  const speed = parseFloat(el.scannerSpeedSlider?.value || 1);
+
+  if (scannerState.synthControl) {
+    scannerState.synthControl.destroy();
+  }
+
+  const visualObj = window.ABCJS.renderAbc("scoreDisplay", scannerState.abcNotation, {
+    responsive: "resize",
+    add_classes: true
+  });
+
+  if (window.ABCJS.synth && window.ABCJS.synth.supportsAudio()) {
+    const synth = new window.ABCJS.synth.CreateSynth();
+    synth.init({ visualObj: visualObj[0], options: { qpm: Math.round(120 * speed) } })
+      .then(() => synth.prime())
+      .then(() => {
+        synth.start();
+        scannerState.isPlaying = true;
+        if (el.scannerPlayBtn) el.scannerPlayBtn.textContent = "⏸";
+      })
+      .catch(err => console.error("abcjs playback error:", err));
+    scannerState.synthControl = synth;
+  }
+}
+
+function scannerStop() {
+  if (scannerState.synthControl) {
+    try { scannerState.synthControl.stop(); } catch { }
+  }
+  scannerState.isPlaying = false;
+  if (el.scannerPlayBtn) el.scannerPlayBtn.textContent = "▶";
+}
+
+/* — scanner event wiring — */
+function initScanner() {
+  if (!el.scannerUploadZone) return;
+
+  // Click to browse
+  el.scannerUploadZone.addEventListener("click", () => el.scannerFileInput?.click());
+  el.scannerFileInput?.addEventListener("change", (e) => {
+    if (e.target.files?.[0]) handleScannerFile(e.target.files[0]);
+  });
+
+  // Drag and drop
+  el.scannerUploadZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    el.scannerUploadZone.classList.add("is-dragover");
+  });
+  el.scannerUploadZone.addEventListener("dragleave", () => {
+    el.scannerUploadZone.classList.remove("is-dragover");
+  });
+  el.scannerUploadZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    el.scannerUploadZone.classList.remove("is-dragover");
+    if (e.dataTransfer.files?.[0]) handleScannerFile(e.dataTransfer.files[0]);
+  });
+
+  // Page nav
+  el.scannerPrevPage?.addEventListener("click", async () => {
+    if (scannerState.currentPage > 1) {
+      scannerState.currentPage--;
+      await renderPdfPage(scannerState.currentPage);
+    }
+  });
+  el.scannerNextPage?.addEventListener("click", async () => {
+    if (scannerState.currentPage < scannerState.totalPages) {
+      scannerState.currentPage++;
+      await renderPdfPage(scannerState.currentPage);
+    }
+  });
+
+  // Extract
+  el.scannerExtractBtn?.addEventListener("click", extractMusicFromCanvas);
+
+  // Playback
+  el.scannerPlayBtn?.addEventListener("click", () => {
+    if (scannerState.isPlaying) scannerStop();
+    else scannerPlay();
+  });
+  el.scannerStopBtn?.addEventListener("click", scannerStop);
+
+  // Speed slider
+  el.scannerSpeedSlider?.addEventListener("input", () => {
+    const val = parseFloat(el.scannerSpeedSlider.value).toFixed(1);
+    if (el.scannerSpeedValue) el.scannerSpeedValue.textContent = `${val}×`;
+  });
+}
+
+// Initialize scanner when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initScanner);
+} else {
+  requestAnimationFrame(initScanner);
 }
