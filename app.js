@@ -8900,6 +8900,43 @@ function formatCoachTimestamp(iso) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+/* ═══════════════════════════════════════════
+ * DEEP LINKS — [[label|route]] wiki-link parser
+ * Converts [[Major Scales|scales:major]] to clickable anchors
+ * ═══════════════════════════════════════════ */
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function parseCoachDeepLinks(content) {
+  if (!content) return "";
+  const escaped = escapeHtml(content);
+  return escaped.replace(
+    /\[\[([^\]|]+)\|([^\]]+)\]\]/g,
+    (_, label, route) => {
+      const safeLabel = label.trim();
+      const safeRoute = route.trim();
+      return `<a class="coach-deep-link" href="#" data-route="${safeRoute}" title="Go to ${safeLabel}">${safeLabel}</a>`;
+    }
+  );
+}
+
+function navigateToLesson(lessonId) {
+  if (!lessonId) return;
+  const lesson = typeof getLessonById === "function" ? getLessonById(lessonId) : null;
+  if (lesson && typeof switchMode === "function") {
+    switchMode("theory");
+    if (typeof highlightLesson === "function") highlightLesson(lessonId);
+  } else {
+    // Fallback: try switching to theory mode and scrolling to the lesson
+    if (typeof switchMode === "function") switchMode("theory");
+    console.log(`[DeepLink] Navigate to: ${lessonId}`);
+  }
+}
+
 function renderCoachMessages() {
   if (!el.coachMessages) return;
   const thread = getActiveCoachThread();
@@ -8919,7 +8956,7 @@ function renderCoachMessages() {
 
     const text = document.createElement("div");
     text.className = "coach-message-text";
-    text.textContent = msg.content || "";
+    text.innerHTML = parseCoachDeepLinks(msg.content || "");
     bubble.appendChild(text);
 
     if (msg.role === "assistant" && msg.artifact) {
@@ -8937,6 +8974,15 @@ function renderCoachMessages() {
   });
 
   el.coachMessages.scrollTop = el.coachMessages.scrollHeight;
+
+  // Event delegation for deep-link clicks
+  el.coachMessages.addEventListener("click", (e) => {
+    const link = e.target.closest(".coach-deep-link");
+    if (!link) return;
+    e.preventDefault();
+    const route = link.dataset.route;
+    if (route) navigateToLesson(route);
+  });
 }
 
 function pushCoachMessage(thread, msg) {

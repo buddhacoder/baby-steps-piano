@@ -74,6 +74,7 @@ async function handleCoach(req, res) {
       answer: coachTurn.assistantText,
       assistantText: coachTurn.assistantText,
       artifact: coachTurn.artifact || null,
+      artifacts: coachTurn.artifacts || [],
       threadId: coachTurn.threadId || '',
       mode: coachTurn.mode,
       warning: coachTurn.warning
@@ -119,6 +120,7 @@ async function handleCoachStream(req, res) {
       answer: coachTurn.assistantText,
       assistantText: coachTurn.assistantText,
       artifact: coachTurn.artifact || null,
+      artifacts: coachTurn.artifacts || [],
       mode: coachTurn.mode,
       warning: coachTurn.warning,
       threadId: coachTurn.threadId || ''
@@ -241,6 +243,7 @@ async function generateCoachTurn(parsed = {}) {
     threadId,
     assistantText: structured.assistantText,
     artifact: structured.artifact || null,
+    artifacts: structured.artifacts || [],
     mode,
     warning: warnings.length ? warnings.join(' | ') : undefined
   };
@@ -301,31 +304,71 @@ function sanitizeCoachMessages(input) {
 
 function buildCoachSystemPrompt() {
   return [
-    'You are an expert adult piano teacher and practice coach.',
+    'You are an expert adult piano teacher and practice coach for the Baby Steps Piano app.',
     'You teach with clear pedagogy, musical context, and concrete drills.',
     'Use direct language and practical examples.',
     'Always include harmony explanation, why it works, and a 12-minute micro-session.',
-    'For any suggested practice concept, include an artifact JSON object when possible.',
-    'Artifact schema: {"title":string,"type":"cadence_drill|progression_drill|scale_drill|arpeggio_drill","key":string,"bpm":number,"playbackPolicy":{"mode":"fixed_sequence|circular_row_sweep","circularResolve":boolean,"finalConfetti":boolean},"sequence":[{"chord":string,"root":string,"quality":string,"beats":number}],"quiz":{"prompt":string,"conceptId":string}}.',
-    'If you include artifact JSON, return strict JSON with keys assistantText and artifact.'
-  ].join(' ');
+    '',
+    '## RESPONSE FORMAT',
+    'Return strict JSON with these top-level keys:',
+    '{ "assistantText": string, "artifact": object|null, "artifacts": object[] }',
+    '',
+    '## ARTIFACT SCHEMAS',
+    'Include relevant artifacts to make your response interactive. Each artifact needs a "type" field.',
+    '',
+    'CHORD_SEQUENCE: { type:"chord_sequence", title:string, key:string, bpm:number, playbackPolicy:{mode:"fixed_sequence"|"circular_row_sweep"}, sequence:[{chord:string, root:string, quality:string, beats:number}], quiz:{prompt:string, conceptId:string} }',
+    'LESSON_CARD: { type:"lesson_card", lessonId:string, title:string, tier:number(1-4), description:string }',
+    'PLAYABLE_SCORE: { type:"playable_score", title:string, abc:string(ABC notation), key:string, bpm:number }',
+    'KANBAN_TASK: { type:"kanban_task", title:string, lane:"todo"|"doing"|"done", description:string, lessonId?:string }',
+    'THEORY_CONCEPT: { type:"theory_concept", title:string, facts:string[], relatedLessons:string[] }',
+    'QUIZ_CHALLENGE: { type:"quiz_challenge", question:string, options:string[], correctIndex:number, explanation:string }',
+    'PRACTICE_DRILL: { type:"practice_drill", title:string, instructions:string, durationSec:number, lessonId?:string }',
+    '',
+    '## DEEP LINKS',
+    'In your assistantText, link to lessons using [[Label|route]] wiki syntax.',
+    'Example: "Start with [[Major Scales|scales:major]] then try [[Circle of Fifths|foundations:circle-of-fifths]]."',
+    'Available lesson route IDs follow the pattern category:lesson-name (e.g. scales:major, chords:triads, rhythm:time-signatures).',
+    '',
+    '## RULES',
+    '- Always include at least one artifact when suggesting practice concepts',
+    '- Use deep links [[label|route]] when referencing lessons in text',
+    '- For chord drills, always include a chord_sequence artifact',
+    '- For theory explanations, include a theory_concept artifact',
+    '- For practice suggestions, include a practice_drill or kanban_task artifact'
+  ].join('\n');
 }
 
 function extractStructuredCoachResponse(rawAnswer, { question, context }) {
   const parsed = tryParseJsonFromText(rawAnswer);
   if (parsed && typeof parsed === 'object') {
     const assistantText = String(parsed.assistantText || parsed.answer || '').trim();
-    const normalizedArtifact = normalizeCoachArtifact(parsed.artifact, { question, context });
+
+    // Support both singular artifact and artifacts array
+    let artifacts = [];
+    if (Array.isArray(parsed.artifacts) && parsed.artifacts.length) {
+      artifacts = parsed.artifacts
+        .map(a => normalizeCoachArtifact(a, { question, context }))
+        .filter(Boolean);
+    }
+    const singleArtifact = normalizeCoachArtifact(parsed.artifact, { question, context });
+    if (singleArtifact && !artifacts.length) {
+      artifacts = [singleArtifact];
+    }
+
     if (assistantText) {
+      const fallback = buildFallbackCoachArtifact(question, context);
       return {
         assistantText,
-        artifact: normalizedArtifact || buildFallbackCoachArtifact(question, context)
+        artifact: artifacts[0] || fallback,
+        artifacts: artifacts.length ? artifacts : (fallback ? [fallback] : [])
       };
     }
   }
+  const fallback = buildFallbackCoachArtifact(question, context);
   return {
     assistantText: String(rawAnswer || '').trim(),
-    artifact: buildFallbackCoachArtifact(question, context)
+    artifact: fallback,
+    artifacts: fallback ? [fallback] : []
   };
 }
 

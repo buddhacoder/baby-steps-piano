@@ -1474,6 +1474,28 @@ textarea:focus-visible {
   color: rgba(237, 243, 255, 0.65);
 }
 
+/* ── Deep-Link Anchors ── */
+.coach-deep-link {
+  color: #60a5fa;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(96, 165, 250, 0.4);
+  cursor: pointer;
+  transition: all 140ms ease;
+  font-weight: 600;
+}
+
+.coach-deep-link:hover {
+  color: #93c5fd;
+  border-bottom-color: rgba(96, 165, 250, 0.8);
+  text-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+}
+
+.coach-deep-link::after {
+  content: " \u2192";
+  font-size: 0.7em;
+  opacity: 0.5;
+}
+
 /* Artifact cards inside messages */
 .coach-artifact-card {
   margin-top: 0.45rem;
