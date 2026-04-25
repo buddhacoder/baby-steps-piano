@@ -4,7 +4,7 @@
    ──────────────────────────────────────────────── */
 
 /** @type {import('@supabase/supabase-js').SupabaseClient | null} */
-let supabase = null;
+let babyStepsSupabase = null;
 
 /** Current auth state */
 const authState = {
@@ -37,9 +37,9 @@ async function initSupabase() {
             return;
         }
 
-        supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+        babyStepsSupabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
 
-        supabase.auth.onAuthStateChange((_event, session) => {
+        babyStepsSupabase.auth.onAuthStateChange((_event, session) => {
             authState.session = session;
             authState.user = session?.user ?? null;
             authState.ready = true;
@@ -47,7 +47,7 @@ async function initSupabase() {
         });
 
         // Initial session restore
-        const { data } = await supabase.auth.getSession();
+        const { data } = await babyStepsSupabase.auth.getSession();
         authState.session = data.session;
         authState.user = data.session?.user ?? null;
         authState.ready = true;
@@ -62,8 +62,8 @@ async function initSupabase() {
 /* ── Auth Actions ───────────────────────────────── */
 
 async function signInWithGoogle() {
-    if (!supabase) return;
-    const { error } = await supabase.auth.signInWithOAuth({
+    if (!babyStepsSupabase) return;
+    const { error } = await babyStepsSupabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: window.location.origin }
     });
@@ -71,8 +71,8 @@ async function signInWithGoogle() {
 }
 
 async function signOut() {
-    if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
+    if (!babyStepsSupabase) return;
+    const { error } = await babyStepsSupabase.auth.signOut();
     if (error) console.error("[supabase] Sign-out error:", error.message);
 }
 
@@ -87,9 +87,9 @@ function isSignedIn() {
 /* ── Cloud Persistence ──────────────────────────── */
 
 async function loadProgressFromCloud() {
-    if (!supabase || !authState.user) return null;
+    if (!babyStepsSupabase || !authState.user) return null;
     try {
-        const { data, error } = await supabase
+        const { data, error } = await babyStepsSupabase
             .from("user_progress")
             .select("progress, coach_threads, lesson_stack")
             .eq("user_id", authState.user.id)
@@ -107,9 +107,9 @@ async function loadProgressFromCloud() {
 }
 
 async function saveProgressToCloud(progress, coachThreads, lessonStack) {
-    if (!supabase || !authState.user) return;
+    if (!babyStepsSupabase || !authState.user) return;
     try {
-        const { error } = await supabase
+        const { error } = await babyStepsSupabase
             .from("user_progress")
             .upsert({
                 user_id: authState.user.id,
@@ -126,7 +126,7 @@ async function saveProgressToCloud(progress, coachThreads, lessonStack) {
 }
 
 async function migrateLocalToCloud(localProgress, localThreads, localStack) {
-    if (!supabase || !authState.user) return false;
+    if (!babyStepsSupabase || !authState.user) return false;
     try {
         // Check if cloud already has data
         const existing = await loadProgressFromCloud();
@@ -148,9 +148,9 @@ async function migrateLocalToCloud(localProgress, localThreads, localStack) {
 /* ── Profile ────────────────────────────────────── */
 
 async function ensureProfile() {
-    if (!supabase || !authState.user) return;
+    if (!babyStepsSupabase || !authState.user) return;
     try {
-        const { data, error } = await supabase
+        const { data, error } = await babyStepsSupabase
             .from("profiles")
             .select("id")
             .eq("id", authState.user.id)
@@ -159,7 +159,7 @@ async function ensureProfile() {
         if (error && error.code === "PGRST116") {
             // No profile yet – create one
             const meta = authState.user.user_metadata || {};
-            await supabase.from("profiles").insert({
+            await babyStepsSupabase.from("profiles").insert({
                 id: authState.user.id,
                 display_name: meta.full_name || meta.name || "Pianist",
                 avatar_url: meta.avatar_url || meta.picture || null
@@ -173,9 +173,9 @@ async function ensureProfile() {
 /* ── Badges ─────────────────────────────────────── */
 
 async function loadBadgesFromCloud() {
-    if (!supabase || !authState.user) return [];
+    if (!babyStepsSupabase || !authState.user) return [];
     try {
-        const { data, error } = await supabase
+        const { data, error } = await babyStepsSupabase
             .from("badges")
             .select("badge_id, earned_at")
             .eq("user_id", authState.user.id);
@@ -192,9 +192,9 @@ async function loadBadgesFromCloud() {
 }
 
 async function awardBadgeCloud(badgeId) {
-    if (!supabase || !authState.user) return;
+    if (!babyStepsSupabase || !authState.user) return;
     try {
-        const { error } = await supabase
+        const { error } = await babyStepsSupabase
             .from("badges")
             .upsert({
                 user_id: authState.user.id,

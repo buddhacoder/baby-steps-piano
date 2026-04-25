@@ -26,11 +26,11 @@
         </div>
       </div>
       <div class="studio-nav-actions">
-        <button id="openKeyCenterBtn" class="key-center-nav-btn" type="button" aria-label="Open Key Center panel">
+        <button id="openKeyCenterBtn" class="key-center-nav-btn" type="button" aria-label="Open Practice Setup panel">
           <span class="key-center-rail-icon">
             <img src="./assets/baby-steps-icon.png?v=20260212b" alt="" aria-hidden="true" />
           </span>
-          <span class="key-center-nav-label">Key Center</span>
+          <span class="key-center-nav-label">Practice Setup</span>
           <span class="key-center-rail-glyph" aria-hidden="true">
             <span></span>
             <span></span>
@@ -73,10 +73,10 @@
     <section class="console" data-mode="compose practice theory">
       <header class="console-head">
         <div>
-          <p class="eyebrow">Baby Steps Piano Companion</p>
-          <h2>Practice real musical ideas with instant visual and audio feedback.</h2>
-          <p class="console-description">Explore chords, cadences, progressions, scales, voicings, and theory in any key
-            while the keyboard shows exactly what to play.</p>
+          <p class="eyebrow">Piano practice, made visible</p>
+          <h2>Pick a key, hear the idea, and see where your hands go.</h2>
+          <p class="console-description">Use the keyboard, chord table, circle of fifths, and coach to turn theory into
+            small playable steps.</p>
         </div>
       </header>
 
@@ -86,16 +86,15 @@
           <div id="highlightGlowLeft" class="highlight-window-glow glow-left"></div>
           <div id="highlightGlowRight" class="highlight-window-glow glow-right"></div>
         </div>
-        <input id="highlightStartLeft" class="visually-hidden-input" type="range" min="36" max="59" step="1" value="48"
+        <input id="highlightStartLeft" class="visually-hidden-input" type="range" min="48" max="72" step="1" value="48"
           aria-label="Left Hand Highlight" />
-        <input id="highlightStartRight" class="visually-hidden-input" type="range" min="48" max="71" step="1" value="60"
+        <input id="highlightStartRight" class="visually-hidden-input" type="range" min="48" max="72" step="1" value="60"
           aria-label="Right Hand Highlight" />
         <div class="window-labels">
           <span id="highlightLabelLeft" class="window-label label-left">LH: C3–C4</span>
           <span id="highlightLabelRight" class="window-label label-right">RH: C4–C5</span>
         </div>
-        <p id="windowKeyboardHint" class="window-keyboard-hint">LH A:C3 W:C#3 S:D3 E:D#3 D:E3 F:F3 R:F#3 | RH J:C4 U:C#4
-          K:D4 I:D#4 L:E4 ;:F4 O:F#4</p>
+        <p id="windowKeyboardHint" class="window-keyboard-hint">Drag the gold or blue bar to set each hand's octave.</p>
       </div>
 
       <div class="table-header">
@@ -141,7 +140,13 @@
 
       <!-- Circle of Fifths view -->
       <div id="circleOfFifthsContainer" class="cof-container is-hidden">
-        <svg id="cofSvg" class="cof-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="cof-stage">
+          <svg id="cofSvg" class="cof-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div class="cof-play-toggle" role="group" aria-label="Circle playback mode">
+            <button class="active" type="button" data-cof-play-mode="note">Note</button>
+            <button type="button" data-cof-play-mode="chord">Chord</button>
+          </div>
+        </div>
         <div id="cofInfo" class="cof-info"></div>
       </div>
 
@@ -170,12 +175,11 @@
           </div>
         </div>
         <div class="metronome-controls">
-          <button id="metronomeDecBtn" class="metronome-adj" type="button" aria-label="Decrease BPM">−</button>
-          <button id="metronomeBpmBtn" class="metronome-bpm-btn" type="button" aria-label="BPM">
-            <span id="metronomeBpmDisplay" class="metronome-bpm-value">100</span>
+          <label id="metronomeBpmBtn" class="metronome-bpm-btn">
+            <input id="metronomeBpmDisplay" class="metronome-bpm-value" type="number" min="30" max="240" step="1"
+              value="100" inputmode="numeric" aria-label="Metronome BPM" />
             <span class="metronome-bpm-label">BPM</span>
-          </button>
-          <button id="metronomeIncBtn" class="metronome-adj" type="button" aria-label="Increase BPM">+</button>
+          </label>
           <button id="metronomeToggleBtn" class="metronome-toggle" type="button" aria-label="Toggle metronome">
             <span class="metronome-toggle-icon">▶</span>
           </button>
@@ -185,18 +189,18 @@
     <div id="keyCenterDrawerBackdrop" class="drawer-backdrop" hidden></div>
     <aside id="keyCenterDrawer" class="key-center-drawer" aria-hidden="true">
       <div class="key-center-drawer-head">
-        <h3>Key Center</h3>
+        <h3>Practice Setup</h3>
         <button id="closeKeyCenterBtn" class="btn-ghost" type="button">Close</button>
       </div>
-      <p class="key-center-drawer-copy">Set the tonal center. This drives the chord table, progression, cadence, and
-        concept views.</p>
+      <p class="key-center-drawer-copy">Choose the key, tempo, and practice mode before you play.</p>
       <div class="drawer-sections">
         <section class="drawer-section drawer-global-controls">
           <h4>Session Controls</h4>
           <div class="tempo-hud" aria-label="Global tempo controls">
             <span class="tempo-hud-label">BPM</span>
             <button id="tempoMinusBtn" type="button" class="tempo-hud-btn" aria-label="Decrease BPM">-</button>
-            <span id="tempoValue" class="tempo-hud-value">80</span>
+            <input id="tempoValue" class="tempo-hud-value" type="number" min="30" max="240" step="1" value="80"
+              inputmode="numeric" aria-label="Session BPM" />
             <button id="tempoPlusBtn" type="button" class="tempo-hud-btn" aria-label="Increase BPM">+</button>
             <label class="subdivision-label" for="subdivisionSelect">Subdivision</label>
             <select id="subdivisionSelect" class="subdivision-select">
@@ -733,12 +737,12 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="./supabase.js?v=20260215a"></script>
+  <script src="./supabase.js?v=20260318a"></script>
   <script src="./theory.js?v=20260210a"></script>
   <script src="./data/repertoire.seed.js?v=20260214a"></script>
   <script src="./node_modules/tone/build/Tone.js"></script>
   <script src="./node_modules/@rnbo/js/dist/rnbo.webaudio.js"></script>
-  <script src="./app.js?v=20260215a"></script>
+  <script src="./app.js?v=20260318h"></script>
 </body>
 
 </html>

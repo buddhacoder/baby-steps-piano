@@ -12,8 +12,10 @@ const STANDARD_WHITE_KEY_MM = 23.5;
 const STANDARD_BLACK_KEY_MM = 13.7;
 const STANDARD_BLACK_TO_WHITE_WIDTH_RATIO = STANDARD_BLACK_KEY_MM / STANDARD_WHITE_KEY_MM;
 const KEYBOARD_FIRST_MIDI = 48;
-const KEYBOARD_LAST_MIDI = 83;
+const KEYBOARD_LAST_MIDI = 84;
 const HIGHLIGHT_WINDOW_SPAN_SEMITONES = 12;
+const HIGHLIGHT_START_MIN_MIDI = KEYBOARD_FIRST_MIDI;
+const HIGHLIGHT_START_MAX_MIDI = KEYBOARD_LAST_MIDI - HIGHLIGHT_WINDOW_SPAN_SEMITONES;
 const LEFT_HAND_BINDINGS = [
   { code: "KeyA", type: "white", index: 0, label: "A" },
   { code: "KeyW", type: "black", index: 0, label: "W" },
@@ -832,6 +834,7 @@ const appState = {
   inversion: "root position",
   paletteTab: "chords",
   chordMode: "palette",
+  cofPlayMode: "note",
   cadenceMode: 1,
   bpm: 100,
   metronomeRunning: false,
@@ -925,6 +928,8 @@ let clearStripStepTimer;
 let clearModeEnterTimer;
 let resetInFlight = false;
 let highlightDragHand = null; /* "left" | "right" | null */
+let highlightDragOffsetSemitones = HIGHLIGHT_WINDOW_SPAN_SEMITONES / 2;
+let notePressIndicatorEl = null;
 let lastRestrictedChordWindowMidi = null;
 let lastChordPaletteSelectionAtMs = null;
 let audioUnlockBound = false;
@@ -1293,6 +1298,16 @@ function setTempoBpm(nextTempo) {
   }
 }
 
+function commitTempoInput() {
+  if (!el.tempoValue) return;
+  const typedValue = el.tempoValue.value;
+  if (typedValue === "") {
+    renderTempoControls();
+    return;
+  }
+  setTempoBpm(typedValue);
+}
+
 function setSubdivision(nextSubdivision) {
   appState.subdivision = normalizeSubdivision(nextSubdivision);
   renderTempoControls();
@@ -1300,7 +1315,7 @@ function setSubdivision(nextSubdivision) {
 
 function renderTempoControls() {
   if (el.tempoValue) {
-    el.tempoValue.textContent = String(appState.tempoBpm);
+    el.tempoValue.value = String(appState.tempoBpm);
   }
   if (el.subdivisionSelect) {
     el.subdivisionSelect.value = String(appState.subdivision);
@@ -1429,8 +1444,64 @@ function renderActivePaletteTable() {
 
 /* ── Chord Mode (Dropdown) Switching ── */
 
-const COF_KEYS_MAJOR = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
-const COF_KEYS_MINOR = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm"];
+const COF_KEYS_MAJOR = [
+  { key: "C", label: "C" },
+  { key: "G", label: "G" },
+  { key: "D", label: "D" },
+  { key: "A", label: "A" },
+  { key: "E", label: "E" },
+  { key: "B", label: "B" },
+  { key: "F#", label: "F#/Gb" },
+  { key: "C#", label: "Db/C#" },
+  { key: "G#", label: "Ab/G#" },
+  { key: "D#", label: "Eb/D#" },
+  { key: "A#", label: "Bb/A#" },
+  { key: "F", label: "F" }
+];
+const COF_KEYS_MINOR = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "D#m/Ebm", "A#m/Bbm", "Fm", "Cm", "Gm", "Dm"];
+const FLAT_TO_SHARP_NOTE = {
+  Cb: "B",
+  Db: "C#",
+  Eb: "D#",
+  Fb: "E",
+  Gb: "F#",
+  Ab: "G#",
+  Bb: "A#"
+};
+
+function normalizePitchClass(note) {
+  return FLAT_TO_SHARP_NOTE[String(note || "").trim()] || String(note || "").trim();
+}
+
+function cofMajorEntryForKey(key) {
+  const normalized = normalizePitchClass(key);
+  return COF_KEYS_MAJOR.find((entry) => entry.key === normalized) || COF_KEYS_MAJOR[0];
+}
+
+function midiForPitchClass(note, octave = 4) {
+  const normalized = normalizePitchClass(note);
+  const idx = NOTES.indexOf(normalized);
+  if (idx < 0) return 60;
+  return 12 * (octave + 1) + idx;
+}
+
+function playCircleOfFifthsSelection(root, quality = "major") {
+  const normalizedRoot = normalizePitchClass(root);
+  const hold = getHoldSeconds();
+  if (appState.cofPlayMode === "chord") {
+    playMidiNotes(buildChordMidi(normalizedRoot, quality, "root position", 3), {
+      hold,
+      asChord: true,
+      restrictToWindow: false
+    });
+  } else {
+    playMidiNotes([midiForPitchClass(normalizedRoot, 4)], {
+      hold: Math.min(0.8, hold),
+      asChord: true,
+      restrictToWindow: false
+    });
+  }
+}
 
 function setChordMode(mode) {
   if (!["palette", "circle", "cadences"].includes(mode)) return;
@@ -1465,7 +1536,7 @@ function updateChordModeTitle() {
     return;
   }
   if (appState.chordMode === "circle") {
-    el.chordTableTitle.textContent = `— Key of ${key}`;
+    el.chordTableTitle.textContent = `— Key of ${cofMajorEntryForKey(key).label}`;
   } else if (appState.chordMode === "cadences") {
     el.chordTableTitle.textContent = `in ${key}`;
   }
@@ -1475,7 +1546,7 @@ function updateChordModeTitle() {
 
 function renderCircleOfFifths() {
   if (!el.cofSvg) return;
-  const activeKey = el.keySelect ? el.keySelect.value : "C";
+  const activeKey = normalizePitchClass(el.keySelect ? el.keySelect.value : "C");
   const cx = 200, cy = 200;
   const outerR = 170, innerR = 115, coreR = 60;
   const wedgeAngle = (2 * Math.PI) / 12;
@@ -1485,7 +1556,7 @@ function renderCircleOfFifths() {
 
   // Outer ring — major keys
   for (let i = 0; i < 12; i++) {
-    const key = COF_KEYS_MAJOR[i];
+    const { key, label } = COF_KEYS_MAJOR[i];
     const a1 = startOffset + i * wedgeAngle;
     const a2 = a1 + wedgeAngle;
     const isActive = key === activeKey;
@@ -1501,20 +1572,21 @@ function renderCircleOfFifths() {
 
     const path = `M${x1i},${y1i} L${x1o},${y1o} A${outerR},${outerR} 0 0,1 ${x2o},${y2o} L${x2i},${y2i} A${innerR},${innerR} 0 0,0 ${x1i},${y1i} Z`;
     const cls = `cof-wedge cof-major${isActive ? ' active' : ''}`;
-    svgContent += `<path class="${cls}" d="${path}" data-cof-key="${key}" />`;
+    svgContent += `<path class="${cls}" d="${path}" data-cof-key="${key}" data-cof-quality="major" />`;
 
     // Label
     const midA = a1 + wedgeAngle / 2;
     const labelR = (outerR + innerR) / 2;
     const lx = cx + labelR * Math.cos(midA);
     const ly = cy + labelR * Math.sin(midA);
-    svgContent += `<text class="cof-label cof-label-major${isActive ? ' active' : ''}" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" data-cof-key="${key}">${key}</text>`;
+    svgContent += `<text class="cof-label cof-label-major${isActive ? ' active' : ''}" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" data-cof-key="${key}" data-cof-quality="major">${label}</text>`;
   }
 
   // Inner ring — minor keys
   for (let i = 0; i < 12; i++) {
     const key = COF_KEYS_MINOR[i];
-    const majorKey = COF_KEYS_MAJOR[i];
+    const majorKey = COF_KEYS_MAJOR[i].key;
+    const minorRoot = normalizePitchClass(key.split('/')[0].replace(/m$/, ""));
     const relatedActive = majorKey === activeKey;
     const a1 = startOffset + i * wedgeAngle;
     const a2 = a1 + wedgeAngle;
@@ -1530,13 +1602,13 @@ function renderCircleOfFifths() {
 
     const path = `M${x1i},${y1i} L${x1o},${y1o} A${innerR},${innerR} 0 0,1 ${x2o},${y2o} L${x2i},${y2i} A${coreR},${coreR} 0 0,0 ${x1i},${y1i} Z`;
     const cls = `cof-wedge cof-minor${relatedActive ? ' related' : ''}`;
-    svgContent += `<path class="${cls}" d="${path}" data-cof-key="${majorKey}" />`;
+    svgContent += `<path class="${cls}" d="${path}" data-cof-key="${majorKey}" data-cof-root="${minorRoot}" data-cof-quality="minor" />`;
 
     const midA = a1 + wedgeAngle / 2;
     const labelR = (innerR + coreR) / 2;
     const lx = cx + labelR * Math.cos(midA);
     const ly = cy + labelR * Math.sin(midA);
-    svgContent += `<text class="cof-label cof-label-minor${relatedActive ? ' related' : ''}" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" data-cof-key="${majorKey}">${key}</text>`;
+    svgContent += `<text class="cof-label cof-label-minor${relatedActive ? ' related' : ''}" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" data-cof-key="${majorKey}" data-cof-root="${minorRoot}" data-cof-quality="minor">${key}</text>`;
   }
 
   // Center label
@@ -1549,7 +1621,10 @@ function renderCircleOfFifths() {
   el.cofSvg.onclick = (e) => {
     const target = e.target.closest('[data-cof-key]');
     if (!target) return;
-    const newKey = target.dataset.cofKey;
+    const newKey = normalizePitchClass(target.dataset.cofKey);
+    const playRoot = normalizePitchClass(target.dataset.cofRoot || newKey);
+    const quality = target.dataset.cofQuality === "minor" ? "minor" : "major";
+    playCircleOfFifthsSelection(playRoot, quality);
     if (el.keySelect) {
       el.keySelect.value = newKey;
       el.keySelect.dispatchEvent(new Event('change'));
@@ -1559,14 +1634,26 @@ function renderCircleOfFifths() {
     renderCofInfo(newKey);
   };
 
+  document.querySelectorAll('[data-cof-play-mode]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.cofPlayMode === appState.cofPlayMode);
+    button.onclick = () => {
+      appState.cofPlayMode = button.dataset.cofPlayMode === 'chord' ? 'chord' : 'note';
+      document.querySelectorAll('[data-cof-play-mode]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.cofPlayMode === appState.cofPlayMode);
+      });
+    };
+  });
+
   renderCofInfo(activeKey);
 }
 
 function renderCofInfo(key) {
   if (!el.cofInfo) return;
+  const normalizedKey = normalizePitchClass(key);
   const scaleSteps = [0, 2, 4, 5, 7, 9, 11];
-  const keyIdx = NOTES.indexOf(key);
+  const keyIdx = NOTES.indexOf(normalizedKey);
   if (keyIdx < 0) return;
+  const keyLabel = cofMajorEntryForKey(normalizedKey).label;
 
   const romanNumerals = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
   const chordQualities = ['major', 'minor', 'minor', 'major', 'major', 'minor', 'diminished'];
@@ -1583,7 +1670,7 @@ function renderCofInfo(key) {
   el.cofInfo.innerHTML = `
     <div class="cof-info-grid">
       <div class="cof-info-block">
-        <h4>Diatonic Chords in ${key} Major</h4>
+        <h4>Diatonic Chords in ${keyLabel} Major</h4>
         <div class="cof-chord-chips">
           ${diatonicChords.map(c => `<button class="cof-chord-chip" data-cof-play-chord="${c.note}" data-cof-play-quality="${c.quality}" type="button"><span class="cof-numeral">${c.numeral}</span><span class="cof-note">${c.note}</span></button>`).join('')}
         </div>
@@ -1591,8 +1678,8 @@ function renderCofInfo(key) {
       <div class="cof-info-block">
         <h4>Key Relationships</h4>
         <ul class="cof-relationships">
-          <li><strong>Dominant (V):</strong> ${NOTES[fifthIdx]}</li>
-          <li><strong>Subdominant (IV):</strong> ${NOTES[fourthIdx]}</li>
+          <li><strong>Dominant (V):</strong> ${cofMajorEntryForKey(NOTES[fifthIdx]).label}</li>
+          <li><strong>Subdominant (IV):</strong> ${cofMajorEntryForKey(NOTES[fourthIdx]).label}</li>
           <li><strong>Relative Minor:</strong> ${NOTES[relMinIdx]}m</li>
         </ul>
       </div>
@@ -1604,7 +1691,7 @@ function renderCofInfo(key) {
     chip.addEventListener('click', () => {
       const root = chip.dataset.cofPlayChord;
       const quality = chip.dataset.cofPlayQuality;
-      const midiNotes = getMidiChord(root, quality, 'root position');
+      const midiNotes = buildChordMidi(normalizePitchClass(root), quality, 'root position');
       playMidiNotes(midiNotes, { hold: getHoldSeconds(), asChord: true, restrictToWindow: false });
     });
   });
@@ -1873,6 +1960,22 @@ function bindEvents() {
     });
   }
 
+  if (el.tempoValue) {
+    el.tempoValue.addEventListener("change", commitTempoInput);
+    el.tempoValue.addEventListener("blur", commitTempoInput);
+    el.tempoValue.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        commitTempoInput();
+        el.tempoValue.blur();
+      }
+      if (event.key === "Escape") {
+        renderTempoControls();
+        el.tempoValue.blur();
+      }
+    });
+  }
+
   if (el.subdivisionSelect) {
     el.subdivisionSelect.addEventListener("change", () => {
       setSubdivision(Number(el.subdivisionSelect.value));
@@ -2008,6 +2111,7 @@ function bindEvents() {
 
   if (el.highlightStartLeft) {
     el.highlightStartLeft.addEventListener("input", () => {
+      syncHighlightWindowControls();
       clearKeyboardHighlights();
       updateHighlightLabels();
       updateHighlightGlows();
@@ -2015,6 +2119,7 @@ function bindEvents() {
   }
   if (el.highlightStartRight) {
     el.highlightStartRight.addEventListener("input", () => {
+      syncHighlightWindowControls();
       clearKeyboardHighlights();
       updateHighlightLabels();
       updateHighlightGlows();
@@ -2024,7 +2129,14 @@ function bindEvents() {
   if (el.highlightWindowTrack) {
     const beginDrag = (hand) => (event) => {
       event.preventDefault();
+      event.stopPropagation();
       highlightDragHand = hand;
+      const glowEl = hand === "left" ? el.highlightGlowLeft : el.highlightGlowRight;
+      const glowRect = glowEl?.getBoundingClientRect();
+      if (glowRect && glowRect.width > 0 && glowEl.contains(event.target)) {
+        const grabRatio = Math.min(1, Math.max(0, (event.clientX - glowRect.left) / glowRect.width));
+        highlightDragOffsetSemitones = grabRatio * HIGHLIGHT_WINDOW_SPAN_SEMITONES;
+      }
       setHighlightFromClientX(hand, event.clientX);
       window.addEventListener("pointermove", onHighlightPointerMove);
       window.addEventListener("pointerup", endHighlightDrag);
@@ -2032,6 +2144,7 @@ function bindEvents() {
     };
     /* track click: pick closest hand */
     el.highlightWindowTrack.addEventListener("pointerdown", (event) => {
+      syncHighlightWindowControls();
       const rect = el.highlightWindowTrack.getBoundingClientRect();
       if (rect.width <= 0) return;
       const ratio = (event.clientX - rect.left) / rect.width;
@@ -2040,6 +2153,7 @@ function bindEvents() {
       const leftNorm = (leftVal - KEYBOARD_FIRST_MIDI) / (KEYBOARD_LAST_MIDI - KEYBOARD_FIRST_MIDI);
       const rightNorm = (rightVal - KEYBOARD_FIRST_MIDI) / (KEYBOARD_LAST_MIDI - KEYBOARD_FIRST_MIDI);
       const hand = Math.abs(ratio - leftNorm) < Math.abs(ratio - rightNorm) ? "left" : "right";
+      highlightDragOffsetSemitones = HIGHLIGHT_WINDOW_SPAN_SEMITONES / 2;
       beginDrag(hand)(event);
     });
     if (el.highlightGlowLeft) el.highlightGlowLeft.addEventListener("pointerdown", beginDrag("left"));
@@ -2248,11 +2362,21 @@ function bindEvents() {
       if (!cell) return;
       const token = ++paletteSequenceToken;
       void playHarmonicPaletteCell(cell, { sequenceToken: token, updateOutput: true }).then((payload) => {
-        if (!payload || token !== paletteSequenceToken) return;
-        if (el.chordDisplay) {
-          el.chordDisplay.textContent = payload.eventPayload.label;
+        if (!payload) {
+          console.warn("[HarmonicPalette] playHarmonicPaletteCell returned null — audio engine may not be ready or cell has no event payload.");
+          return;
         }
-        trackRep("chords", payload.eventPayload.label);
+        if (token !== paletteSequenceToken) return;
+        const label = payload.eventPayload?.label;
+        if (el.chordDisplay && label) {
+          el.chordDisplay.textContent = label;
+        }
+        if (label) trackRep("chords", label);
+      }).catch((err) => {
+        console.error("[HarmonicPalette] Playback error:", err);
+        if (el.chordDisplay) {
+          el.chordDisplay.textContent = "Playback error — check console for details.";
+        }
       });
       return;
     }
@@ -2388,6 +2512,16 @@ function bindEvents() {
       if (event.key !== "Enter" || event.shiftKey) return;
       event.preventDefault();
       void askCoach();
+    });
+  }
+  // Deep-link click delegation — registered once here, not inside renderCoachMessages.
+  if (el.coachMessages) {
+    el.coachMessages.addEventListener("click", (e) => {
+      const link = e.target.closest(".coach-deep-link");
+      if (!link) return;
+      e.preventDefault();
+      const route = link.dataset.route;
+      if (route) navigateToLesson(route);
     });
   }
   renderCoachKanban();
@@ -2617,6 +2751,7 @@ function bindEvents() {
 function renderKeyboard() {
   if (!el.keyboard) return;
   el.keyboard.innerHTML = "";
+  notePressIndicatorEl = null;
   keyEls = [];
   keyElsByMidi = new Map();
   const firstMidi = KEYBOARD_FIRST_MIDI;
@@ -2674,6 +2809,10 @@ function renderKeyboard() {
 
   el.keyboard.appendChild(whiteBed);
   el.keyboard.appendChild(blackBed);
+  notePressIndicatorEl = document.createElement("div");
+  notePressIndicatorEl.className = "note-press-indicator";
+  notePressIndicatorEl.setAttribute("aria-hidden", "true");
+  el.keyboard.appendChild(notePressIndicatorEl);
   reapplyTypingHeldHighlights();
 }
 
@@ -2735,6 +2874,52 @@ function playManualKeyImmediate(midi, velocity = 0.9) {
   }
 }
 
+function getNotePressColor(midi) {
+  const colors = [
+    "#ffb84d",
+    "#ff7a59",
+    "#f45dbb",
+    "#b76cff",
+    "#6f8dff",
+    "#35b7ff",
+    "#29c6b7",
+    "#5fca67",
+    "#b6cf3d",
+    "#ffd54a",
+    "#ff9d55",
+    "#ff6f91"
+  ];
+  return colors[((midi % 12) + 12) % 12];
+}
+
+function showPressedNoteIndicator(midi, keyEl = keyElsByMidi.get(midi)) {
+  if (!el.keyboard || !keyEl) return;
+  if (!notePressIndicatorEl || !el.keyboard.contains(notePressIndicatorEl)) {
+    notePressIndicatorEl = document.createElement("div");
+    notePressIndicatorEl.className = "note-press-indicator";
+    notePressIndicatorEl.setAttribute("aria-hidden", "true");
+    el.keyboard.appendChild(notePressIndicatorEl);
+  }
+
+  const keyboardRect = el.keyboard.getBoundingClientRect();
+  const keyRect = keyEl.getBoundingClientRect();
+  if (keyboardRect.width <= 0 || keyRect.width <= 0) return;
+
+  const color = getNotePressColor(midi);
+  const isBlackKey = keyEl.classList.contains("black-key");
+  const x = keyRect.left - keyboardRect.left + keyRect.width / 2;
+  const y = keyRect.top - keyboardRect.top + keyRect.height * (isBlackKey ? 0.82 : 0.66);
+
+  keyEl.style.setProperty("--note-press-color", color);
+  notePressIndicatorEl.textContent = midiToNoteName(midi);
+  notePressIndicatorEl.style.left = `${x}px`;
+  notePressIndicatorEl.style.top = `${y}px`;
+  notePressIndicatorEl.style.setProperty("--note-press-color", color);
+  notePressIndicatorEl.classList.remove("is-visible");
+  void notePressIndicatorEl.offsetWidth;
+  notePressIndicatorEl.classList.add("is-visible");
+}
+
 function startManualKeyGesture(event, initialKeyEl, initialMidi) {
   event.preventDefault();
   clearKeyboardHighlights();
@@ -2748,6 +2933,7 @@ function startManualKeyGesture(event, initialKeyEl, initialMidi) {
 
   const triggerActiveKey = (velocity = 0.9) => {
     playManualKeyImmediate(active.midi, velocity);
+    showPressedNoteIndicator(active.midi, active.keyEl);
     onTheoryGuidedKeyPress();
     el.chordDisplay.textContent = `Key: ${midiToNoteName(active.midi)}`;
   };
@@ -2857,6 +3043,7 @@ function onWindowPianoKeyDown(event) {
   typingHeldMidiByCode.set(event.code, midi);
   const keyEl = keyElsByMidi.get(midi);
   if (keyEl) keyEl.classList.add("active");
+  showPressedNoteIndicator(midi, keyEl);
   playManualKeyImmediate(midi, 0.88);
   onTheoryGuidedKeyPress();
   if (el.chordDisplay) {
@@ -3894,8 +4081,12 @@ async function ensureHarmonicPlaybackReady() {
     || (sampleEngineReady && !htmlSampleEngineActive)
     || htmlSampleEngineActive;
 
-  if (!canSchedule && el.chordDisplay) {
-    el.chordDisplay.textContent = "Audio scheduler unavailable for harmonic playback.";
+  if (!canSchedule) {
+    const engineStatus = `toneReady=${toneEngineReady} rnboActive=${rnboEngineActive} sampleReady=${sampleEngineReady} htmlActive=${htmlSampleEngineActive}`;
+    console.warn(`[HarmonicPlayback] No audio engine available. ${engineStatus}`);
+    if (el.chordDisplay) {
+      el.chordDisplay.textContent = "Audio scheduler unavailable for harmonic playback.";
+    }
   }
   return canSchedule;
 }
@@ -6286,11 +6477,17 @@ function initializeTheoryCourse() {
 function getTheoryLessonsForTrack(trackId) {
   const track = window.THEORY_CURRICULUM?.[trackId];
   if (!track) return [];
-  const baseLessons = track.levels.map((level, idx) => ({
-    id: `${trackId}-${idx}`,
+  const sourceLessons = Array.isArray(track.lessons)
+    ? track.lessons
+    : Array.isArray(track.levels)
+      ? track.levels
+      : [];
+  const baseLessons = sourceLessons.map((level, idx) => ({
+    id: level.id || `${trackId}-${idx}`,
     trackId,
     title: level.title,
     description: level.desc,
+    prerequisites: Array.isArray(level.prerequisites) ? level.prerequisites : [],
     resources: Array.isArray(level.resources) ? level.resources : [],
     videoUrl: pickLessonVideoUrl(level.resources, trackId),
     narration: `${track.title}. ${level.title}. ${level.desc}`,
@@ -8467,20 +8664,36 @@ function mapMidiToWindow(midi, start, end) {
 
 function updateWindowKeyboardHint() {
   if (!el.windowKeyboardHint) return;
-  const leftStart = Number(el.highlightStartLeft?.value);
-  const rightStart = Number(el.highlightStartRight?.value);
-  const formatHand = (bindings, start) => {
-    if (!Number.isFinite(start)) return "";
-    return bindings
-      .map(b => `${b.label}:${midiToNoteName(start + bindingToSemitoneOffset(b))}`)
-      .join("  ");
-  };
-  const lh = formatHand(LEFT_HAND_BINDINGS, leftStart);
-  const rh = formatHand(RIGHT_HAND_BINDINGS, rightStart);
-  el.windowKeyboardHint.textContent = `LH  ${lh}  |  RH  ${rh}`;
+  el.windowKeyboardHint.textContent = "Drag the gold or blue bar to set each hand's octave.";
+}
+
+function clampHighlightStart(value) {
+  const numeric = Number(value);
+  const fallback = HIGHLIGHT_START_MIN_MIDI;
+  const safeValue = Number.isFinite(numeric) ? numeric : fallback;
+  return Math.max(HIGHLIGHT_START_MIN_MIDI, Math.min(HIGHLIGHT_START_MAX_MIDI, Math.round(safeValue)));
+}
+
+function syncHighlightWindowControls() {
+  if (!el.highlightStartLeft || !el.highlightStartRight) return;
+  let leftStart = clampHighlightStart(el.highlightStartLeft.value);
+  let rightStart = clampHighlightStart(el.highlightStartRight.value);
+
+  if (rightStart < leftStart + HIGHLIGHT_WINDOW_SPAN_SEMITONES) {
+    rightStart = Math.min(HIGHLIGHT_START_MAX_MIDI, leftStart + HIGHLIGHT_WINDOW_SPAN_SEMITONES);
+    leftStart = Math.min(leftStart, rightStart - HIGHLIGHT_WINDOW_SPAN_SEMITONES);
+  }
+
+  el.highlightStartLeft.min = String(HIGHLIGHT_START_MIN_MIDI);
+  el.highlightStartLeft.max = String(HIGHLIGHT_START_MAX_MIDI);
+  el.highlightStartRight.min = String(HIGHLIGHT_START_MIN_MIDI);
+  el.highlightStartRight.max = String(HIGHLIGHT_START_MAX_MIDI);
+  el.highlightStartLeft.value = String(clampHighlightStart(leftStart));
+  el.highlightStartRight.value = String(clampHighlightStart(rightStart));
 }
 
 function updateHighlightLabels() {
+  syncHighlightWindowControls();
   const leftStart = Number(el.highlightStartLeft?.value);
   const rightStart = Number(el.highlightStartRight?.value);
   if (el.highlightLabelLeft && Number.isFinite(leftStart)) {
@@ -8497,8 +8710,8 @@ function updateHighlightLabels() {
 
 function updateHighlightGlow(glowEl, startEl) {
   if (!startEl || !glowEl) return;
-  const min = Number(startEl.min || KEYBOARD_FIRST_MIDI);
-  const max = Number(startEl.max || (KEYBOARD_LAST_MIDI - HIGHLIGHT_WINDOW_SPAN_SEMITONES));
+  const min = HIGHLIGHT_START_MIN_MIDI;
+  const max = HIGHLIGHT_START_MAX_MIDI;
   const start = Number(startEl.value);
   const totalVisibleKeys = KEYBOARD_LAST_MIDI - KEYBOARD_FIRST_MIDI + 1;
   const windowKeys = HIGHLIGHT_WINDOW_SPAN_SEMITONES + 1;
@@ -8518,13 +8731,23 @@ function updateHighlightGlows() {
 function setHighlightFromClientX(hand, clientX) {
   const startEl = hand === "left" ? el.highlightStartLeft : el.highlightStartRight;
   if (!el.highlightWindowTrack || !startEl) return;
+  syncHighlightWindowControls();
   const rect = el.highlightWindowTrack.getBoundingClientRect();
   if (rect.width <= 0) return;
-  const min = Number(startEl.min || KEYBOARD_FIRST_MIDI);
-  const max = Number(startEl.max || (KEYBOARD_LAST_MIDI - HIGHLIGHT_WINDOW_SPAN_SEMITONES));
+  let min = HIGHLIGHT_START_MIN_MIDI;
+  let max = HIGHLIGHT_START_MAX_MIDI;
+  const leftStart = Number(el.highlightStartLeft?.value);
+  const rightStart = Number(el.highlightStartRight?.value);
+  if (hand === "right" && Number.isFinite(leftStart)) {
+    min = Math.max(min, leftStart + 12);
+  }
+  if (hand === "left" && Number.isFinite(rightStart)) {
+    max = Math.min(max, rightStart - 12);
+  }
+  const totalVisibleKeys = KEYBOARD_LAST_MIDI - KEYBOARD_FIRST_MIDI + 1;
   const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-  const midiRange = max - min;
-  const next = Math.round(min + ratio * midiRange);
+  const pointedMidi = KEYBOARD_FIRST_MIDI + ratio * totalVisibleKeys;
+  const next = Math.round(pointedMidi - highlightDragOffsetSemitones);
   startEl.value = String(Math.min(max, Math.max(min, next)));
   clearKeyboardHighlights();
   updateHighlightLabels();
@@ -8538,6 +8761,7 @@ function onHighlightPointerMove(event) {
 
 function endHighlightDrag() {
   highlightDragHand = null;
+  highlightDragOffsetSemitones = HIGHLIGHT_WINDOW_SPAN_SEMITONES / 2;
   window.removeEventListener("pointermove", onHighlightPointerMove);
   window.removeEventListener("pointerup", endHighlightDrag);
   window.removeEventListener("pointercancel", endHighlightDrag);
@@ -8931,9 +9155,8 @@ function navigateToLesson(lessonId) {
     switchMode("theory");
     if (typeof highlightLesson === "function") highlightLesson(lessonId);
   } else {
-    // Fallback: try switching to theory mode and scrolling to the lesson
-    if (typeof switchMode === "function") switchMode("theory");
-    console.log(`[DeepLink] Navigate to: ${lessonId}`);
+    // Lesson not found in curriculum — log but do NOT force a mode switch.
+    console.log(`[DeepLink] Route "${lessonId}" not found in curriculum — ignoring navigation.`);
   }
 }
 
@@ -8944,7 +9167,7 @@ function renderCoachMessages() {
   if (!thread.messages.length) {
     const placeholder = document.createElement("div");
     placeholder.className = "coach-message assistant";
-    placeholder.textContent = "Start a conversation. I will generate explanation and a playable lesson artifact.";
+    placeholder.textContent = "What makes V want to resolve to I? Which chord feels like home in this key? How would Dorian sound different from natural minor?";
     el.coachMessages.appendChild(placeholder);
     return;
   }
@@ -8974,15 +9197,6 @@ function renderCoachMessages() {
   });
 
   el.coachMessages.scrollTop = el.coachMessages.scrollHeight;
-
-  // Event delegation for deep-link clicks
-  el.coachMessages.addEventListener("click", (e) => {
-    const link = e.target.closest(".coach-deep-link");
-    if (!link) return;
-    e.preventDefault();
-    const route = link.dataset.route;
-    if (route) navigateToLesson(route);
-  });
 }
 
 function pushCoachMessage(thread, msg) {
@@ -10603,9 +10817,16 @@ class CadenceGame {
 let metronomeIntervalId = null;
 
 function setBpm(newBpm) {
-  appState.bpm = Math.max(30, Math.min(240, Math.round(newBpm)));
+  const numeric = Number(newBpm);
+  if (!Number.isFinite(numeric)) {
+    if (el.metronomeBpmDisplay) {
+      el.metronomeBpmDisplay.value = String(appState.bpm);
+    }
+    return;
+  }
+  appState.bpm = Math.max(30, Math.min(240, Math.round(numeric)));
   if (el.metronomeBpmDisplay) {
-    el.metronomeBpmDisplay.textContent = appState.bpm;
+    el.metronomeBpmDisplay.value = String(appState.bpm);
   }
   // Update pendulum swing speed via CSS custom property
   const metronomeEl = el.metronome;
@@ -10617,6 +10838,16 @@ function setBpm(newBpm) {
     stopMetronomeTick();
     startMetronomeTick();
   }
+}
+
+function commitMetronomeBpmInput() {
+  if (!el.metronomeBpmDisplay) return;
+  const typedValue = el.metronomeBpmDisplay.value;
+  if (typedValue === "") {
+    el.metronomeBpmDisplay.value = String(appState.bpm);
+    return;
+  }
+  setBpm(typedValue);
 }
 
 function startMetronome() {
@@ -10683,13 +10914,19 @@ function initMetronome() {
       appState.metronomeRunning ? stopMetronome() : startMetronome();
     });
   }
-  // Tap to edit BPM
-  if (el.metronomeBpmBtn) {
-    el.metronomeBpmBtn.addEventListener('dblclick', () => {
-      const input = prompt('Enter BPM (30-240):', String(appState.bpm));
-      if (input !== null) {
-        const val = parseInt(input, 10);
-        if (!isNaN(val)) setBpm(val);
+  if (el.metronomeBpmDisplay) {
+    el.metronomeBpmDisplay.value = String(appState.bpm);
+    el.metronomeBpmDisplay.addEventListener('change', commitMetronomeBpmInput);
+    el.metronomeBpmDisplay.addEventListener('blur', commitMetronomeBpmInput);
+    el.metronomeBpmDisplay.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitMetronomeBpmInput();
+        el.metronomeBpmDisplay.blur();
+      }
+      if (event.key === 'Escape') {
+        el.metronomeBpmDisplay.value = String(appState.bpm);
+        el.metronomeBpmDisplay.blur();
       }
     });
   }
