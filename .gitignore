@@ -13,3 +13,4 @@ out/
 
 # downloaded external datasets and archives
 external/
+.vercel

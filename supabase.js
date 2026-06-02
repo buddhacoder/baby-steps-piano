@@ -18,6 +18,12 @@ const authState = {
 
 async function initSupabase() {
     try {
+        if (window.location.protocol === "file:") {
+            console.warn("[supabase] File mode detected – running in local-only mode.");
+            authState.ready = true;
+            _notify();
+            return;
+        }
         const res = await fetch("/api/config");
         if (!res.ok) throw new Error("Config endpoint unavailable");
         const cfg = await res.json();

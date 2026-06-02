@@ -1,0 +1,9 @@
+{
+  "builds": [
+    { "src": "server.js", "use": "@vercel/node" },
+    { "src": "**/*.{html,css,js,json,png,jpg,svg,ico,mp3,wav,mid,mjs}", "use": "@vercel/static" }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/server.js" }
+  ]
+}

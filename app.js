@@ -2,6 +2,7 @@ const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const DEGREE_TO_SEMITONE = [0, 2, 4, 5, 7, 9, 11];
 const ROMAN = ["I", "ii", "iii", "IV", "V", "vi", "vii°"];
 const PROGRESS_STORAGE_KEY = "baby-steps-progress-v1";
+const KEY_CENTER_TAB_POSITION_KEY = "baby-steps-key-center-tab-top-v1";
 const LEGACY_PROGRESS_KEYS = ["baby-steps-progress", "baby-steps-progress-v0"];
 const COACH_THREADS_STORAGE_KEY = "baby-steps-coach-threads-v1";
 const COACH_LESSON_STACK_STORAGE_KEY = "baby-steps-coach-lesson-stack-v1";
@@ -72,6 +73,11 @@ const SAMPLE_ONSET_MAX_THRESHOLD = 0.03;
 const SAMPLE_ONSET_RATIO = 0.12;
 const SAMPLE_ONSET_CONFIRM_SAMPLES = 24;
 const CHORD_TRANSIENT_TRIM_SECONDS = 0.008;
+const CHORD_HOME_HOLD_MS = 3000;
+const CHORD_MODE_TRANSITION_CLEANUP_MS = 860;
+const CHORD_MODE_GLISS_SPACING_SECONDS = 0.052;
+const CHORD_MODE_GLISS_HOLD_SECONDS = 0.15;
+const CHORD_MODE_GLISS_THROTTLE_MS = 180;
 
 const CHORDS = {
   major: { intervals: [0, 4, 7], label: "Major", short: "" },
@@ -146,13 +152,328 @@ const SUBDIVISION_OPTIONS = [
 
 const PROGRESSIONS = {
   "I-vi-IV-V (Pop)": [0, 5, 3, 4],
+  "I-V-vi-IV (Anthem)": [0, 4, 5, 3],
+  "vi-IV-I-V (Emotional Pop)": [5, 3, 0, 4],
+  "I-IV-V (Three-Chord)": [0, 3, 4],
+  "I-V-vi-iii-IV-I-IV-V (Canon)": [0, 4, 5, 2, 3, 0, 3, 4],
+  "I-ii-IV-V (Songwriter Lift)": [0, 1, 3, 4],
+  "I-bVII-IV-I (Rock Mixolydian)": [0, 6, 3, 0],
+  "I-V-IV (Rock/Country)": [0, 4, 3],
   "ii-V-I (Jazz)": [1, 4, 0],
+  "iiø-V-i (Minor Jazz)": [1, 4, 0],
+  "I-vi-ii-V (Turnaround)": [0, 5, 1, 4],
+  "I-VI7-ii-V (Rhythm Changes)": [0, 5, 1, 4],
+  "ii-V-I-vi (Jazz Loop)": [1, 4, 0, 5],
+  "iii-vi-ii-V-I (Circle)": [2, 5, 1, 4, 0],
+  "iv-bVII-I (Backdoor)": [3, 6, 0],
   "12-Bar Blues (I-IV-V)": [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4],
-  "i-iv-VII-III (Minor cinematic)": [0, 3, 6, 2]
+  "i-iv-VII-III (Minor cinematic)": [0, 3, 6, 2],
+  "i-bVII-bVI-V (Andalusian)": [0, 6, 5, 4],
+  "bVI-bVII-I (Epic Lift)": [5, 6, 0],
+  "IV-I (Amen / Plagal)": [3, 0],
+  "I-IV-I-V (Church Lift)": [0, 3, 0, 4],
+  "I-iii-IV-iv (Gospel Color)": [0, 2, 3, 3],
+  "I-IV-iv-I (Minor Plagal Color)": [0, 3, 3, 0],
+  "7-3-6 (Gospel Pull)": [6, 2, 5]
 };
+
+const PROGRESSION_STYLE_PATTERNS = {
+  plain: {
+    label: "Plain",
+    summary: "block chords on the main pulse",
+    whatChanges: "The chords play as simple blocks so the number pattern is easy to hear."
+  },
+  pop: {
+    label: "Pop",
+    summary: "steady blocks with a little lift",
+    whatChanges: "The chords stay clear, but the repeat gives the loop a song-like pulse."
+  },
+  reggae: {
+    label: "Reggae",
+    summary: "short offbeat stabs",
+    whatChanges: "The chords get shorter and land after the beat, which creates the skank/offbeat feel."
+  },
+  bossa: {
+    label: "Bossa nova",
+    summary: "soft syncopated pushes",
+    whatChanges: "The same harmony gets light, uneven pushes instead of square block chords."
+  },
+  latin: {
+    label: "Latin",
+    summary: "repeating syncopated chord punches",
+    whatChanges: "The chords repeat in a clave-like pattern, so rhythm becomes the main style signal."
+  },
+  swing: {
+    label: "Swing",
+    summary: "long-short comping feel",
+    whatChanges: "The chords lean into a long-short pulse. Add sevenths and it starts to feel more jazz."
+  },
+  classical: {
+    label: "Classical",
+    summary: "even, connected harmony",
+    whatChanges: "The chords are held cleanly and evenly so the function and voice movement are easiest to inspect."
+  }
+};
+
+const PROGRESSION_PALETTE_GROUPS = [
+  {
+    id: "pop",
+    title: "Pop / Singer-Songwriter",
+    items: [
+      {
+        name: "I-V-vi-IV (Anthem)",
+        tagline: "Big chorus lift",
+        theory: "This is the modern emotional engine: home, lift, ache, release. It feels familiar because countless pop hooks use the same number path in different keys.",
+        listenFor: "The vi chord is the emotional turn. It darkens the loop without making the song feel fully sad.",
+        feel: "Expansive, emotional, and immediately singable.",
+        songs: ["Journey - Don't Stop Believin'", "U2 - With or Without You", "The Beatles - Let It Be", "Bob Marley - No Woman, No Cry", "Jason Mraz - I'm Yours"]
+      },
+      {
+        name: "I-vi-IV-V (Pop)",
+        tagline: "Classic doo-wop/pop loop",
+        theory: "Home moves to the relative minor, then IV and V pull everything back. It is friendly, circular, and easy to sing over.",
+        listenFor: "The V at the end asks to start again, so the loop feels like it can keep going.",
+        feel: "Warm, nostalgic, and round.",
+        songs: ["Ben E. King - Stand by Me", "The Penguins - Earth Angel", "The Marcels - Blue Moon", "Hoagy Carmichael - Heart and Soul", "Pearl Jam - Last Kiss"]
+      },
+      {
+        name: "vi-IV-I-V (Emotional Pop)",
+        tagline: "Start with feeling",
+        theory: "Starting on vi makes the same major-key materials feel more vulnerable. When I finally arrives, it sounds like clarity after tension.",
+        listenFor: "Notice how the loop sounds minor-tinted even though it belongs to a major key.",
+        feel: "Reflective first, hopeful second.",
+        songs: ["The Cranberries - Zombie", "Linkin Park - Numb", "OneRepublic - Apologize", "Avril Lavigne - Complicated", "Eagle-Eye Cherry - Save Tonight"]
+      },
+      {
+        name: "I-IV-V (Three-Chord)",
+        tagline: "Folk, rock, country bedrock",
+        theory: "I is home, IV opens the room, and V creates the strongest pull back home. This is the basic grammar behind a huge amount of popular music.",
+        listenFor: "The V chord is the cliffhanger. Your ear expects I after it.",
+        feel: "Direct, stable, and easy to follow.",
+        songs: ["The Troggs - Wild Thing", "Ritchie Valens - La Bamba", "The Kingsmen - Louie Louie", "The Beatles - Twist and Shout", "Chuck Berry - Johnny B. Goode"]
+      },
+      {
+        name: "I-V-vi-iii-IV-I-IV-V (Canon)",
+        tagline: "Classic descending pop DNA",
+        qualities: ["major", "major", "minor", "minor", "major", "major", "major", "major"],
+        theory: "This is the Canon-style long loop. The bass keeps stepping through a graceful story while the chords feel inevitable and familiar.",
+        listenFor: "The vi to iii area is the tender middle. It makes the return to IV and I feel emotional instead of plain.",
+        feel: "Elegant, sentimental, and ceremonial.",
+        songs: ["Pachelbel - Canon in D", "Maroon 5 - Memories", "Vitamin C - Graduation", "Green Day - Basket Case", "Coolio - C U When U Get There"]
+      },
+      {
+        name: "I-ii-IV-V (Songwriter Lift)",
+        tagline: "Gentle lift into the V",
+        theory: "The ii chord gives the progression a step forward before IV opens the sound and V points back home.",
+        listenFor: "Notice how ii feels like motion, not arrival. It is a small lift that makes the V stronger.",
+        feel: "Plainspoken, hopeful, and useful for verses.",
+        songs: ["The Beatles - Eight Days a Week", "Sam Cooke - Wonderful World", "The Beach Boys - Wouldn't It Be Nice", "Traditional - This Little Light of Mine", "Classic hymn turnarounds"]
+      }
+    ]
+  },
+  {
+    id: "jazz-blues",
+    title: "Jazz / Blues",
+    items: [
+      {
+        name: "ii-V-I (Jazz)",
+        tagline: "The jazz sentence",
+        theory: "ii prepares, V creates dominant tension, and I resolves. If you understand this, jazz harmony starts to look less mysterious.",
+        listenFor: "The V chord has the strongest pull. It points directly at I.",
+        feel: "Set up, tension, arrival.",
+        songs: ["Joseph Kosma - Autumn Leaves", "Duke Ellington - Satin Doll", "Miles Davis - Tune Up", "Kenny Dorham - Blue Bossa", "Harry Warren - There Will Never Be Another You"]
+      },
+      {
+        name: "iiø-V-i (Minor Jazz)",
+        tagline: "Minor-key jazz gravity",
+        rootOffsets: [2, 7, 0],
+        qualities: ["m7b5", "dom7", "minor"],
+        displayRomans: ["iiø", "V7", "i"],
+        theory: "This is the minor version of ii-V-I. The half-diminished ii chord and dominant V create a darker, more dramatic pull into minor home.",
+        listenFor: "The iiø chord sounds unstable right away. The V7 then tightens the pull before i releases it.",
+        feel: "Dark, sophisticated, and resolved.",
+        songs: ["Joseph Kosma - Autumn Leaves", "Kenny Dorham - Blue Bossa", "Duke Ellington - Caravan", "Wayne Shorter - Footprints", "Jazz minor turnaround endings"]
+      },
+      {
+        name: "I-vi-ii-V (Turnaround)",
+        tagline: "Gets you back home",
+        theory: "A turnaround keeps the music moving at the end of a phrase. It walks away from I just enough to make returning to I feel satisfying.",
+        listenFor: "The last two chords, ii to V, are the runway back to home.",
+        feel: "Circular, polished, and ready to repeat.",
+        songs: ["Hoagy Carmichael - Heart and Soul", "George Gershwin - I Got Rhythm", "Duke Ellington - Satin Doll", "Charlie Parker - Anthropology", "Sonny Rollins - Oleo"]
+      },
+      {
+        name: "I-VI7-ii-V (Rhythm Changes)",
+        tagline: "Jazz standard turnaround",
+        qualities: ["maj7", "dom7", "min7", "dom7"],
+        displayRomans: ["Imaj7", "VI7", "ii7", "V7"],
+        theory: "This is a stronger turnaround because VI becomes dominant instead of minor. That dominant VI points at ii, then ii-V points back home.",
+        listenFor: "The VI7 chord is the spice. It makes the middle of the loop lean forward.",
+        feel: "Bright, swinging, and classic.",
+        songs: ["George Gershwin - I Got Rhythm", "Charlie Parker - Anthropology", "Sonny Rollins - Oleo", "Thelonious Monk - Rhythm-a-Ning", "Flintstones Theme"]
+      },
+      {
+        name: "ii-V-I-vi (Jazz Loop)",
+        tagline: "Resolution with a tag",
+        theory: "This resolves to I, then uses vi to keep the story open. It is useful when you want a progression to breathe instead of stopping.",
+        listenFor: "The vi after I feels like a comma, not a period.",
+        feel: "Resolved, then gently reopened.",
+        songs: ["Bart Howard - Fly Me to the Moon", "Frank Loesser - I've Never Been in Love Before", "Duke Ellington - Satin Doll", "Jerome Kern - All the Things You Are", "Vernon Duke - Autumn in New York"]
+      },
+      {
+        name: "iii-vi-ii-V-I (Circle)",
+        tagline: "Circle-of-fifths pull",
+        qualities: ["min7", "min7", "min7", "dom7", "maj7"],
+        displayRomans: ["iii7", "vi7", "ii7", "V7", "Imaj7"],
+        theory: "This walks through functional gravity. Each chord points naturally to the next, so the whole line feels like it is rolling downhill toward I.",
+        listenFor: "Listen for the repeated falling-fifth motion. It is one of harmony's strongest engines.",
+        feel: "Inevitable, educated, and satisfying.",
+        songs: ["Jerome Kern - All the Things You Are", "Bart Howard - Fly Me to the Moon", "Duke Ellington - Satin Doll", "George Gershwin - I Got Rhythm", "Many jazz standard turnarounds"]
+      },
+      {
+        name: "iv-bVII-I (Backdoor)",
+        tagline: "Soulful backdoor home",
+        rootOffsets: [5, 10, 0],
+        preferFlats: true,
+        qualities: ["min7", "dom7", "major"],
+        displayRomans: ["iv7", "bVII7", "I"],
+        theory: "This approaches I from the backdoor instead of using V. The borrowed iv and bVII7 give the resolution a smoky jazz, soul, or gospel color.",
+        listenFor: "The bVII7 does not sound like a normal dominant, but it still slides beautifully into I.",
+        feel: "Cool, warm, and slightly surprising.",
+        songs: ["The Beatles - Hey Jude", "Radiohead - Creep", "Billy Strayhorn - Take the A Train", "Jerome Kern - All the Things You Are", "Jazz and gospel tag endings"]
+      },
+      {
+        name: "12-Bar Blues (I-IV-V)",
+        tagline: "Blues form map",
+        theory: "The blues repeats I, visits IV, returns home, then uses V and IV to set up the next round. It is a form and a feeling at the same time.",
+        listenFor: "The final V chord turns the whole form around.",
+        feel: "Grounded, conversational, and cyclical.",
+        songs: ["Big Mama Thornton - Hound Dog", "Robert Johnson - Sweet Home Chicago", "Chuck Berry - Johnny B. Goode", "Stevie Ray Vaughan - Pride and Joy", "B.B. King - Everyday I Have the Blues"]
+      }
+    ]
+  },
+  {
+    id: "gospel",
+    title: "Gospel / Church",
+    items: [
+      {
+        name: "IV-I (Amen / Plagal)",
+        tagline: "Church resolution",
+        theory: "IV to I is the classic Amen sound. It resolves gently, more like arrival and reassurance than dramatic tension.",
+        listenFor: "This cadence feels warm because IV falls back into home without the sharp pull of V.",
+        feel: "Gentle, settled, and reverent.",
+        songs: ["Traditional - Amen", "John Newton - Amazing Grace", "Traditional - Auld Lang Syne", "Traditional - Leaning on the Everlasting Arms", "Traditional hymn endings"]
+      },
+      {
+        name: "I-IV-I-V (Church Lift)",
+        tagline: "Call-and-response lift",
+        theory: "This rocks between home and IV, then uses V to ask for the next phrase. It is simple, strong, and great for learning gospel movement.",
+        listenFor: "IV opens the sound. V points forward.",
+        feel: "Open, communal, and forward-moving.",
+        songs: ["Edwin Hawkins Singers - Oh Happy Day", "Traditional - This Little Light of Mine", "Traditional - Down by the Riverside", "Traditional - I'll Fly Away", "Traditional - When the Saints Go Marching In"]
+      },
+      {
+        name: "I-iii-IV-iv (Gospel Color)",
+        tagline: "Sweet borrowed-color move",
+        qualities: ["major", "minor", "major", "minor"],
+        displayRomans: ["I", "iii", "IV", "iv"],
+        theory: "The borrowed minor iv is the magic. It briefly borrows color from the minor world, then makes the return home feel tender.",
+        listenFor: "The iv chord is the sigh. That one color change is the whole lesson.",
+        feel: "Sweet, aching, and tender.",
+        songs: ["The Beatles - In My Life", "Radiohead - Creep", "David Bowie - Space Oddity", "The Beach Boys - God Only Knows", "Queen - We Are the Champions"]
+      },
+      {
+        name: "I-IV-iv-I (Minor Plagal Color)",
+        tagline: "The borrowed iv sigh",
+        qualities: ["major", "major", "minor", "major"],
+        displayRomans: ["I", "IV", "iv", "I"],
+        theory: "This isolates the famous major IV to minor iv color. It is one of the clearest ways to hear borrowed harmony without needing a long progression.",
+        listenFor: "The IV to iv change is the emotional hinge. The same root stays, but the color changes from bright to bittersweet.",
+        feel: "Tender, nostalgic, and intimate.",
+        songs: ["The Beatles - In My Life", "The Beach Boys - God Only Knows", "Radiohead - Creep", "David Bowie - Space Oddity", "Queen - We Are the Champions"]
+      },
+      {
+        name: "7-3-6 (Gospel Pull)",
+        tagline: "Passing pull into vi",
+        qualities: ["m7b5", "dom7", "minor"],
+        displayRomans: ["viiø", "III7", "vi"],
+        theory: "This is a gospel and jazz-flavored gravity move into vi. The first two chords act like setup and pull, then vi becomes the landing spot.",
+        listenFor: "Hear how III7 leans hard into vi.",
+        feel: "Churchy, tense, and satisfying.",
+        songs: ["Gospel shout endings", "Jazz gospel turnarounds", "Traditional church passing chords", "R&B piano walkups", "Neo-soul reharmonizations"]
+      }
+    ]
+  },
+  {
+    id: "cinematic",
+    title: "Rock / Cinematic Color",
+    items: [
+      {
+        name: "I-bVII-IV-I (Rock Mixolydian)",
+        tagline: "Open rock color",
+        rootOffsets: [0, 10, 5, 0],
+        preferFlats: true,
+        qualities: ["major", "major", "major", "major"],
+        displayRomans: ["I", "bVII", "IV", "I"],
+        theory: "The flat-seven chord gives a major key a rock/modal flavor. It sounds open and earthy instead of tidy and classical.",
+        listenFor: "bVII is the color note. It feels bold without needing a normal V chord.",
+        feel: "Wide, rootsy, and confident.",
+        songs: ["Lynyrd Skynyrd - Sweet Home Alabama", "The Rolling Stones - Sympathy for the Devil", "The Beatles - Hey Jude", "The Who - Won't Get Fooled Again", "Stealers Wheel - Stuck in the Middle with You"]
+      },
+      {
+        name: "I-V-IV (Rock/Country)",
+        tagline: "Backbeat-ready major rock",
+        theory: "This uses the same three primary chords as I-IV-V, but the V to IV order gives it a looser, guitar-driven sound.",
+        listenFor: "The V does not resolve straight home. It drops to IV first, which makes the loop feel more relaxed and earthy.",
+        feel: "Open-road, strong, and unfussy.",
+        songs: ["Lynyrd Skynyrd - Sweet Home Alabama", "Bob Dylan - Knockin' on Heaven's Door", "Tom Petty - Free Fallin'", "The Rolling Stones - You Can't Always Get What You Want", "Country-rock chorus progressions"]
+      },
+      {
+        name: "i-iv-VII-III (Minor cinematic)",
+        tagline: "Minor movie motion",
+        rootOffsets: [0, 5, 10, 3],
+        preferFlats: true,
+        qualities: ["minor", "minor", "major", "major"],
+        displayRomans: ["i", "iv", "VII", "III"],
+        theory: "This moves through a minor-key landscape with enough major chords to feel wide-screen. It is useful for dramatic, reflective progressions.",
+        listenFor: "The III chord brightens the minor mood without leaving the world of the key.",
+        feel: "Dramatic, reflective, and wide-screen.",
+        songs: ["Traditional - House of the Rising Sun", "Eagles - Hotel California", "Gary Jules - Mad World", "R.E.M. - Losing My Religion", "Film-score minor loops"]
+      },
+      {
+        name: "i-bVII-bVI-V (Andalusian)",
+        tagline: "Spanish minor descent",
+        rootOffsets: [0, 10, 8, 7],
+        preferFlats: true,
+        qualities: ["minor", "major", "major", "major"],
+        displayRomans: ["i", "bVII", "bVI", "V"],
+        theory: "This is the classic Andalusian descent. The bass walks down through minor colors and lands on V, which wants to pull back to i.",
+        listenFor: "The final V is the snapback. After the descending line, it creates a strong need to restart on i.",
+        feel: "Passionate, dramatic, and old-world.",
+        songs: ["Traditional - Hit the Road Jack", "Led Zeppelin - Babe I'm Gonna Leave You", "The Stray Cats - Stray Cat Strut", "Flamenco-style turnarounds", "Latin minor vamp endings"]
+      },
+      {
+        name: "bVI-bVII-I (Epic Lift)",
+        tagline: "Big cinematic arrival",
+        rootOffsets: [8, 10, 0],
+        preferFlats: true,
+        qualities: ["major", "major", "major"],
+        displayRomans: ["bVI", "bVII", "I"],
+        theory: "Two borrowed major chords climb into I. It is simple, huge, and very useful for endings, key moments, and dramatic arrivals.",
+        listenFor: "The bVI to bVII climb feels like a ramp. I becomes the arrival at the top.",
+        feel: "Heroic, cinematic, and final.",
+        songs: ["The Beatles - Hey Jude", "Oasis - Don't Look Back in Anger", "Queen - We Are the Champions", "Film trailer cadences", "Arena rock endings"]
+      }
+    ]
+  }
+];
 
 const MAJOR_KEY_TRIAD_QUALITIES = ["major", "minor", "minor", "major", "major", "minor", "diminished"];
 const MAJOR_KEY_SEVENTH_QUALITIES = ["maj7", "min7", "min7", "maj7", "dom7", "min7", "m7b5"];
+const MINOR_KEY_DEGREE_TO_SEMITONE = [0, 2, 3, 5, 7, 8, 10];
+const MINOR_KEY_TRIAD_QUALITIES = ["minor", "diminished", "major", "minor", "minor", "major", "major"];
+const MINOR_KEY_SEVENTH_QUALITIES = ["min7", "m7b5", "maj7", "min7", "min7", "maj7", "dom7"];
+const PROGRESSION_START_TARGET_MIDI = 60;
 const ARPEGGIO_TRIAD_ROWS = [
   { name: "Triad (Root Position)", inversionIndex: 0 },
   { name: "Triad (1st Inversion)", inversionIndex: 1 },
@@ -797,6 +1118,12 @@ const defaultProgress = {
   sessionsCompleted: 0,
   streakDays: 0,
   lastSessionDate: "",
+  activePracticePathId: "chord-mastery-foundation",
+  practicePathStartDate: "2026-04-27",
+  labLearningMode: "study",
+  dailyPracticeLog: {},
+  chordMasteryScores: {},
+  savedLabIdeas: [],
   chordReps: 0,
   progressionReps: 0,
   arpeggioReps: 0,
@@ -810,6 +1137,41 @@ const defaultProgress = {
   areas: { chords: 0, progressions: 0, arpeggios: 0, scales: 0 },
   recent: []
 };
+
+const CHORD_MASTERY_KEYS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const CHORD_MASTERY_KEY_WEIGHTS = {
+  C: 1.6,
+  Db: 0.8,
+  D: 1.3,
+  Eb: 0.9,
+  E: 1.1,
+  F: 1.4,
+  Gb: 0.7,
+  G: 1.5,
+  Ab: 0.8,
+  A: 1.2,
+  Bb: 1,
+  B: 1
+};
+const CHORD_MASTERY_SKILLS = [
+  { id: "cm-root", label: "CM Root" },
+  { id: "cm-inv1", label: "CM 1st" },
+  { id: "cm-inv2", label: "CM 2nd" },
+  { id: "1564-root", label: "1-5-6-4 Root" },
+  { id: "1564-inv1", label: "1-5-6-4 1st" },
+  { id: "1564-inv2", label: "1-5-6-4 2nd" },
+  { id: "1564-voice", label: "Voice-led" }
+];
+const VOCABULARY_LAB_ROWS = [
+  { id: "minor-blues", label: "Minor blues scale", type: "scale", scale: "blues", note: "Use over I7, IV7, and V7 for blues language." },
+  { id: "major-blues", label: "Major blues color", type: "scale", intervals: [0, 2, 3, 4, 7, 9], note: "Brighter blues color for gospel, country, and pop piano." },
+  { id: "dorian", label: "Dorian over ii", type: "scale", scale: "dorian", degree: 1, note: "Jazz minor color that wants to move toward V." },
+  { id: "mixolydian", label: "Mixolydian over V", type: "scale", scale: "mixolydian", degree: 4, note: "Dominant sound that wants to resolve home." },
+  { id: "amen", label: "Amen / plagal", type: "harmony", steps: [3, 0], qualities: ["major", "major"], note: "Church-style IV to I resolution." },
+  { id: "church-walk", label: "Church walk to IV", type: "harmony", offsets: [0, 2, 4, 5], qualities: ["major", "minor", "minor", "major"], note: "Passing motion from I toward IV." },
+  { id: "736", label: "7-3-6 movement", type: "harmony", offsets: [11, 4, 9], qualities: ["m7b5", "dom7", "minor"], note: "Gospel/jazz pull into vi." },
+  { id: "tritone", label: "Tritone dominant", type: "harmony", offsets: [6, 0], qualities: ["dom7", "major"], note: "Dominant substitute resolving home by half step." }
+];
 
 const BADGE_DEFINITIONS = [
   { id: "first_chord", label: "First Chord", icon: "🎹", rule: p => (p.areas?.chords || 0) >= 1 },
@@ -921,6 +1283,7 @@ let chordAssetPreloadPromise = null;
 let toneSampler = null;
 let toneEngineReady = false;
 let toneEngineInitPromise = null;
+let emergencyToneEngineActive = false;
 const tonePendingRequests = [];
 let audioStatusLastRendered = "";
 let focusTimerId;
@@ -934,11 +1297,20 @@ let lastRestrictedChordWindowMidi = null;
 let lastChordPaletteSelectionAtMs = null;
 let audioUnlockBound = false;
 let keyCenterBackdropHideTimer = null;
+let keyCenterTabDrag = null;
+let suppressKeyCenterToggleClick = false;
+let chordModeTransitionTimer = null;
+let lastChordModeGlissAtMs = 0;
 const typingHeldMidiByCode = new Map();
 let activePatternRunId = 0;
 const patternUiTimerIds = new Set();
 let paletteSequenceToken = 0;
+let progressionPalettePlayToken = 0;
+let activeProgressionPaletteGroupId = "pop";
+let progressionPaletteFocus = { root: "C", quality: "major", source: "key" };
+let keyDisplayPreference = "sharp";
 let activeExploreChordContext = null;
+let currentStudyContext = { type: "chord" };
 const guidedExerciseUiTimers = new Set();
 const scheduledFallbackNoteTimers = new Set();
 let progress = loadProgress();
@@ -977,7 +1349,6 @@ function init() {
     gameInstructions: byId("gameInstructions"),
     gameFeedback: byId("gameFeedback"),
     openKeyCenterBtn: byId("openKeyCenterBtn"),
-    closeKeyCenterBtn: byId("closeKeyCenterBtn"),
     keyCenterDrawer: byId("keyCenterDrawer"),
     keyCenterDrawerBackdrop: byId("keyCenterDrawerBackdrop"),
     tempoMinusBtn: byId("tempoMinusBtn"),
@@ -1000,6 +1371,13 @@ function init() {
     cadenceStrip: byId("cadenceStrip"),
     chordDisplay: byId("chordDisplay"),
     progressionOutput: byId("progressionOutput"),
+    progressionPalettePanel: byId("progressionPalettePanel"),
+    progressionPaletteKey: byId("progressionPaletteKey"),
+    progressionPaletteTabs: byId("progressionPaletteTabs"),
+    progressionPaletteGrid: byId("progressionPaletteGrid"),
+    progressionPaletteExplain: byId("progressionPaletteExplain"),
+    progressionVoicingSelect: byId("progressionVoicingSelect"),
+    progressionStyleSelect: byId("progressionStyleSelect"),
     audioStatus: byId("audioStatus"),
     highlightStartLeft: byId("highlightStartLeft"),
     highlightStartRight: byId("highlightStartRight"),
@@ -1017,8 +1395,10 @@ function init() {
     arpOutput: byId("arpOutput"),
     scaleRootSelect: byId("scaleRootSelect"),
     scaleTypeSelect: byId("scaleTypeSelect"),
+    scaleOctaveSelect: byId("scaleOctaveSelect"),
+    scaleHandSelect: byId("scaleHandSelect"),
+    scaleMotionSelect: byId("scaleMotionSelect"),
     playScaleBtn: byId("playScaleBtn"),
-    scalePracticeBtn: byId("scalePracticeBtn"),
     scaleOutput: byId("scaleOutput"),
     modeSwitch: byId("modeSwitch"),
     coachInput: byId("coachInput"),
@@ -1032,6 +1412,37 @@ function init() {
     kanbanActive: byId("kanbanActive"),
     kanbanDone: byId("kanbanDone"),
     lessonCards: byId("lessonCards"),
+    todayPracticeMeta: byId("todayPracticeMeta"),
+    todayPracticeTitle: byId("todayPracticeTitle"),
+    todayPracticeFocus: byId("todayPracticeFocus"),
+    todayPracticeExercises: byId("todayPracticeExercises"),
+    practiceStartDateInput: byId("practiceStartDateInput"),
+    practiceMinutesInput: byId("practiceMinutesInput"),
+    practiceNotesInput: byId("practiceNotesInput"),
+    markPracticeDoneBtn: byId("markPracticeDoneBtn"),
+    todayPracticeStatus: byId("todayPracticeStatus"),
+    chordMasteryMatrix: byId("chordMasteryMatrix"),
+    masteryWeightedScore: byId("masteryWeightedScore"),
+    masteryStrongestKey: byId("masteryStrongestKey"),
+    masteryWeakestKey: byId("masteryWeakestKey"),
+    scaleChordLab: byId("scaleChordLab"),
+    pianoLabContext: byId("pianoLabContext"),
+    nowStudyingPanel: byId("nowStudyingPanel"),
+    labMicroMissions: byId("labMicroMissions"),
+    studyModeSwitch: byId("studyModeSwitch"),
+    lostStepBtn: byId("lostStepBtn"),
+    lab1564InversionSelect: byId("lab1564InversionSelect"),
+    lab1564PatternSelect: byId("lab1564PatternSelect"),
+    play1564LabBtn: byId("play1564LabBtn"),
+    lab1564Output: byId("lab1564Output"),
+    vocabularyLab: byId("vocabularyLab"),
+    modFromKeySelect: byId("modFromKeySelect"),
+    modToKeySelect: byId("modToKeySelect"),
+    modPathSelect: byId("modPathSelect"),
+    playModulationLabBtn: byId("playModulationLabBtn"),
+    modulationLabOutput: byId("modulationLabOutput"),
+    saveLabIdeaBtn: byId("saveLabIdeaBtn"),
+    savedLabIdeas: byId("savedLabIdeas"),
     statSessions: byId("statSessions"),
     statStreak: byId("statStreak"),
     statChords: byId("statChords"),
@@ -1130,6 +1541,7 @@ function init() {
     masteryCadences: byId("masteryCadences"),
     badgeGrid: byId("badgeGrid"),
     chordModeSelect: byId("chordModeSelect"),
+    chordModeSwitch: byId("chordModeSwitch"),
     paletteTableWrap: byId("paletteTableWrap"),
     circleOfFifthsContainer: byId("circleOfFifthsContainer"),
     cofSvg: byId("cofSvg"),
@@ -1176,6 +1588,10 @@ function init() {
   populateSelect(el.rootSelect, NOTES);
   populateSelect(el.qualitySelect, Object.keys(CHORDS));
   populateSelect(el.inversionSelect, ["root position", "1st inversion", "2nd inversion"]);
+  populateSelect(el.modFromKeySelect, NOTES);
+  populateSelect(el.modToKeySelect, NOTES);
+  if (el.modFromKeySelect) el.modFromKeySelect.value = "C";
+  if (el.modToKeySelect) el.modToKeySelect.value = "F";
   populateSelect(el.arpTypeSelect, Object.keys(ARP_TYPES));
   populateScaleTypeSelect();
 
@@ -1196,9 +1612,12 @@ function init() {
   renderPaletteTabButtons();
   renderActivePaletteTable();
   updateExploreHarmonyUi();
+  renderProgressionPalette();
   renderProgressionStrip();
   renderCadenceStrip();
   renderLessonTracks();
+  renderPracticeLab();
+  renderExploreLabs();
   renderTheoryContent();
   renderProgress();
   syncRepertoireControlState();
@@ -1239,6 +1658,12 @@ function renderButtonGroup(container, options, stateKey) {
       appState[stateKey] = opt;
       updateButtonActiveState(container, opt);
       markChordTableCell(appState.root, appState.quality);
+      if (stateKey === "quality") {
+        setProgressionPaletteFocus(appState.root, appState.quality, "chord");
+        currentStudyContext = { type: "chord", root: appState.root, quality: appState.quality };
+        renderExploreLabs();
+        renderProgressionPalette();
+      }
     });
     container.appendChild(btn);
   });
@@ -1358,9 +1783,14 @@ function getSelectedCadenceName() {
 }
 
 function setRootContext(root) {
-  appState.root = root;
-  if (el.keySelect) el.keySelect.value = root;
-  if (el.conceptKeySelect) el.conceptKeySelect.value = root;
+  const rawRoot = String(root || "C").trim();
+  const normalizedRoot = normalizePitchClass(rawRoot);
+  keyDisplayPreference = rawRoot.includes("b") ? "flat" : "sharp";
+  appState.root = normalizedRoot;
+  setProgressionPaletteFocus(normalizedRoot, "major", "key");
+  if (el.keySelect) el.keySelect.value = normalizedRoot;
+  if (el.conceptKeySelect) el.conceptKeySelect.value = normalizedRoot;
+  if (el.rootSelect) el.rootSelect.value = normalizedRoot;
   updateButtonActiveState(el.rootBtnGroup, appState.root);
   renderActivePaletteTable();
   renderProgressionStrip();
@@ -1373,6 +1803,8 @@ function setRootContext(root) {
   if (appState.paletteTab === "chords") {
     markChordTableCell(appState.root, appState.quality);
   }
+  renderProgressionPalette();
+  renderExploreLabs();
   // Refresh Circle of Fifths / Cadences mode if active
   if (appState.chordMode === "circle") {
     renderCircleOfFifths();
@@ -1473,6 +1905,20 @@ function normalizePitchClass(note) {
   return FLAT_TO_SHARP_NOTE[String(note || "").trim()] || String(note || "").trim();
 }
 
+function displayPitchClass(note, options = {}) {
+  const normalized = normalizePitchClass(note);
+  const preferFlat = options.preferFlat === true;
+  return preferFlat ? (ENHARMONIC_FLAT_MAP[normalized] || normalized) : normalized;
+}
+
+function shouldUseFlatKeyDisplay() {
+  return keyDisplayPreference === "flat";
+}
+
+function currentKeyDisplayName() {
+  return displayPitchClass(el.keySelect?.value || appState.root || "C", { preferFlat: shouldUseFlatKeyDisplay() });
+}
+
 function cofMajorEntryForKey(key) {
   const normalized = normalizePitchClass(key);
   return COF_KEYS_MAJOR.find((entry) => entry.key === normalized) || COF_KEYS_MAJOR[0];
@@ -1505,8 +1951,60 @@ function playCircleOfFifthsSelection(root, quality = "major") {
 
 function setChordMode(mode) {
   if (!["palette", "circle", "cadences"].includes(mode)) return;
+  const isModeChange = appState.chordMode !== mode;
+  const applyMode = () => applyChordMode(mode);
+  if (!isModeChange) {
+    applyMode();
+    return;
+  }
+  playChordModeGlissando(appState.chordMode, mode);
+  runChordModeTransition(applyMode);
+}
+
+function playChordModeGlissando(fromMode, toMode) {
+  const modeOrder = ["palette", "circle", "cadences"];
+  const fromIndex = modeOrder.indexOf(fromMode);
+  const toIndex = modeOrder.indexOf(toMode);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+  const nowMs = performance.now();
+  if (nowMs - lastChordModeGlissAtMs < CHORD_MODE_GLISS_THROTTLE_MS) return;
+  lastChordModeGlissAtMs = nowMs;
+
+  if (!ensureAudio()) return;
+  const schedule = () => {
+    if (!audioCtx || !audioMaster) return;
+    const root = el.keySelect?.value || appState.root || "C";
+    const rootMidi = midiForPitchClass(root, 5);
+    const ascending = toIndex > fromIndex;
+    const intervals = ascending ? [0, 2, 4, 7, 12] : [12, 9, 7, 4, 0];
+    const startBase = audioCtx.currentTime + Math.max(0.012, getInteractiveStartLeadTimeSeconds());
+    intervals.forEach((interval, index) => {
+      const start = startBase + index * CHORD_MODE_GLISS_SPACING_SECONDS;
+      const velocity = 0.34 - index * 0.018;
+      playEmergencyToneForMidi(rootMidi + interval, start, CHORD_MODE_GLISS_HOLD_SECONDS, velocity);
+    });
+  };
+
+  if (audioCtx?.state === "running") {
+    schedule();
+    return;
+  }
+  void audioCtx?.resume().then(schedule).catch(() => {
+    // Browser audio policy can still block sound until the next direct gesture.
+  });
+}
+
+function applyChordMode(mode) {
   appState.chordMode = mode;
   if (el.chordModeSelect) el.chordModeSelect.value = mode;
+  if (el.chordModeSwitch) {
+    el.chordModeSwitch.querySelectorAll("button[data-chord-mode]").forEach((btn) => {
+      const isActive = btn.dataset.chordMode === mode;
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+  }
 
   // Toggle visibility of the three views
   const showPalette = mode === "palette";
@@ -1515,6 +2013,7 @@ function setChordMode(mode) {
 
   if (el.paletteTabSwitch) el.paletteTabSwitch.classList.toggle("is-hidden", !showPalette);
   if (el.paletteTableWrap) el.paletteTableWrap.classList.toggle("is-hidden", !showPalette);
+  if (el.progressionPalettePanel) el.progressionPalettePanel.classList.toggle("is-hidden", !showPalette);
   // exploreHarmonyControl removed
 
   if (el.circleOfFifthsContainer) el.circleOfFifthsContainer.classList.toggle("is-hidden", !showCircle);
@@ -1526,6 +2025,118 @@ function setChordMode(mode) {
   // Render the active view
   if (showCircle) renderCircleOfFifths();
   if (showCadences) renderCadenceCatalog();
+}
+
+function runChordModeTransition(updateView) {
+  const consolePanel = document.querySelector(".console");
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  if (!consolePanel || reduceMotion) {
+    updateView();
+    return;
+  }
+
+  if (chordModeTransitionTimer) {
+    window.clearTimeout(chordModeTransitionTimer);
+    chordModeTransitionTimer = null;
+  }
+
+  const beforeHeight = consolePanel.getBoundingClientRect().height;
+  removeChordModeTransitionGhost(consolePanel);
+  createChordModeTransitionGhost(consolePanel);
+  consolePanel.classList.remove("is-view-transitioning");
+  getChordModeViewSurfaces().forEach((surface) => surface.classList.remove("console-view-enter"));
+  consolePanel.style.height = `${beforeHeight}px`;
+  consolePanel.style.overflow = "hidden";
+  consolePanel.classList.add("is-view-transitioning");
+  void consolePanel.offsetHeight;
+
+  updateView();
+
+  const activeSurfaces = getChordModeViewSurfaces().filter((surface) => !surface.classList.contains("is-hidden"));
+  activeSurfaces.forEach((surface, index) => {
+    surface.classList.remove("console-view-enter");
+    surface.style.setProperty("--surface-delay", `${Math.min(index * 64, 150)}ms`);
+    void surface.offsetHeight;
+    surface.classList.add("console-view-enter");
+  });
+
+  const afterHeight = consolePanel.scrollHeight;
+  requestAnimationFrame(() => {
+    consolePanel.style.height = `${afterHeight}px`;
+  });
+
+  chordModeTransitionTimer = window.setTimeout(() => {
+    consolePanel.classList.remove("is-view-transitioning");
+    consolePanel.style.height = "";
+    consolePanel.style.overflow = "";
+    removeChordModeTransitionGhost(consolePanel);
+    activeSurfaces.forEach((surface) => {
+      surface.classList.remove("console-view-enter");
+      surface.style.removeProperty("--surface-delay");
+    });
+    chordModeTransitionTimer = null;
+  }, CHORD_MODE_TRANSITION_CLEANUP_MS);
+}
+
+function getChordModeViewSurfaces() {
+  return [
+    el.paletteTabSwitch,
+    el.paletteTableWrap,
+    el.progressionPalettePanel,
+    el.circleOfFifthsContainer,
+    el.cadenceModePanel,
+  ].filter(Boolean);
+}
+
+function getVisibleChordModeViewSurfaces() {
+  return getChordModeViewSurfaces().filter((surface) => {
+    if (surface.classList.contains("is-hidden")) return false;
+    const rect = surface.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+}
+
+function createChordModeTransitionGhost(consolePanel) {
+  const visibleSurfaces = getVisibleChordModeViewSurfaces();
+  if (!visibleSurfaces.length) return null;
+
+  const consoleRect = consolePanel.getBoundingClientRect();
+  const ghost = document.createElement("div");
+  ghost.className = "console-transition-ghost";
+  ghost.setAttribute("aria-hidden", "true");
+
+  visibleSurfaces.forEach((surface) => {
+    const rect = surface.getBoundingClientRect();
+    const clone = surface.cloneNode(true);
+    stripInteractiveCloneAttributes(clone);
+    clone.classList.remove("console-view-enter");
+    clone.classList.add("console-transition-ghost-surface");
+    clone.style.left = `${rect.left - consoleRect.left}px`;
+    clone.style.top = `${rect.top - consoleRect.top}px`;
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    ghost.appendChild(clone);
+  });
+
+  consolePanel.appendChild(ghost);
+  return ghost;
+}
+
+function stripInteractiveCloneAttributes(root) {
+  [root, ...root.querySelectorAll("*")].forEach((node) => {
+    node.removeAttribute("id");
+    node.removeAttribute("for");
+    node.removeAttribute("aria-describedby");
+    node.removeAttribute("aria-controls");
+    node.removeAttribute("aria-labelledby");
+    if (["BUTTON", "SELECT", "INPUT", "TEXTAREA", "A"].includes(node.tagName)) {
+      node.setAttribute("tabindex", "-1");
+    }
+  });
+}
+
+function removeChordModeTransitionGhost(consolePanel) {
+  consolePanel.querySelectorAll(".console-transition-ghost").forEach((ghost) => ghost.remove());
 }
 
 function updateChordModeTitle() {
@@ -1621,14 +2232,12 @@ function renderCircleOfFifths() {
   el.cofSvg.onclick = (e) => {
     const target = e.target.closest('[data-cof-key]');
     if (!target) return;
-    const newKey = normalizePitchClass(target.dataset.cofKey);
+    const rawKey = target.dataset.cofKey;
+    const newKey = normalizePitchClass(rawKey);
     const playRoot = normalizePitchClass(target.dataset.cofRoot || newKey);
     const quality = target.dataset.cofQuality === "minor" ? "minor" : "major";
     playCircleOfFifthsSelection(playRoot, quality);
-    if (el.keySelect) {
-      el.keySelect.value = newKey;
-      el.keySelect.dispatchEvent(new Event('change'));
-    }
+    setRootContext(rawKey);
     renderCircleOfFifths();
     updateChordModeTitle();
     renderCofInfo(newKey);
@@ -1918,12 +2527,17 @@ function renderCadenceCatalog() {
 
 function openKeyCenterDrawer() {
   if (!el.keyCenterDrawer) return;
+  document.body.classList.add("practice-setup-open");
   if (keyCenterBackdropHideTimer) {
     window.clearTimeout(keyCenterBackdropHideTimer);
     keyCenterBackdropHideTimer = null;
   }
   el.keyCenterDrawer.classList.add("is-open");
   el.keyCenterDrawer.setAttribute("aria-hidden", "false");
+  if (el.openKeyCenterBtn) {
+    el.openKeyCenterBtn.setAttribute("aria-expanded", "true");
+    el.openKeyCenterBtn.setAttribute("aria-label", "Close quick controls panel");
+  }
   if (el.keyCenterDrawerBackdrop) {
     el.keyCenterDrawerBackdrop.hidden = false;
     requestAnimationFrame(() => {
@@ -1934,8 +2548,13 @@ function openKeyCenterDrawer() {
 
 function closeKeyCenterDrawer() {
   if (!el.keyCenterDrawer) return;
+  document.body.classList.remove("practice-setup-open");
   el.keyCenterDrawer.classList.remove("is-open");
   el.keyCenterDrawer.setAttribute("aria-hidden", "true");
+  if (el.openKeyCenterBtn) {
+    el.openKeyCenterBtn.setAttribute("aria-expanded", "false");
+    el.openKeyCenterBtn.setAttribute("aria-label", "Open quick controls panel");
+  }
   if (el.keyCenterDrawerBackdrop) {
     el.keyCenterDrawerBackdrop.classList.remove("is-open");
     keyCenterBackdropHideTimer = window.setTimeout(() => {
@@ -1945,6 +2564,85 @@ function closeKeyCenterDrawer() {
       keyCenterBackdropHideTimer = null;
     }, 220);
   }
+}
+
+function clampKeyCenterTabTop(top) {
+  if (!el.openKeyCenterBtn) return top;
+  const rect = el.openKeyCenterBtn.getBoundingClientRect();
+  const minTop = 72;
+  const maxTop = Math.max(minTop, window.innerHeight - rect.height - 18);
+  return Math.max(minTop, Math.min(maxTop, top));
+}
+
+function setKeyCenterTabTop(top, persist = false) {
+  if (!el.openKeyCenterBtn) return;
+  const nextTop = clampKeyCenterTabTop(top);
+  el.openKeyCenterBtn.style.setProperty("--key-center-tab-top", `${Math.round(nextTop)}px`);
+  if (persist) {
+    safeStorageSet(KEY_CENTER_TAB_POSITION_KEY, String(Math.round(nextTop)));
+  }
+}
+
+function restoreKeyCenterTabPosition() {
+  if (!el.openKeyCenterBtn) return;
+  const savedValue = safeStorageGet(KEY_CENTER_TAB_POSITION_KEY);
+  if (savedValue === null) return;
+  const savedTop = Number(savedValue);
+  if (Number.isFinite(savedTop)) {
+    setKeyCenterTabTop(savedTop, false);
+  }
+}
+
+function beginKeyCenterTabDrag(event) {
+  if (!el.openKeyCenterBtn || event.button !== 0) return;
+  const rect = el.openKeyCenterBtn.getBoundingClientRect();
+  keyCenterTabDrag = {
+    pointerId: event.pointerId,
+    startY: event.clientY,
+    startTop: rect.top,
+    moved: false,
+  };
+  el.openKeyCenterBtn.setPointerCapture?.(event.pointerId);
+  el.openKeyCenterBtn.classList.add("is-dragging");
+}
+
+function moveKeyCenterTabDrag(event) {
+  if (!keyCenterTabDrag || event.pointerId !== keyCenterTabDrag.pointerId) return;
+  const deltaY = event.clientY - keyCenterTabDrag.startY;
+  if (Math.abs(deltaY) > 4) {
+    keyCenterTabDrag.moved = true;
+    suppressKeyCenterToggleClick = true;
+  }
+  if (!keyCenterTabDrag.moved) return;
+  event.preventDefault();
+  setKeyCenterTabTop(keyCenterTabDrag.startTop + deltaY);
+}
+
+function endKeyCenterTabDrag(event) {
+  if (!keyCenterTabDrag || event.pointerId !== keyCenterTabDrag.pointerId) return;
+  const didMove = keyCenterTabDrag.moved;
+  keyCenterTabDrag = null;
+  el.openKeyCenterBtn?.classList.remove("is-dragging");
+  el.openKeyCenterBtn?.releasePointerCapture?.(event.pointerId);
+  if (didMove && el.openKeyCenterBtn) {
+    setKeyCenterTabTop(el.openKeyCenterBtn.getBoundingClientRect().top, true);
+    window.setTimeout(() => {
+      suppressKeyCenterToggleClick = false;
+    }, 0);
+  }
+}
+
+function syncKeyCenterTabToViewport() {
+  if (!el.openKeyCenterBtn) return;
+  setKeyCenterTabTop(el.openKeyCenterBtn.getBoundingClientRect().top);
+}
+
+function toggleKeyCenterDrawer() {
+  if (el.keyCenterDrawer?.classList.contains("is-open")) {
+    closeKeyCenterDrawer();
+    return;
+  }
+  openKeyCenterDrawer();
 }
 
 function bindEvents() {
@@ -1996,6 +2694,14 @@ function bindEvents() {
     });
   }
 
+  if (el.chordModeSwitch) {
+    el.chordModeSwitch.addEventListener("click", (event) => {
+      const modeButton = event.target.closest("button[data-chord-mode]");
+      if (!modeButton) return;
+      setChordMode(modeButton.dataset.chordMode);
+    });
+  }
+
   if (el.cadenceModeButtons) {
     el.cadenceModeButtons.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-cadence-mode]");
@@ -2008,7 +2714,9 @@ function bindEvents() {
   // Explore harmony removed
 
   el.playProgressionBtn.addEventListener("click", async () => {
-    const progression = buildProgressionChords(el.keySelect.value, el.progressionSelect.value);
+    const context = getProgressionPaletteContext();
+    const voicingMode = getProgressionVoicingMode();
+    const progression = buildProgressionChords(context, el.progressionSelect.value, voicingMode);
     const hold = getHoldSeconds();
     for (let i = 0; i < progression.length; i += 1) {
       const step = progression[i];
@@ -2017,9 +2725,45 @@ function bindEvents() {
       await wait(Math.max(220, hold * 560));
     }
     clearProgressionStep();
-    el.progressionOutput.textContent = `Played ${el.progressionSelect.value} in ${el.keySelect.value}: ${progression.map((s) => s.name).join(" -> ")}`;
-    trackRep("progressions", `${el.keySelect.value} ${el.progressionSelect.value}`);
+    el.progressionOutput.textContent = `Played ${el.progressionSelect.value} in ${context.label} (${progressionVoicingLabel(voicingMode)}): ${progression.map((s) => s.name).join(" -> ")}`;
+    trackRep("progressions", `${context.label} ${el.progressionSelect.value}`);
   });
+
+  if (el.progressionPaletteGrid) {
+    el.progressionPaletteGrid.addEventListener("click", (event) => {
+      const card = event.target.closest("button[data-progression-name]");
+      if (!card) return;
+      void playProgressionPaletteItem(card.dataset.progressionName);
+    });
+  }
+
+  if (el.progressionPaletteTabs) {
+    el.progressionPaletteTabs.addEventListener("click", (event) => {
+      const tab = event.target.closest("button[data-progression-group]");
+      if (!tab) return;
+      activeProgressionPaletteGroupId = tab.dataset.progressionGroup || "pop";
+      progressionPalettePlayToken += 1;
+      clearProgressionStep();
+      renderProgressionPalette();
+    });
+  }
+
+  if (el.progressionVoicingSelect) {
+    el.progressionVoicingSelect.addEventListener("change", () => {
+      progressionPalettePlayToken += 1;
+      clearProgressionStep();
+      renderProgressionStrip();
+      renderProgressionPalette();
+    });
+  }
+
+  if (el.progressionStyleSelect) {
+    el.progressionStyleSelect.addEventListener("change", () => {
+      progressionPalettePlayToken += 1;
+      clearProgressionStep();
+      renderProgressionPalette();
+    });
+  }
 
   if (el.playCadenceBtn) {
     el.playCadenceBtn.addEventListener("click", async () => {
@@ -2060,11 +2804,21 @@ function bindEvents() {
   }
 
   if (el.openKeyCenterBtn) {
-    el.openKeyCenterBtn.addEventListener("click", openKeyCenterDrawer);
-  }
-
-  if (el.closeKeyCenterBtn) {
-    el.closeKeyCenterBtn.addEventListener("click", closeKeyCenterDrawer);
+    restoreKeyCenterTabPosition();
+    el.openKeyCenterBtn.addEventListener("pointerdown", beginKeyCenterTabDrag);
+    el.openKeyCenterBtn.addEventListener("pointermove", moveKeyCenterTabDrag);
+    el.openKeyCenterBtn.addEventListener("pointerup", endKeyCenterTabDrag);
+    el.openKeyCenterBtn.addEventListener("pointercancel", endKeyCenterTabDrag);
+    window.addEventListener("resize", syncKeyCenterTabToViewport);
+    el.openKeyCenterBtn.addEventListener("click", (event) => {
+      if (suppressKeyCenterToggleClick) {
+        event.preventDefault();
+        event.stopPropagation();
+        suppressKeyCenterToggleClick = false;
+        return;
+      }
+      toggleKeyCenterDrawer();
+    });
   }
 
   if (el.keyCenterDrawerBackdrop) {
@@ -2094,6 +2848,10 @@ function bindEvents() {
       appState.quality = el.qualitySelect.value;
       updateButtonActiveState(el.qualityBtnGroup, appState.quality);
       markChordTableCell(appState.root, appState.quality);
+      setProgressionPaletteFocus(appState.root, appState.quality, "chord");
+      currentStudyContext = { type: "chord", root: appState.root, quality: appState.quality };
+      renderProgressionPalette();
+      renderExploreLabs();
     });
   }
 
@@ -2105,8 +2863,11 @@ function bindEvents() {
   }
 
   el.progressionSelect.addEventListener("change", () => {
+    currentStudyContext = { type: "progression", name: el.progressionSelect.value };
     renderProgressionStrip();
+    renderProgressionPalette();
     renderPersonalizedSequence();
+    renderExploreLabs();
   });
 
   if (el.highlightStartLeft) {
@@ -2172,6 +2933,7 @@ function bindEvents() {
   window.addEventListener("blur", clearWindowPianoKeyState);
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    dismissChordHomeOverlay();
     if (el.keyCenterDrawer?.classList.contains("is-open")) {
       closeKeyCenterDrawer();
       event.preventDefault();
@@ -2198,7 +2960,7 @@ function bindEvents() {
     appState.quality = quality;
     updateButtonActiveState(el.rootBtnGroup, appState.root);
     updateButtonActiveState(el.qualityBtnGroup, appState.quality);
-    const midi = buildChordMidi(root, quality, "root position", 3);
+    const midi = buildChordMidiForPaletteCell(cell, "root position", 3);
     const restrictedMidi = normalizeMidiCollection(midi);
     const previousRestrictedMidi = Array.isArray(lastRestrictedChordWindowMidi)
       ? lastRestrictedChordWindowMidi
@@ -2210,7 +2972,12 @@ function bindEvents() {
       && !midiCollectionsEqual(previousRestrictedMidi, restrictedMidi)
       ? computeChordTransitionDiff(previousRestrictedMidi, restrictedMidi)
       : { removed: [], added: [] };
-    markChordTableCell(root, quality);
+    clearChordTableSelection();
+    cell.classList.add("is-selected");
+    setProgressionPaletteFocus(root, quality, "chord");
+    currentStudyContext = { type: "chord", root, quality, label };
+    renderProgressionPalette();
+    renderExploreLabs();
     highlightKeyboardHold(midi, false);
     showChordTransitionDiff(chordTransitionDiff);
     el.chordDisplay.textContent = `Palette chord armed: ${label} (release to play)`;
@@ -2218,6 +2985,13 @@ function bindEvents() {
     let pointerIsDown = true;
     let explorationTriggered = false;
     let holdExploreTimerId = null;
+    let homeOverlayTriggered = false;
+    let homeOverlayTimerId = window.setTimeout(() => {
+      if (!pointerIsDown) return;
+      homeOverlayTriggered = true;
+      clearChordDiffPreview();
+      showChordHomeOverlay(cell, { root, quality, label, midi });
+    }, CHORD_HOME_HOLD_MS);
     if (false) { // exploreHarmonyEnabled removed
       appState.exploreStartTime = Date.now();
       holdExploreTimerId = window.setTimeout(() => {
@@ -2241,7 +3015,18 @@ function bindEvents() {
         clearExploreTimer(holdExploreTimerId);
         holdExploreTimerId = null;
       }
+      if (homeOverlayTimerId !== null) {
+        window.clearTimeout(homeOverlayTimerId);
+        homeOverlayTimerId = null;
+      }
       clearChordDiffPreview();
+      if (homeOverlayTriggered) {
+        lastRestrictedChordWindowMidi = restrictedMidi;
+        lastChordPaletteSelectionAtMs = performance.now();
+        el.chordDisplay.textContent = `Home options for ${label}: choose a center from the wheel.`;
+        trackRep("chords", `${label} home options`);
+        return;
+      }
       if (explorationTriggered || appState.isExploring) {
         const exploredLongEnough = (Date.now() - appState.exploreStartTime) >= EXPLORATION_HOLD_THRESHOLD_MS;
         stopHarmonyExploration({ withResolution: exploredLongEnough, clearLabel: true });
@@ -2266,6 +3051,10 @@ function bindEvents() {
       if (holdExploreTimerId !== null) {
         clearExploreTimer(holdExploreTimerId);
         holdExploreTimerId = null;
+      }
+      if (homeOverlayTimerId !== null) {
+        window.clearTimeout(homeOverlayTimerId);
+        homeOverlayTimerId = null;
       }
       if (explorationTriggered || appState.isExploring) {
         stopHarmonyExploration({ withResolution: false, clearLabel: true });
@@ -2389,6 +3178,8 @@ function bindEvents() {
       const rowId = rowTrigger?.dataset?.paletteRowId;
       const tab = rowTrigger?.dataset?.paletteTab;
       if (!rowId || !tab) return;
+      currentStudyContext = { type: "scale", tab, rowId, note: scalarCell.dataset.scaleNote };
+      renderNowStudyingPanel();
       void playScalarPaletteRow(tab, rowId);
       return;
     }
@@ -2436,38 +3227,22 @@ function bindEvents() {
   el.playScaleBtn.addEventListener("click", async () => {
     const root = el.scaleRootSelect.value;
     const patternKey = resolveScalePatternKey(el.scaleTypeSelect.value);
-    const midi = buildScalePatternMidi(root, patternKey, 3);
-    const notes = midi.map((value) => midiToNoteName(value));
-    const scaleHand = el.handSelect?.value === "left" ? "left" : "right";
-    const fingers = buildScaleFingering(notes, scaleHand);
+    const octaveCount = Math.max(1, Math.min(3, Number.parseInt(el.scaleOctaveSelect?.value || "1", 10) || 1));
+    const scaleHand = el.scaleHandSelect?.value || "right";
+    const scaleMotion = el.scaleMotionSelect?.value || "parallel";
+    const plan = buildScalePlaybackPlan(root, patternKey, octaveCount, scaleHand, scaleMotion);
     await playPatternScheduled({
-      notes,
-      fingers,
+      events: plan.events,
       showFingers: true,
-      snapshot: true
+      snapshot: true,
+      snapshotHoldMs: 3800
     });
     if (el.scaleOutput) {
-      el.scaleOutput.textContent = `${root} ${scalePatternLabel(patternKey)} @ ${appState.tempoBpm} BPM: ${notes.join(" - ")}`;
+      const octaveLabel = octaveCount === 1 ? "1 octave" : `${octaveCount} octaves`;
+      el.scaleOutput.textContent = `${root} ${scalePatternLabel(patternKey)} (${octaveLabel}, ${plan.label}) @ ${appState.tempoBpm}: ${plan.summary}`;
     }
     trackRep("scales", `${root} ${scalePatternLabel(patternKey)}`);
   });
-
-  el.scalePracticeBtn.addEventListener("click", () => {
-    const root = el.scaleRootSelect.value;
-    const patternKey = resolveScalePatternKey(el.scaleTypeSelect.value);
-    const bpm = appState.tempoBpm;
-    const family = patternKey === "major" ? "major (classical)" : "natural minor (classical)";
-    const useCase = SCALE_FAMILIES[family]?.useCase || "timing, tone consistency, and relaxed fingering";
-    el.scaleOutput.textContent = [
-      `Micro-plan for ${root} ${scalePatternLabel(patternKey)} @ ${bpm} BPM:`,
-      "1) 2 min hands separate, long tone.",
-      "2) 2 min contrary motion.",
-      "3) 2 min phrase ending on chord tone.",
-      `Use this for: ${useCase}.`
-    ].join(" ");
-  });
-
-
 
   el.coachUseContextBtn.addEventListener("click", () => {
     const cadenceName = getSelectedCadenceName();
@@ -2480,8 +3255,9 @@ function bindEvents() {
       `Chord focus: ${appState.root}${CHORDS[appState.quality].short}`,
       `Arpeggio: ${el.arpRootSelect.value} ${el.arpTypeSelect.value}`,
       `Scale: ${el.scaleRootSelect.value} ${scalePatternLabel(resolveScalePatternKey(el.scaleTypeSelect.value))}`,
+      `Learning mode: ${progress.labLearningMode === "play" ? "piano transfer" : "computer study / theory thinking"}`,
       `Recent progress: chords ${progress.chordReps}, progressions ${progress.progressionReps}, scales ${progress.scaleReps}, arpeggios ${progress.arpeggioReps}`,
-      "Give a concise ADHD-friendly 12-minute session with practical voicing examples."
+      "Give a concise ADHD-friendly 12-minute session that works at a computer first, then offers an optional piano-transfer step."
     ].join(" | ");
   });
 
@@ -2530,6 +3306,68 @@ function bindEvents() {
     markSessionComplete();
     renderProgress();
   });
+
+  if (el.practiceStartDateInput) {
+    el.practiceStartDateInput.addEventListener("change", () => {
+      progress.practicePathStartDate = el.practiceStartDateInput.value || todayKey();
+      saveProgress();
+      renderPracticeLab();
+    });
+  }
+
+  if (el.markPracticeDoneBtn) {
+    el.markPracticeDoneBtn.addEventListener("click", markTodayPracticeDone);
+  }
+
+  if (el.studyModeSwitch) {
+    el.studyModeSwitch.addEventListener("click", (event) => {
+      const btn = event.target.closest("button[data-study-mode]");
+      if (!btn) return;
+      progress.labLearningMode = btn.dataset.studyMode === "play" ? "play" : "study";
+      saveProgress();
+      renderExploreLabs();
+    });
+  }
+
+  if (el.lostStepBtn) {
+    el.lostStepBtn.addEventListener("click", resetToSafeLabStep);
+  }
+
+  if (el.chordMasteryMatrix) {
+    el.chordMasteryMatrix.addEventListener("change", (event) => {
+      const input = event.target.closest("input[data-mastery-key][data-mastery-skill]");
+      if (!input) return;
+      updateChordMasteryScore(input.dataset.masteryKey, input.dataset.masterySkill, input.value);
+    });
+  }
+
+  if (el.play1564LabBtn) {
+    el.play1564LabBtn.addEventListener("click", () => {
+      void play1564Lab();
+    });
+  }
+
+  if (el.vocabularyLab) {
+    el.vocabularyLab.addEventListener("click", (event) => {
+      const btn = event.target.closest("button[data-vocab-id]");
+      if (!btn) return;
+      void playVocabularyLabRow(btn.dataset.vocabId);
+    });
+  }
+
+  if (el.playModulationLabBtn) {
+    el.playModulationLabBtn.addEventListener("click", () => {
+      void playModulationLab();
+    });
+  }
+
+  [el.keySelect, el.modFromKeySelect, el.modToKeySelect, el.modPathSelect, el.lab1564InversionSelect, el.lab1564PatternSelect]
+    .filter(Boolean)
+    .forEach((control) => control.addEventListener("change", renderExploreLabs));
+
+  if (el.saveLabIdeaBtn) {
+    el.saveLabIdeaBtn.addEventListener("click", saveCurrentLabIdea);
+  }
 
   el.resetProgressBtn.addEventListener("click", hardResetProgress);
 
@@ -2848,15 +3686,18 @@ function playManualKeyImmediate(midi, velocity = 0.9) {
     playHtmlSampleForMidi(midi, hold, velocity);
     return;
   }
+  if (emergencyToneEngineActive) {
+    playEmergencyMidiNotes([midi], { hold, asChord: true, velocity });
+    return;
+  }
   if (!sampleEngineReady) {
     if (isSampleEngineLoading()) {
       enqueuePendingPlayRequest([midi], { hold, asChord: true, velocity });
       return;
     }
-    if (el.chordDisplay) {
-      el.chordDisplay.textContent = "Audio samples failed to initialize. Reload to retry.";
+    if (!playEmergencyMidiNotes([midi], { hold, asChord: true, velocity })) {
+      updateAudioStatusText("error");
     }
-    updateAudioStatusText("error");
     return;
   }
   const playNow = () => {
@@ -2920,10 +3761,56 @@ function showPressedNoteIndicator(midi, keyEl = keyElsByMidi.get(midi)) {
   notePressIndicatorEl.classList.add("is-visible");
 }
 
+function triggerFeelHaptic(type = "soft") {
+  if (!("vibrate" in navigator)) return;
+  const patterns = {
+    soft: 8,
+    save: [10, 24, 12],
+    success: 18,
+    complete: [18, 34, 28],
+    retry: [8, 30, 8]
+  };
+  try {
+    navigator.vibrate(patterns[type] || patterns.soft);
+  } catch {
+    // Haptics are progressive enhancement only.
+  }
+}
+
+function emitFeelFeedback(type = "soft", message = "", options = {}) {
+  const { haptic = false, visual = true } = options;
+  if (haptic) triggerFeelHaptic(type);
+
+  document.body.classList.remove("feel-state-soft", "feel-state-save", "feel-state-success", "feel-state-complete", "feel-state-retry");
+  void document.body.offsetWidth;
+  document.body.classList.add(`feel-state-${type}`);
+  window.setTimeout(() => {
+    document.body.classList.remove(`feel-state-${type}`);
+  }, 720);
+
+  if (!visual || !message) return;
+  let toast = document.querySelector(".feel-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.className = "feel-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    document.body.appendChild(toast);
+  }
+  toast.dataset.type = type;
+  toast.textContent = message;
+  toast.classList.remove("show");
+  void toast.offsetWidth;
+  toast.classList.add("show");
+  window.clearTimeout(toast._hideTimer);
+  toast._hideTimer = window.setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
 function startManualKeyGesture(event, initialKeyEl, initialMidi) {
   event.preventDefault();
   clearKeyboardHighlights();
   initialKeyEl.classList.add("active");
+  emitFeelFeedback("soft", "", { haptic: true, visual: false });
 
   const pointerId = event.pointerId;
   const active = {
@@ -3110,7 +3997,7 @@ function showChordTransitionDiff(diff) {
 const COF_ORDER = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
 
 function cornerKeyButtonHtml() {
-  const current = el.keySelect ? el.keySelect.value : "C";
+  const current = currentKeyDisplayName();
   return `<button class="corner-key-btn" aria-label="Key: ${current}" title="Click to cycle key, hold for circle selector">${current}</button>`;
 }
 
@@ -3132,7 +4019,7 @@ function wireCornerKeyButton() {
     clearTimeout(pressTimer);
     if (!longPressed) {
       // click → cycle to next key
-      const current = el.keySelect ? el.keySelect.value : "C";
+      const current = normalizePitchClass(el.keySelect ? el.keySelect.value : "C");
       const idx = NOTES.indexOf(current);
       const next = NOTES[(idx + 1) % NOTES.length];
       setRootContext(next);
@@ -3148,7 +4035,7 @@ function showCornerCofOverlay(anchorBtn) {
   dismissCornerCofOverlay();
   const overlay = document.createElement('div');
   overlay.className = 'corner-cof-overlay';
-  const current = el.keySelect ? el.keySelect.value : "C";
+  const current = normalizePitchClass(el.keySelect ? el.keySelect.value : "C");
   const radius = 72;
   const centerX = 90;
   const centerY = 90;
@@ -3160,7 +4047,7 @@ function showCornerCofOverlay(anchorBtn) {
     const angle = (i * 30 - 90) * (Math.PI / 180);
     const x = centerX + radius * Math.cos(angle);
     const y = centerY + radius * Math.sin(angle);
-    const isActive = note === current;
+    const isActive = normalizePitchClass(note) === current;
     svgContent += `
       <g class="cof-note-group" data-note="${note}" style="cursor:pointer">
         <circle cx="${x}" cy="${y}" r="16" fill="${isActive ? '#4A90D9' : 'rgba(60,80,130,0.7)'}" stroke="${isActive ? '#fff' : 'rgba(150,170,220,0.4)'}" stroke-width="${isActive ? 2 : 1}"/>
@@ -3178,14 +4065,18 @@ function showCornerCofOverlay(anchorBtn) {
   overlay.style.zIndex = '9999';
   document.body.appendChild(overlay);
 
-  // click handler for note selection
-  overlay.addEventListener('click', (e) => {
+  const selectCofGroupFromEvent = (e) => {
     const group = e.target.closest('.cof-note-group');
     if (group) {
       setRootContext(group.dataset.note);
       dismissCornerCofOverlay();
+      e.preventDefault();
     }
-  });
+  };
+
+  // Release on a wheel note should be enough to finalize the key after long-press.
+  overlay.addEventListener('pointerup', selectCofGroupFromEvent);
+  overlay.addEventListener('click', selectCofGroupFromEvent);
 
   // dismiss on outside click
   setTimeout(() => {
@@ -3206,14 +4097,174 @@ function dismissCornerCofOverlay() {
   document.removeEventListener('pointerdown', handleCofOutsideClick);
 }
 
+function qualityFamilyForHomeSearch(quality) {
+  if (["maj7", "min7", "dom7", "m7b5"].includes(quality)) return "seventh";
+  return "triad";
+}
+
+function homeQualityMatches(selectedQuality, candidateQuality) {
+  if (selectedQuality === candidateQuality) return true;
+  if (selectedQuality === "major") return candidateQuality === "major";
+  if (selectedQuality === "minor") return candidateQuality === "minor";
+  if (selectedQuality === "diminished") return candidateQuality === "diminished" || candidateQuality === "m7b5";
+  if (selectedQuality === "sus2" || selectedQuality === "sus4") {
+    return candidateQuality === "major" || candidateQuality === "dom7" || candidateQuality === "maj7";
+  }
+  return false;
+}
+
+function homeOptionSortScore(option) {
+  const roman = String(option.roman || "");
+  if (roman === "I" || roman === "i") return 0;
+  if (roman === "IV" || roman === "iv") return 1;
+  if (roman === "V" || roman === "v") return 2;
+  if (roman === "vi" || roman === "VI") return 3;
+  if (roman === "iii" || roman === "III") return 4;
+  return 8;
+}
+
+function buildHomeOptionsForChord(root, quality) {
+  const normalizedRoot = normalizePitchClass(root);
+  const family = qualityFamilyForHomeSearch(quality);
+  const majorQualityMap = family === "seventh" ? MAJOR_KEY_SEVENTH_QUALITIES : MAJOR_KEY_TRIAD_QUALITIES;
+  const minorQualityMap = family === "seventh" ? MINOR_KEY_SEVENTH_QUALITIES : MINOR_KEY_TRIAD_QUALITIES;
+  const options = [];
+
+  NOTES.forEach((key) => {
+    const keyIndex = NOTES.indexOf(key);
+    DEGREE_TO_SEMITONE.forEach((semi, idx) => {
+      const degreeRoot = NOTES[(keyIndex + semi) % 12];
+      const candidateQuality = majorQualityMap[idx];
+      if (degreeRoot !== normalizedRoot || !homeQualityMatches(quality, candidateQuality)) return;
+      options.push({
+        key,
+        mode: "major",
+        roman: ROMAN[idx],
+        tonicQuality: "major",
+        label: `${displayPitchClass(key)} major`,
+        role: `${ROMAN[idx]} in ${displayPitchClass(key)} major`,
+        note: ROMAN[idx] === "I"
+          ? "Most settled home."
+          : `${harmonyChordSymbol(normalizedRoot, quality)} can live here as ${ROMAN[idx]}.`
+      });
+    });
+
+    const minorKeyIndex = NOTES.indexOf(key);
+    MINOR_KEY_DEGREE_TO_SEMITONE.forEach((semi, idx) => {
+      const degreeRoot = NOTES[(minorKeyIndex + semi) % 12];
+      const candidateQuality = minorQualityMap[idx];
+      const roman = ["i", "ii°", "III", "iv", "v", "VI", "VII"][idx];
+      if (degreeRoot !== normalizedRoot || !homeQualityMatches(quality, candidateQuality)) return;
+      options.push({
+        key,
+        mode: "minor",
+        roman,
+        tonicQuality: "minor",
+        label: `${displayPitchClass(key)} minor`,
+        role: `${roman} in ${displayPitchClass(key)} minor`,
+        note: roman === "i"
+          ? "Minor-key home."
+          : `${harmonyChordSymbol(normalizedRoot, quality)} can live here as ${roman}.`
+      });
+    });
+  });
+
+  return options
+    .sort((a, b) => homeOptionSortScore(a) - homeOptionSortScore(b) || a.label.localeCompare(b.label))
+    .slice(0, 8);
+}
+
+function showChordHomeOverlay(anchorCell, chord = {}) {
+  dismissChordHomeOverlay();
+  const options = buildHomeOptionsForChord(chord.root, chord.quality);
+  const overlay = document.createElement("div");
+  overlay.className = "chord-home-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-label", `Home options for ${chord.label || "selected chord"}`);
+  const rect = anchorCell.getBoundingClientRect();
+  const overlayWidth = Math.min(360, window.innerWidth - 20);
+  const overlayHeight = Math.min(336, window.innerHeight - 20);
+  overlay.style.left = `${Math.max(10, Math.min(window.innerWidth - overlayWidth - 10, rect.left + rect.width / 2 - overlayWidth / 2))}px`;
+  overlay.style.top = `${Math.max(10, Math.min(window.innerHeight - overlayHeight - 10, rect.top + rect.height / 2 - overlayHeight / 2))}px`;
+
+  const optionMarkup = options.length
+    ? `<div class="chord-home-options-grid">${options.map((option) => `
+        <button class="chord-home-option"
+          data-home-key="${escapeHtml(option.key)}" data-home-mode="${escapeHtml(option.mode)}"
+          data-home-quality="${escapeHtml(option.tonicQuality)}" type="button">
+          <strong>${escapeHtml(option.label)}</strong>
+          <span>${escapeHtml(option.roman)}</span>
+        </button>
+      `).join("")}</div>`
+    : `<p class="chord-home-empty">No simple diatonic homes found for this exact color yet.</p>`;
+
+  overlay.innerHTML = `
+    <div class="chord-home-center">
+      <strong>${escapeHtml(chord.label || chord.root || "Chord")}</strong>
+      <span>possible homes</span>
+    </div>
+    ${optionMarkup}
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", (event) => {
+    const btn = event.target.closest(".chord-home-option");
+    if (!btn) return;
+    const key = normalizePitchClass(btn.dataset.homeKey || "C");
+    const mode = btn.dataset.homeMode === "minor" ? "minor" : "major";
+    const tonicQuality = mode === "minor" ? "minor" : "major";
+    const selected = options.find((option) => option.key === key && option.mode === mode);
+    const hold = Math.max(0.8, getHoldSeconds());
+    if (mode === "major") {
+      setRootContext(key);
+    } else {
+      setProgressionPaletteFocus(key, "minor", "key");
+      renderProgressionPalette();
+    }
+    playMidiNotes(buildChordMidi(key, tonicQuality, "root position", 3), { hold, asChord: true, restrictToWindow: false });
+    if (el.chordDisplay) {
+      el.chordDisplay.textContent = `${selected?.label || `${key} ${mode}`} can feel like home: ${selected?.role || ""}`;
+    }
+    dismissChordHomeOverlay();
+  });
+
+  setTimeout(() => {
+    document.addEventListener("pointerdown", handleChordHomeOutsideClick);
+  }, 10);
+}
+
+function handleChordHomeOutsideClick(event) {
+  const overlay = document.querySelector(".chord-home-overlay");
+  if (overlay && !overlay.contains(event.target)) {
+    dismissChordHomeOverlay();
+  }
+}
+
+function dismissChordHomeOverlay() {
+  const existing = document.querySelector(".chord-home-overlay");
+  if (existing) existing.remove();
+  document.removeEventListener("pointerdown", handleChordHomeOutsideClick);
+}
+
 function renderChordTable() {
-  const key = el.keySelect.value;
-  el.chordTableTitle.textContent = `Chords in ${key} Major`;
+  const key = normalizePitchClass(el.keySelect.value || appState.root || "C");
+  const preferFlat = shouldUseFlatKeyDisplay();
+  const keyLabel = displayPitchClass(key, { preferFlat });
+  el.chordTableTitle.textContent = `Chords in ${keyLabel} Major`;
 
-  const degreeRoots = DEGREE_TO_SEMITONE.map((semi) => NOTES[(NOTES.indexOf(key) + semi) % 12]);
+  const keyIndex = NOTES.indexOf(key);
+  const degreeData = [...DEGREE_TO_SEMITONE, 12].map((semi) => {
+    const absoluteSemi = keyIndex + semi;
+    return {
+      root: NOTES[absoluteSemi % 12],
+      octaveShift: Math.floor(absoluteSemi / 12) * 12
+    };
+  });
+  const degreeRoots = degreeData.map((degree) => degree.root);
+  const degreeLabels = [...ROMAN, "8"];
 
-  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${degreeRoots.map((root, idx) => (
-    `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${ROMAN[idx]}" data-column-root="${root}">${ROMAN[idx]}<br>${root}</button></th>`
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${degreeData.map(({ root }, idx) => (
+    `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${degreeLabels[idx]}" data-column-root="${root}">${degreeLabels[idx]}<br>${displayPitchClass(root, { preferFlat })}</button></th>`
   )).join("")}`;
   wireCornerKeyButton();
 
@@ -3225,10 +4276,11 @@ function renderChordTable() {
   ];
 
   el.chordTableBody.innerHTML = rows.map((row, rowIndex) => {
-    const cells = degreeRoots.map((root, idx) => {
-      const quality = row.quality || row.map[idx];
-      const label = chordSymbol(root, quality);
-      return `<td data-root="${root}" data-quality="${quality}" data-label="${label}">${label}</td>`;
+    const cells = degreeData.map(({ root, octaveShift }, idx) => {
+      const degreeIndex = idx % DEGREE_TO_SEMITONE.length;
+      const quality = row.quality || row.map[degreeIndex];
+      const label = harmonyChordSymbol(root, quality, { preferFlat });
+      return `<td data-root="${root}" data-quality="${quality}" data-label="${label}" data-octave-shift="${octaveShift}">${label}</td>`;
     }).join("");
     return `<tr data-row-index="${rowIndex}"><th scope="row" class="row-label"><button type="button" class="axis-play-btn axis-play-row" data-row-index="${rowIndex}" data-row-name="${row.name}">${row.name}</button></th>${cells}</tr>`;
   }).join("");
@@ -3237,25 +4289,33 @@ function renderChordTable() {
 }
 
 function renderArpeggioTable() {
-  const key = el.keySelect.value;
-  el.chordTableTitle.textContent = `Arpeggios in ${key} Major`;
-  const degreeRoots = DEGREE_TO_SEMITONE.map((semi) => NOTES[(NOTES.indexOf(key) + semi) % 12]);
+  const key = normalizePitchClass(el.keySelect.value || appState.root || "C");
+  const preferFlat = shouldUseFlatKeyDisplay();
+  el.chordTableTitle.textContent = `Arpeggios in ${displayPitchClass(key, { preferFlat })} Major`;
+  const keyIndex = NOTES.indexOf(key);
+  const degreeData = DEGREE_TO_SEMITONE.map((semi) => {
+    const absoluteSemi = keyIndex + semi;
+    return {
+      root: NOTES[absoluteSemi % 12],
+      octaveShift: Math.floor(absoluteSemi / 12) * 12
+    };
+  });
 
-  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${degreeRoots.map((root, idx) => (
-    `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${ROMAN[idx]}" data-column-root="${root}">${ROMAN[idx]}<br>${root}</button></th>`
+  el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${degreeData.map(({ root }, idx) => (
+    `<th class="axis-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${ROMAN[idx]}" data-column-root="${root}">${ROMAN[idx]}<br>${displayPitchClass(root, { preferFlat })}</button></th>`
   )).join("")}`;
   wireCornerKeyButton();
 
   el.chordTableBody.innerHTML = ARPEGGIO_TRIAD_ROWS.map((row, rowIndex) => {
-    const cells = degreeRoots.map((root, idx) => {
+    const cells = degreeData.map(({ root, octaveShift }, idx) => {
       const quality = MAJOR_KEY_TRIAD_QUALITIES[idx];
       const shortInversion = row.inversionIndex === 0
         ? "RP"
         : row.inversionIndex === 1
           ? "1st"
           : "2nd";
-      const label = `${chordSymbol(root, quality)} ${shortInversion}`;
-      return `<td data-root="${root}" data-quality="${quality}" data-label="${label}" data-inversion-index="${row.inversionIndex}">${label}</td>`;
+      const label = `${harmonyChordSymbol(root, quality, { preferFlat })} ${shortInversion}`;
+      return `<td data-root="${root}" data-quality="${quality}" data-label="${label}" data-inversion-index="${row.inversionIndex}" data-octave-shift="${octaveShift}">${label}</td>`;
     }).join("");
     return `<tr data-row-index="${rowIndex}"><th scope="row" class="row-label"><button type="button" class="axis-play-btn axis-play-row" data-row-index="${rowIndex}" data-row-name="${row.name}" data-inversion-index="${row.inversionIndex}">${row.name}</button></th>${cells}</tr>`;
   }).join("");
@@ -3263,28 +4323,37 @@ function renderArpeggioTable() {
   clearChordTableSelection();
 }
 
+function buildChordMidiForPaletteCell(cell, inversion = "root position", baseOctave = 3) {
+  const root = cell?.dataset?.root;
+  const quality = cell?.dataset?.quality;
+  if (!root || !quality) return [];
+  const octaveShift = Number(cell.dataset.octaveShift || 0);
+  return buildChordMidi(root, quality, inversion, baseOctave)
+    .map((midi) => midi + (Number.isFinite(octaveShift) ? octaveShift : 0));
+}
+
 function getScalarPaletteConfig(paletteTab) {
   if (paletteTab === "scales") {
     return {
-      title: `Scales in ${el.keySelect.value}`,
+      title: `Scales in ${currentKeyDisplayName()}`,
       rows: SCALES_PALETTE_ROWS
     };
   }
   if (paletteTab === "modes") {
     return {
-      title: `Modes in ${el.keySelect.value}`,
+      title: `Modes in ${currentKeyDisplayName()}`,
       rows: MODES_PALETTE_ROWS
     };
   }
   if (paletteTab === "pentatonic") {
     return {
-      title: `Pentatonic in ${el.keySelect.value}`,
+      title: `Pentatonic in ${currentKeyDisplayName()}`,
       rows: PENTATONIC_PALETTE_ROWS
     };
   }
   if (paletteTab === "color") {
     return {
-      title: `Color in ${el.keySelect.value}`,
+      title: `Color in ${currentKeyDisplayName()}`,
       rows: COLOR_PALETTE_ROWS
     };
   }
@@ -3294,7 +4363,8 @@ function getScalarPaletteConfig(paletteTab) {
 function renderScalarPaletteTable(paletteTab) {
   const config = getScalarPaletteConfig(paletteTab);
   if (!config) return;
-  const key = el.keySelect.value;
+  const key = normalizePitchClass(el.keySelect.value || appState.root || "C");
+  const preferFlat = shouldUseFlatKeyDisplay();
   el.chordTableTitle.textContent = config.title;
   el.chordTableHead.innerHTML = `<th class="axis-corner-cell">${cornerKeyButtonHtml()}</th>${PALETTE_SCALAR_COLUMN_DEGREES
     .map((degree, idx) => `<th class="axis-col-cell degree-col-cell"><button type="button" class="axis-play-btn axis-play-col" data-column-index="${idx}" data-column-roman="${degree}">${degree}</button></th>`)
@@ -3308,7 +4378,7 @@ function renderScalarPaletteTable(paletteTab) {
       .slice(0, PALETTE_SCALAR_COLUMN_DEGREES.length)
       .map((midi) => pitchClassFromMidi(midi));
     const cells = PALETTE_SCALAR_COLUMN_DEGREES.map((_, idx) => {
-      const label = displayNotes[idx] || "";
+      const label = displayPitchClass(displayNotes[idx] || "", { preferFlat });
       const midi = Number.isFinite(displayMidi[idx]) ? displayMidi[idx] : "";
       return `<td data-scale-note="${label}" data-scale-midi="${midi}">${label}</td>`;
     }).join("");
@@ -5204,8 +6274,15 @@ function readRepertoireSeedFromWindow() {
   };
 }
 
+function isFileProtocolMode() {
+  return window.location.protocol === "file:";
+}
+
 async function loadRepertoireLibrary() {
   const seedFallback = readRepertoireSeedFromWindow();
+  if (isFileProtocolMode() && seedFallback) {
+    return seedFallback;
+  }
   try {
     const [itemsResponse, stylesResponse] = await Promise.all([
       fetch(REPERTOIRE_DATA_URL),
@@ -6133,7 +7210,7 @@ function bindRepertoireEvents() {
 
 function renderProgressionStrip() {
   if (!el.progressionStrip) return;
-  const progression = buildProgressionChords(el.keySelect.value, el.progressionSelect.value);
+  const progression = buildProgressionChords(getProgressionPaletteContext(), el.progressionSelect.value, getProgressionVoicingMode());
   el.progressionStrip.innerHTML = "";
 
   progression.forEach((step, idx) => {
@@ -6149,6 +7226,267 @@ function renderProgressionStrip() {
     });
     el.progressionStrip.appendChild(div);
   });
+}
+
+function renderProgressionPalette() {
+  if (!el.progressionPaletteGrid) return;
+  const context = getProgressionPaletteContext();
+  const voicingMode = getProgressionVoicingMode();
+  const activeGroup = PROGRESSION_PALETTE_GROUPS.find((group) => group.id === activeProgressionPaletteGroupId)
+    || PROGRESSION_PALETTE_GROUPS[0];
+  activeProgressionPaletteGroupId = activeGroup?.id || "pop";
+  if (el.progressionPaletteKey) {
+    const sourceLabel = context.source === "chord" ? "Selected chord" : "Key";
+    el.progressionPaletteKey.textContent = `${sourceLabel}: ${context.label}`;
+  }
+  if (el.progressionPaletteTabs) {
+    el.progressionPaletteTabs.innerHTML = PROGRESSION_PALETTE_GROUPS.map((group) => `
+      <button class="${group.id === activeProgressionPaletteGroupId ? "active" : ""}" type="button"
+        data-progression-group="${escapeHtml(group.id)}" role="tab"
+        aria-selected="${group.id === activeProgressionPaletteGroupId ? "true" : "false"}">
+        ${escapeHtml(group.title)}
+      </button>
+    `).join("");
+  }
+  el.progressionPaletteGrid.innerHTML = `
+    <section class="progression-family" aria-label="${escapeHtml(activeGroup.title)}">
+      <div class="progression-family-grid">
+        ${activeGroup.items.map((item) => {
+          const chords = buildProgressionPaletteChords(context, item, voicingMode);
+          return `
+            <button class="progression-card" type="button" data-progression-name="${escapeHtml(item.name)}">
+              <strong>${escapeHtml(item.name)}</strong>
+              <span>${escapeHtml(item.tagline)}</span>
+              <small>${chords.map((chord) => escapeHtml(chord.symbol)).join(" -> ")}</small>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+async function playProgressionPaletteItem(name) {
+  const item = findProgressionPaletteItem(name);
+  if (!item) return;
+  const token = ++progressionPalettePlayToken;
+  clearPatternUiTimers();
+  clearPatternVisualState();
+  const group = findProgressionPaletteGroupForItem(name);
+  if (group) activeProgressionPaletteGroupId = group.id;
+  const context = getProgressionPaletteContext();
+  const voicingMode = getProgressionVoicingMode();
+  const styleMode = getProgressionStyleMode();
+  if (el.progressionSelect && PROGRESSIONS[name]) {
+    el.progressionSelect.value = name;
+    renderProgressionStrip();
+  }
+  renderProgressionPalette();
+  el.progressionPaletteGrid?.querySelectorAll(".progression-card").forEach((card) => {
+    card.classList.toggle("is-active", card.dataset.progressionName === name);
+  });
+
+  const chords = buildProgressionPaletteChords(context, item, voicingMode);
+  currentStudyContext = { type: "progression", name: item.name };
+  renderProgressionPaletteExplanation(item, context, chords);
+  if (el.progressionOutput) {
+    el.progressionOutput.textContent = `Progression palette: ${item.name} in ${context.label} (${progressionVoicingLabel(voicingMode)}, ${progressionStyleLabel(styleMode)}): ${chords.map((chord) => chord.symbol).join(" -> ")}`;
+  }
+  trackRep("progressions", `${context.label} ${item.name}`);
+  renderPianoLabContext();
+  renderNowStudyingPanel();
+  renderLabMicroMissions();
+
+  const timing = getProgressionPaletteTiming(item, chords, styleMode);
+  await playStyledProgression(chords, timing, token);
+}
+
+function renderProgressionPaletteExplanation(item, keyOrContext, chords) {
+  if (el.progressionPaletteExplain) {
+    const context = typeof keyOrContext === "object" ? keyOrContext : { label: keyOrContext };
+    const styleMode = getProgressionStyleMode();
+    const timing = getProgressionPaletteTiming(item, chords, styleMode);
+    const style = PROGRESSION_STYLE_PATTERNS[styleMode] || PROGRESSION_STYLE_PATTERNS.plain;
+    el.progressionPaletteExplain.classList.remove("is-updating");
+    el.progressionPaletteExplain.innerHTML = `
+      <div class="progression-explain-head">
+        <strong>${escapeHtml(item.name)} in ${escapeHtml(context.label || context.root || "C")}</strong>
+        <span>${chords.map((chord) => `${escapeHtml(chord.degree)} ${escapeHtml(chord.symbol)}`).join(" -> ")}</span>
+      </div>
+      <p><strong>What you heard:</strong> ${escapeHtml(item.theory)}</p>
+      <p><strong>Listen for:</strong> ${escapeHtml(item.listenFor)}</p>
+      <p><strong>Style:</strong> ${escapeHtml(style.label)} - ${escapeHtml(style.whatChanges)}</p>
+      ${renderProgressionSongExamples(item)}
+      <p><strong>Feel:</strong> ${escapeHtml(item.feel || `${timing.label} at ${appState.bpm} BPM, with each chord held long enough to hear the color before it moves.`)}</p>
+      <p><strong>Try next:</strong> change the key and press the same button. The chord names change, but the number story stays the same.</p>
+    `;
+    void el.progressionPaletteExplain.offsetWidth;
+    el.progressionPaletteExplain.classList.add("is-updating");
+  }
+}
+
+function renderProgressionSongExamples(item = {}) {
+  const songs = Array.isArray(item.songs) ? item.songs.slice(0, 5) : [];
+  if (!songs.length) return "";
+  return `
+    <div class="progression-song-row">
+      <strong>Songs to listen for:</strong>
+      ${songs.map((song) => `<span>${escapeHtml(song)}</span>`).join("")}
+    </div>
+  `;
+}
+
+async function playStyledProgression(chords = [], timing = {}, token = progressionPalettePlayToken) {
+  const playableChords = Array.isArray(chords) ? chords.filter((chord) => Array.isArray(chord?.midi)) : [];
+  if (!playableChords.length) return;
+  if (!ensureAudio()) return;
+  if (isToneEngineAvailable() && (!toneEngineReady || !toneSampler)) {
+    await ensureToneEngine();
+  }
+  if (!toneEngineReady && shouldUseRnboPrimaryEngine() && !htmlSampleEngineActive && !rnboEngineActive && !rnboEngineFailedReason) {
+    await initializeRnboEngine();
+  }
+
+  const nowSec = getSchedulerNowSeconds();
+  const startSec = nowSec + Math.max(0.03, getInteractiveStartLeadTimeSeconds());
+  let chordStartMs = 0;
+  playableChords.forEach((chord, chordIndex) => {
+    const chordMs = timing.chordMsByIndex?.[chordIndex] || timing.defaultChordMs || 1000;
+    const events = timing.styleEventsByIndex?.[chordIndex] || [{
+      offsetMs: 0,
+      holdSeconds: timing.defaultHoldSeconds || 0.8,
+      highlightMs: chordMs
+    }];
+    events.forEach((event) => {
+      const eventStartSec = startSec + (chordStartMs + (Number(event.offsetMs) || 0)) / 1000;
+      scheduleProgressionChordEvent(chord.midi, eventStartSec, event.holdSeconds || timing.defaultHoldSeconds || 0.6, event.velocity || 0.78);
+      scheduleProgressionVisualEvent(chordIndex, chord.midi, eventStartSec, event.highlightMs || Math.min(chordMs, 520), token);
+    });
+    chordStartMs += chordMs;
+  });
+
+  const totalMs = timing.chordMsByIndex?.reduce((sum, value) => sum + value, 0)
+    || playableChords.length * (timing.defaultChordMs || 1000);
+  const clearTimerId = window.setTimeout(() => {
+    if (token !== progressionPalettePlayToken) return;
+    clearProgressionStep();
+  }, Math.max(0, Math.round((startSec - nowSec) * 1000 + totalMs + 80)));
+  registerPatternUiTimer(clearTimerId);
+  await wait(totalMs + Math.round((startSec - nowSec) * 1000) + 90);
+}
+
+function scheduleProgressionChordEvent(midiNotes, startTimeSec, holdSeconds, velocity = 0.78) {
+  const notes = Array.isArray(midiNotes) ? midiNotes.filter((midi) => Number.isFinite(midi)) : [];
+  if (!notes.length) return;
+  notes.forEach((midi) => {
+    scheduleSingleMidiNote(midi, startTimeSec, holdSeconds, velocity);
+  });
+}
+
+function scheduleProgressionVisualEvent(stepIndex, midiNotes, startTimeSec, highlightMs, token) {
+  const nowSec = getSchedulerNowSeconds();
+  const delayMs = Math.max(0, Math.round((startTimeSec - nowSec) * 1000));
+  const onTimerId = window.setTimeout(() => {
+    if (token !== progressionPalettePlayToken) return;
+    activateProgressionStep(stepIndex);
+    highlightKeyboard(midiNotes, highlightMs, false);
+  }, delayMs);
+  registerPatternUiTimer(onTimerId);
+}
+
+function getProgressionPaletteTiming(item = {}, chords = [], styleMode = getProgressionStyleMode()) {
+  const beatMs = Math.round(60000 / Math.max(30, appState.bpm || 80));
+  const chordCount = Math.max(1, chords.length || (PROGRESSIONS[item.name] || []).length || 4);
+  const beatsByIndex = getProgressionPaletteBeats(item, chordCount);
+  const chordMsByIndex = beatsByIndex.map((beats) => Math.round(beatMs * beats));
+  const holdSecondsByIndex = chordMsByIndex.map((durationMs) => {
+    const breathMs = Math.min(180, Math.max(70, beatMs * 0.2));
+    return Math.max(0.62, (durationMs - breathMs) / 1000);
+  });
+  return {
+    beatMs,
+    beatsByIndex,
+    chordMsByIndex,
+    holdSecondsByIndex,
+    styleMode,
+    styleEventsByIndex: chordMsByIndex.map((chordMs, index) => buildProgressionStyleEvents(styleMode, chordMs, beatMs, holdSecondsByIndex[index])),
+    defaultChordMs: chordMsByIndex[0] || beatMs * 2,
+    defaultHoldSeconds: holdSecondsByIndex[0] || Math.max(0.62, (beatMs * 1.8) / 1000),
+    label: describeProgressionPaletteTiming(item, beatsByIndex, styleMode)
+  };
+}
+
+function buildProgressionStyleEvents(styleMode, chordMs, beatMs, fallbackHoldSeconds) {
+  const style = normalizeProgressionStyleMode(styleMode);
+  const clampWithinChord = (value) => Math.max(0, Math.min(chordMs - 80, Math.round(value)));
+  const shortHold = Math.max(0.12, Math.min(0.34, beatMs / 1000 * 0.38));
+  const mediumHold = Math.max(0.28, Math.min(0.58, beatMs / 1000 * 0.72));
+  const longHold = Math.max(0.58, fallbackHoldSeconds || 0.8);
+  if (style === "reggae") {
+    return [0.5, 1.5].map((beat) => ({
+      offsetMs: clampWithinChord(beatMs * beat),
+      holdSeconds: shortHold,
+      highlightMs: Math.round(shortHold * 1000)
+    }));
+  }
+  if (style === "bossa") {
+    return [0, 0.75, 1.5].map((beat) => ({
+      offsetMs: clampWithinChord(beatMs * beat),
+      holdSeconds: mediumHold,
+      highlightMs: Math.round(mediumHold * 1000)
+    }));
+  }
+  if (style === "latin") {
+    return [0, 0.75, 1.25, 1.75].map((beat) => ({
+      offsetMs: clampWithinChord(beatMs * beat),
+      holdSeconds: shortHold,
+      highlightMs: Math.round(shortHold * 1000)
+    }));
+  }
+  if (style === "swing") {
+    return [0, 1.33].map((beat, index) => ({
+      offsetMs: clampWithinChord(beatMs * beat),
+      holdSeconds: index === 0 ? mediumHold : shortHold,
+      highlightMs: index === 0 ? Math.round(mediumHold * 1000) : Math.round(shortHold * 1000)
+    }));
+  }
+  if (style === "pop") {
+    return [0, 1].map((beat, index) => ({
+      offsetMs: clampWithinChord(beatMs * beat),
+      holdSeconds: index === 0 ? longHold * 0.58 : mediumHold,
+      highlightMs: index === 0 ? Math.round(chordMs * 0.5) : Math.round(mediumHold * 1000)
+    }));
+  }
+  return [{
+    offsetMs: 0,
+    holdSeconds: style === "classical" ? Math.max(longHold, chordMs / 1000 * 0.92) : longHold,
+    highlightMs: chordMs
+  }];
+}
+
+function getProgressionPaletteBeats(item = {}, chordCount = 4) {
+  const name = item.name || "";
+  if (name.includes("ii-V-I") && chordCount === 3) return [2, 2, 4];
+  if (name.includes("IV-I (Amen")) return [2, 3];
+  if (name.includes("12-Bar")) return Array.from({ length: chordCount }, () => 2);
+  if (name.includes("Turnaround")) return Array.from({ length: chordCount }, () => 1);
+  if (name.includes("7-3-6")) return [1.5, 1.5, 3];
+  if (chordCount === 2) return [2, 3];
+  if (chordCount === 3) return [2, 2, 3];
+  return Array.from({ length: chordCount }, () => 2);
+}
+
+function describeProgressionPaletteTiming(item = {}, beatsByIndex = [], styleMode = getProgressionStyleMode()) {
+  const name = item.name || "";
+  const style = PROGRESSION_STYLE_PATTERNS[normalizeProgressionStyleMode(styleMode)] || PROGRESSION_STYLE_PATTERNS.plain;
+  if (styleMode && styleMode !== "plain") return `${style.label}: ${style.summary}`;
+  if (name.includes("ii-V-I") && beatsByIndex.length === 3) return "a jazz 2-2-4 resolution";
+  if (name.includes("IV-I (Amen")) return "a gentle Amen cadence";
+  if (name.includes("12-Bar")) return "a compact blues shuffle map";
+  if (name.includes("Turnaround")) return "a quick turnaround pulse";
+  if (name.includes("7-3-6")) return "a gospel passing move into a longer landing";
+  if (beatsByIndex.every((beats) => beats === 2)) return "a normal two-beat chord loop";
+  return `${beatsByIndex.join("-")} beat chord movement`;
 }
 
 function renderCadenceStrip() {
@@ -6175,9 +7513,6 @@ async function playChordTableCellSequence(cells, label) {
   if (!Array.isArray(cells) || cells.length === 0) return;
   const playableCells = cells.filter((cell) => cell?.dataset?.root && cell?.dataset?.quality);
   if (playableCells.length === 0) return;
-  const startCell = playableCells[0];
-  const startRoot = startCell.dataset.root;
-  const startQuality = startCell.dataset.quality;
   const beatSeconds = getHarmonyBeatSeconds();
   const stepSeconds = beatSeconds * 2;
   const hold = Math.max(0.14, stepSeconds * 0.9);
@@ -6187,26 +7522,24 @@ async function playChordTableCellSequence(cells, label) {
     const root = cell?.dataset?.root;
     const quality = cell?.dataset?.quality;
     if (!root || !quality) continue;
-    markChordTableCell(root, quality);
-    const midi = buildChordMidi(root, quality, "root position", 3);
+    clearChordTableSelection();
+    cell.classList.add("is-selected");
+    const midi = buildChordMidiForPaletteCell(cell, "root position", 3);
     playMidiNotes(midi, {
       hold,
       asChord: true,
       highlightMs: getHighlightMs(hold, stepMs),
       restrictToWindow: false
     });
+    if (i === playableCells.length - 1) {
+      celebrateResolutionCell(cell);
+    }
     await wait(stepMs);
   }
 
-  // Resolve by replaying the starting chord one octave higher for a full loop finish.
-  const resolvedMidi = buildChordMidi(startRoot, startQuality, "root position", 3).map((midi) => midi + 12);
-  const resolvedHold = Math.max(0.16, stepSeconds * 0.95);
-  playCircularResolveAtStartCell(startCell, resolvedMidi, resolvedHold);
-
   if (el.chordDisplay) {
     const shortLabel = playableCells.map((cell) => cell?.dataset?.label).filter(Boolean).join(" -> ");
-    const resolvedLabel = `${startRoot}${CHORDS[startQuality]?.short || ""}`;
-    el.chordDisplay.textContent = `${label}: ${shortLabel} -> ${resolvedLabel}↑`;
+    el.chordDisplay.textContent = `${label}: ${shortLabel}`;
   }
   trackRep("chords", label);
 }
@@ -6924,11 +8257,12 @@ function applyGuidedLessonSetup(plan) {
   const setup = plan.practice || {};
   const key = setup.key || appState.root;
   setRootContext(key);
-  if (el.rootSelect) el.rootSelect.value = key;
-  if (el.keySelect) el.keySelect.value = key;
-  if (el.scaleRootSelect) el.scaleRootSelect.value = key;
-  if (el.arpRootSelect) el.arpRootSelect.value = key;
-  if (el.conceptKeySelect) el.conceptKeySelect.value = key;
+  const normalizedKey = normalizePitchClass(key);
+  if (el.rootSelect) el.rootSelect.value = normalizedKey;
+  if (el.keySelect) el.keySelect.value = normalizedKey;
+  if (el.scaleRootSelect) el.scaleRootSelect.value = normalizedKey;
+  if (el.arpRootSelect) el.arpRootSelect.value = normalizedKey;
+  if (el.conceptKeySelect) el.conceptKeySelect.value = normalizedKey;
 
   if (setup.mode === "progression" && setup.progressionName && el.progressionSelect && PROGRESSIONS[setup.progressionName]) {
     el.progressionSelect.value = setup.progressionName;
@@ -7501,23 +8835,115 @@ function buildScaleMidi(root, intervals, octave = 3) {
   return intervals.map((interval) => base + interval);
 }
 
-function buildScalePatternMidi(root, patternKey, octave = 3) {
+function buildScalePatternMidi(root, patternKey, octave = 3, octaveCount = 1) {
   const resolvedPattern = resolveScalePatternKey(patternKey);
   const intervals = SCALE_PATTERN_LIBRARY[resolvedPattern]?.intervals || SCALE_PATTERN_LIBRARY.major.intervals;
   const base = 12 * (octave + 1) + NOTES.indexOf(root);
-  return [...intervals, 12].map((interval) => base + interval);
+  const count = Math.max(1, Math.min(3, Number.parseInt(octaveCount, 10) || 1));
+  const expandedIntervals = [];
+  for (let octaveIndex = 0; octaveIndex < count; octaveIndex += 1) {
+    intervals.forEach((interval) => {
+      expandedIntervals.push(interval + octaveIndex * 12);
+    });
+  }
+  expandedIntervals.push(count * 12);
+  return expandedIntervals.map((interval) => base + interval);
+}
+
+function buildDescendingScalePatternMidi(root, patternKey, octave = 4, octaveCount = 1) {
+  const ascending = buildScalePatternMidi(root, patternKey, octave - octaveCount, octaveCount);
+  return ascending.reverse();
+}
+
+function buildScalePlaybackPlan(root, patternKey, octaveCount = 1, hand = "right", motion = "parallel") {
+  const rightAscendingMidi = buildScalePatternMidi(root, patternKey, 4, octaveCount);
+  const leftAscendingMidi = buildScalePatternMidi(root, patternKey, 3, octaveCount);
+  const rightDescendingMidi = buildDescendingScalePatternMidi(root, patternKey, 4 + octaveCount, octaveCount);
+  const leftDescendingMidi = buildDescendingScalePatternMidi(root, patternKey, 4, octaveCount);
+
+  if (hand === "left") {
+    const notes = leftAscendingMidi.map(midiToNoteName);
+    const fingers = buildScaleFingering(notes, "left");
+    return {
+      events: notes.map((note, index) => ({ notes: [note], fingers: [fingers[index]] })),
+      label: "left hand",
+      summary: notes.join(" - ")
+    };
+  }
+
+  if (hand !== "both") {
+    const notes = rightAscendingMidi.map(midiToNoteName);
+    const fingers = buildScaleFingering(notes, "right");
+    return {
+      events: notes.map((note, index) => ({ notes: [note], fingers: [fingers[index]] })),
+      label: "right hand",
+      summary: notes.join(" - ")
+    };
+  }
+
+  const rightMidi = motion === "contrary-in" ? rightDescendingMidi : rightAscendingMidi;
+  const leftMidi = motion === "contrary-out" ? leftDescendingMidi : leftAscendingMidi;
+  const rightNotes = rightMidi.map(midiToNoteName);
+  const leftNotes = leftMidi.map(midiToNoteName);
+  const rightFingers = motion === "contrary-in"
+    ? buildScaleFingering([...rightNotes].reverse(), "right").reverse()
+    : buildScaleFingering(rightNotes, "right");
+  const leftFingers = motion === "contrary-out"
+    ? buildScaleFingering([...leftNotes].reverse(), "left").reverse()
+    : buildScaleFingering(leftNotes, "left");
+  const length = Math.min(rightNotes.length, leftNotes.length);
+  const events = [];
+  for (let index = 0; index < length; index += 1) {
+    events.push({
+      notes: [leftNotes[index], rightNotes[index]],
+      fingers: [leftFingers[index], rightFingers[index]]
+    });
+  }
+  const motionLabel = motion === "contrary-out"
+    ? "both hands, contrary outward"
+    : motion === "contrary-in"
+      ? "both hands, contrary inward"
+      : "both hands, together";
+  return {
+    events,
+    label: motionLabel,
+    summary: events.map((event) => event.notes.join(" + ")).join(" | ")
+  };
 }
 
 function buildScaleFingering(notes, hand = "right") {
-  const rightDefault = [1, 2, 3, 1, 2, 3, 4, 5];
-  const rightAlternative = [1, 2, 3, 4, 1, 2, 3, 5];
-  const leftDefault = [5, 4, 3, 2, 1, 3, 2, 1];
-  const leftAlternative = [5, 4, 3, 2, 1, 4, 3, 2];
-  const defaultPattern = hand === "left" ? leftDefault : rightDefault;
-  const altPattern = hand === "left" ? leftAlternative : rightAlternative;
+  const length = Array.isArray(notes) ? notes.length : 0;
+  const defaultPattern = buildMultiOctaveScaleFingering(length, hand, false);
+  const altPattern = buildMultiOctaveScaleFingering(length, hand, true);
   if (!scaleFingeringHasThumbOnBlack(notes, defaultPattern)) return defaultPattern;
   if (!scaleFingeringHasThumbOnBlack(notes, altPattern)) return altPattern;
   return defaultPattern;
+}
+
+function buildMultiOctaveScaleFingering(targetLength, hand = "right", useAlternative = false) {
+  const length = Math.max(0, Number.parseInt(targetLength, 10) || 0);
+  if (!length) return [];
+  if (length <= 8) {
+    if (hand === "left") return (useAlternative ? [5, 4, 3, 2, 1, 4, 3, 2] : [5, 4, 3, 2, 1, 3, 2, 1]).slice(0, length);
+    return (useAlternative ? [1, 2, 3, 4, 1, 2, 3, 5] : [1, 2, 3, 1, 2, 3, 4, 5]).slice(0, length);
+  }
+
+  const fingers = [];
+  if (hand === "left") {
+    const firstOctave = useAlternative ? [5, 4, 3, 2, 1, 4, 3, 2] : [5, 4, 3, 2, 1, 3, 2, 1];
+    const continuingOctave = useAlternative ? [4, 3, 2, 1, 4, 3, 2] : [4, 3, 2, 1, 3, 2, 1];
+    fingers.push(...firstOctave);
+    while (fingers.length < length) {
+      fingers.push(...continuingOctave);
+    }
+    return fingers.slice(0, length);
+  }
+
+  const sevenNoteCycle = useAlternative ? [1, 2, 3, 4, 1, 2, 3] : [1, 2, 3, 1, 2, 3, 4];
+  while (fingers.length < length - 1) {
+    fingers.push(...sevenNoteCycle);
+  }
+  return [...fingers.slice(0, length - 1), 5];
 }
 
 function scaleFingeringHasThumbOnBlack(notes, pattern) {
@@ -7622,17 +9048,32 @@ function scheduleSingleMidiNote(midi, startTimeSec, holdSeconds, velocity) {
 }
 
 async function playPatternScheduled({
+  events = null,
   notes,
   fingers = null,
   startTimeSec = null,
   showFingers = true,
-  snapshot = true
+  snapshot = true,
+  snapshotHoldMs = 800
 }) {
-  const noteList = Array.isArray(notes) ? notes : [];
-  const midiNotes = noteList
-    .map((note) => noteNameToMidi(note))
-    .filter((midi) => Number.isFinite(midi));
-  if (!midiNotes.length) return;
+  const eventList = Array.isArray(events) && events.length
+    ? events.map((event) => {
+      const eventNotes = Array.isArray(event?.notes) ? event.notes : [event?.note].filter(Boolean);
+      const eventFingers = Array.isArray(event?.fingers) ? event.fingers : [];
+      const midi = eventNotes
+        .map((note) => noteNameToMidi(note))
+        .filter((value) => Number.isFinite(value));
+      return { midi, fingers: eventFingers };
+    }).filter((event) => event.midi.length)
+    : (Array.isArray(notes) ? notes : [])
+      .map((note, index) => {
+        const midi = noteNameToMidi(note);
+        return Number.isFinite(midi)
+          ? { midi: [midi], fingers: [Array.isArray(fingers) ? fingers[index] : null] }
+          : null;
+      })
+      .filter(Boolean);
+  if (!eventList.length) return;
   if (!ensureAudio()) return;
 
   const runId = Date.now() + Math.floor(Math.random() * 1000);
@@ -7670,29 +9111,34 @@ async function playPatternScheduled({
     : nowSec + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
   const usedNotes = new Set();
 
-  midiNotes.forEach((midi, idx) => {
-    const note = midiToNoteName(midi);
+  eventList.forEach((event, idx) => {
     const noteStart = safeStart + idx * stepSeconds;
-    scheduleSingleMidiNote(midi, noteStart, holdSeconds, velocity);
-    usedNotes.add(note);
+    const eventNotes = event.midi.map((midi) => midiToNoteName(midi));
+    event.midi.forEach((midi) => {
+      scheduleSingleMidiNote(midi, noteStart, holdSeconds, velocity);
+      usedNotes.add(midiToNoteName(midi));
+    });
 
     const onDelayMs = Math.max(0, Math.round((noteStart - nowSec) * 1000));
     const offDelayMs = Math.max(onDelayMs + 36, Math.round((noteStart + holdSeconds - nowSec) * 1000));
-    const fingerNum = Array.isArray(fingers) ? fingers[idx] : null;
     const onTimerId = window.setTimeout(() => {
       if (activePatternRunId !== runId) return;
-      highlightKey(note, fingerNum, showFingers);
+      eventNotes.forEach((note, noteIndex) => {
+        highlightKey(note, event.fingers[noteIndex], showFingers);
+      });
     }, onDelayMs);
     const offTimerId = window.setTimeout(() => {
       if (activePatternRunId !== runId) return;
-      const keyEl = getKeyEl(note);
-      if (keyEl) keyEl.classList.remove("active");
+      eventNotes.forEach((note) => {
+        const keyEl = getKeyEl(note);
+        if (keyEl) keyEl.classList.remove("active");
+      });
     }, offDelayMs);
     registerPatternUiTimer(onTimerId);
     registerPatternUiTimer(offTimerId);
   });
 
-  const patternDurationSeconds = (midiNotes.length - 1) * stepSeconds + holdSeconds;
+  const patternDurationSeconds = (eventList.length - 1) * stepSeconds + holdSeconds;
   const finalDelayMs = Math.max(0, Math.round((safeStart + patternDurationSeconds - nowSec) * 1000));
   const finalizeTimerId = window.setTimeout(() => {
     if (activePatternRunId !== runId) return;
@@ -7711,33 +9157,204 @@ async function playPatternScheduled({
       }
     });
 
+    const cleanupDelayMs = snapshot ? Math.max(0, Number(snapshotHoldMs) || 800) : 0;
     const cleanupTimerId = window.setTimeout(() => {
       if (activePatternRunId !== runId) return;
       clearFingerOverlays();
       clearPatternVisualState();
       clearPatternUiTimers();
       activePatternRunId = 0;
-    }, snapshot ? 800 : 0);
+    }, cleanupDelayMs);
     registerPatternUiTimer(cleanupTimerId);
   }, finalDelayMs);
   registerPatternUiTimer(finalizeTimerId);
 }
 
-function buildProgressionChords(key, progressionName) {
+function buildProgressionChords(keyOrContext, progressionName, voicingMode = "root position") {
   const degreeOffsets = PROGRESSIONS[progressionName];
+  const context = typeof keyOrContext === "object"
+    ? keyOrContext
+    : { root: keyOrContext, mode: "major", quality: "major" };
+  const key = context.root || "C";
   const keyIndex = NOTES.indexOf(key);
+  const paletteItem = findProgressionPaletteItem(progressionName);
+  const degreeMap = context.mode === "minor" || context.quality === "minor"
+    ? MINOR_KEY_DEGREE_TO_SEMITONE
+    : DEGREE_TO_SEMITONE;
+  const preferFlats = shouldPreferFlatsForProgression(context, paletteItem || {});
 
-  return degreeOffsets.map((offset, i) => {
-    const degreeRoot = NOTES[(keyIndex + degreeToSemitone(offset)) % 12];
-    const quality = chooseDiatonicQuality(offset, progressionName, i);
-    const midi = buildChordMidi(degreeRoot, quality, "root position", 3);
+  const chords = degreeOffsets.map((offset, i) => {
+    const rootOffset = paletteItem?.rootOffsets?.[i] ?? degreeMap[offset % 7];
+    const degreeRoot = NOTES[(keyIndex + rootOffset + 12) % 12];
+    const quality = chooseDiatonicQuality(offset, progressionName, i, context);
+    const inversion = normalizeProgressionVoicingMode(voicingMode) === "voice-led"
+      ? "root position"
+      : normalizeProgressionVoicingMode(voicingMode);
+    const midi = buildChordMidi(degreeRoot, quality, inversion, 3);
+    const displayRoot = formatHarmonyNoteName(degreeRoot, preferFlats);
     return {
-      degree: romanForDegree(offset),
-      name: `${degreeRoot} ${CHORDS[quality].label}`,
-      symbol: chordSymbol(degreeRoot, quality),
-      midi
+      degree: paletteItem?.displayRomans?.[i] || romanForDegree(offset, context),
+      root: degreeRoot,
+      quality,
+      name: `${displayRoot} ${CHORDS[quality].label}`,
+      symbol: harmonyChordSymbol(degreeRoot, quality, { preferFlat: preferFlats }),
+      midi,
+      voicing: inversion
     };
   });
+  return normalizeProgressionVoicingMode(voicingMode) === "voice-led"
+    ? applyVoiceLeadingToProgressionChords(chords)
+    : chords;
+}
+
+function findProgressionPaletteItem(name) {
+  return PROGRESSION_PALETTE_GROUPS
+    .flatMap((group) => group.items)
+    .find((item) => item.name === name);
+}
+
+function findProgressionPaletteGroupForItem(name) {
+  return PROGRESSION_PALETTE_GROUPS.find((group) => group.items.some((item) => item.name === name));
+}
+
+function setProgressionPaletteFocus(root, quality = "major", source = "key") {
+  progressionPaletteFocus = {
+    root: normalizePitchClass(root) || "C",
+    quality: quality === "minor" ? "minor" : "major",
+    source
+  };
+}
+
+function getProgressionPaletteContext() {
+  const root = normalizePitchClass(progressionPaletteFocus?.root || el.keySelect?.value || appState.root || "C");
+  const isMinor = progressionPaletteFocus?.quality === "minor";
+  return {
+    root,
+    mode: isMinor ? "minor" : "major",
+    quality: isMinor ? "minor" : "major",
+    source: progressionPaletteFocus?.source || "key",
+    label: `${displayPitchClass(root, { preferFlat: shouldUseFlatKeyDisplay() })} ${isMinor ? "minor" : "major"}`
+  };
+}
+
+function normalizeProgressionVoicingMode(value) {
+  return ["root position", "1st inversion", "2nd inversion", "voice-led"].includes(value)
+    ? value
+    : "root position";
+}
+
+function getProgressionVoicingMode() {
+  return normalizeProgressionVoicingMode(el.progressionVoicingSelect?.value || "root position");
+}
+
+function progressionVoicingLabel(value) {
+  const mode = normalizeProgressionVoicingMode(value);
+  if (mode === "voice-led") return "voice-led";
+  return mode;
+}
+
+function normalizeProgressionStyleMode(value) {
+  return Object.prototype.hasOwnProperty.call(PROGRESSION_STYLE_PATTERNS, value)
+    ? value
+    : "plain";
+}
+
+function getProgressionStyleMode() {
+  return normalizeProgressionStyleMode(el.progressionStyleSelect?.value || "plain");
+}
+
+function progressionStyleLabel(value) {
+  const mode = normalizeProgressionStyleMode(value);
+  return PROGRESSION_STYLE_PATTERNS[mode]?.label || "Plain";
+}
+
+function buildProgressionPaletteChords(keyOrContext, item, voicingMode = "root position") {
+  const context = typeof keyOrContext === "object"
+    ? keyOrContext
+    : { root: keyOrContext, mode: "major", quality: "major" };
+  const key = context.root || "C";
+  const isMinorContext = context.mode === "minor" || context.quality === "minor";
+  const degreeMap = isMinorContext ? MINOR_KEY_DEGREE_TO_SEMITONE : DEGREE_TO_SEMITONE;
+  const degreeOffsets = PROGRESSIONS[item.name] || [];
+  const keyIndex = NOTES.indexOf(key);
+  const preferFlats = shouldPreferFlatsForProgression(context, item);
+  const normalizedVoicing = normalizeProgressionVoicingMode(voicingMode);
+  const chords = degreeOffsets.map((offset, idx) => {
+    const rootOffset = item.rootOffsets?.[idx] ?? degreeMap[offset % 7];
+    const root = NOTES[(keyIndex + rootOffset + 12) % 12];
+    const quality = item.qualities?.[idx] || chooseDiatonicQuality(offset, item.name, idx, context);
+    const displayRoot = formatHarmonyNoteName(root, preferFlats);
+    const inversion = normalizedVoicing === "voice-led" ? "root position" : normalizedVoicing;
+    return {
+      degree: item.displayRomans?.[idx] || romanForDegree(offset, context),
+      root,
+      quality,
+      symbol: harmonyChordSymbol(root, quality, { preferFlat: preferFlats }),
+      name: `${displayRoot} ${CHORDS[quality]?.label || quality}`,
+      midi: buildChordMidi(root, quality, inversion, 3),
+      voicing: inversion
+    };
+  });
+  return normalizedVoicing === "voice-led"
+    ? applyVoiceLeadingToProgressionChords(chords)
+    : chords;
+}
+
+function applyVoiceLeadingToProgressionChords(chords = []) {
+  let previous = null;
+  return chords.map((chord, idx) => {
+    const voicingOptions = buildChordVoicingOptions(chord.root, chord.quality, idx === 0 ? 3 : 3);
+    const best = !previous
+      ? chooseCenteredProgressionStart(voicingOptions)
+      : voicingOptions.sort((a, b) => voiceLeadDistance(previous, a.midi) - voiceLeadDistance(previous, b.midi))[0];
+    previous = best?.midi || chord.midi;
+    return {
+      ...chord,
+      midi: previous,
+      voicing: best?.inversion || "root position"
+    };
+  });
+}
+
+function chordCenterMidi(midi = []) {
+  const notes = Array.isArray(midi) ? midi.filter((note) => Number.isFinite(note)) : [];
+  if (!notes.length) return PROGRESSION_START_TARGET_MIDI;
+  return notes.reduce((sum, note) => sum + note, 0) / notes.length;
+}
+
+function chooseCenteredProgressionStart(voicingOptions = []) {
+  const options = Array.isArray(voicingOptions) ? voicingOptions.filter((option) => option?.midi?.length) : [];
+  if (!options.length) return null;
+  return [...options].sort((a, b) => {
+    const centerDelta = Math.abs(chordCenterMidi(a.midi) - PROGRESSION_START_TARGET_MIDI)
+      - Math.abs(chordCenterMidi(b.midi) - PROGRESSION_START_TARGET_MIDI);
+    if (Math.abs(centerDelta) > 0.001) return centerDelta;
+    const inversionDelta = a.inversion === "root position" ? -1 : b.inversion === "root position" ? 1 : 0;
+    if (inversionDelta !== 0) return inversionDelta;
+    return voiceLeadDistance([PROGRESSION_START_TARGET_MIDI], a.midi)
+      - voiceLeadDistance([PROGRESSION_START_TARGET_MIDI], b.midi);
+  })[0];
+}
+
+function buildChordVoicingOptions(root, quality, baseOctave = 3) {
+  if (!root || !CHORDS[quality]) return [];
+  const inversions = ["root position", "1st inversion", "2nd inversion"];
+  const octaves = [baseOctave - 1, baseOctave, baseOctave + 1].filter((octave) => octave >= 1 && octave <= 5);
+  return octaves.flatMap((octave) => inversions.map((inversion) => ({
+    inversion,
+    octave,
+    midi: buildChordMidi(root, quality, inversion, octave)
+  })));
+}
+
+function shouldPreferFlatsForProgression(context = {}, item = {}) {
+  if (item.preferFlats === true) return true;
+  if (shouldUseFlatKeyDisplay()) return true;
+  const root = normalizePitchClass(context.root || "C");
+  if (context.mode === "minor" || context.quality === "minor") {
+    return ["F", "A#", "D#", "G#", "C#"].includes(root);
+  }
+  return root === "F";
 }
 
 function buildCadenceChords(key, cadenceName) {
@@ -7770,8 +9387,11 @@ function buildDiatonicSevenths(key) {
   });
 }
 
-function romanForDegree(degree) {
+function romanForDegree(degree, context = {}) {
   const idx = degree % 7;
+  if (context.mode === "minor" || context.quality === "minor") {
+    return ["i", "ii°", "III", "iv", "v", "VI", "VII"][idx] || "i";
+  }
   return ROMAN[idx] || "I";
 }
 
@@ -7779,19 +9399,34 @@ function degreeToSemitone(degreeIndex) {
   return DEGREE_TO_SEMITONE[degreeIndex % 7];
 }
 
-function chooseDiatonicQuality(degree, progressionName, index) {
+function chooseDiatonicQuality(degree, progressionName, index, context = {}) {
+  const paletteItem = findProgressionPaletteItem(progressionName);
+  if (paletteItem?.qualities?.[index]) return paletteItem.qualities[index];
+  const isMinorContext = context.mode === "minor" || context.quality === "minor";
+
   if (progressionName.includes("12-Bar")) {
     if (index === 8 || index === 11) return "dom7";
-    return "major";
+    return isMinorContext ? "minor" : "major";
   }
 
   if (progressionName.includes("ii-V-I")) {
+    if (isMinorContext) {
+      if (degree === 1) return "m7b5";
+      if (degree === 4) return "dom7";
+      if (degree === 0) return "minor";
+    }
     if (degree === 1) return "min7";
     if (degree === 4) return "dom7";
     if (degree === 0) return "maj7";
   }
 
-  const map = ["major", "minor", "minor", "major", "major", "minor", "diminished"];
+  if (progressionName.includes("Turnaround") && isMinorContext) {
+    if (degree === 1) return "m7b5";
+    if (degree === 4) return "dom7";
+    if (degree === 0 || degree === 5) return "minor";
+  }
+
+  const map = isMinorContext ? MINOR_KEY_TRIAD_QUALITIES : MAJOR_KEY_TRIAD_QUALITIES;
   return map[degree % 7] || "major";
 }
 
@@ -7814,12 +9449,15 @@ function isSampleEngineLoading() {
 }
 
 function updateSampleEngineReadiness() {
-  if (htmlSampleEngineActive) {
+  if (htmlSampleEngineActive || emergencyToneEngineActive) {
     sampleEngineReady = true;
     return;
   }
   const total = getTotalRequiredSamples();
   sampleEngineReady = total > 0 && sampleBuffers.size >= total && failedSampleNotes.size === 0;
+  if (sampleEngineReady) {
+    emergencyToneEngineActive = false;
+  }
 }
 
 function sampleNoteToToneLabel(sampleNote) {
@@ -7839,7 +9477,7 @@ function flushTonePendingRequests() {
 }
 
 function isToneEngineAvailable() {
-  return USE_TONE_ENGINE && Boolean(window.Tone);
+  return USE_TONE_ENGINE && Boolean(window.Tone) && !htmlEngineForcedByProtocol;
 }
 
 async function ensureToneEngine() {
@@ -7868,6 +9506,7 @@ async function ensureToneEngine() {
         }).toDestination();
       });
       toneEngineReady = true;
+      emergencyToneEngineActive = false;
       return true;
     } catch {
       toneEngineReady = false;
@@ -8031,10 +9670,7 @@ function playMidiNotesWithToneEngine(midiNotes, options = {}) {
   }
 
   void ensureToneEngine().then((ready) => {
-    if (!ready && el.chordDisplay) {
-      el.chordDisplay.textContent = "Tone engine unavailable. Falling back.";
-    }
-    updateAudioStatusText(ready ? "" : "error");
+    updateAudioStatusText();
   });
   return false;
 }
@@ -8048,6 +9684,7 @@ function normalizeMidiSignature(midiNotes) {
 
 async function ensureChordAssetManifest() {
   if (chordAssetManifest) return chordAssetManifest;
+  if (isFileProtocolMode()) return null;
   if (chordAssetManifestPromise) return chordAssetManifestPromise;
   chordAssetManifestPromise = fetch(CHORD_ASSET_MANIFEST_URL, { cache: "no-store" })
     .then((res) => {
@@ -8309,6 +9946,7 @@ function ensureAudio(options = {}) {
     rnboLoadPromise = null;
     rnboLoadAttempted = false;
     rnboEngineFailedReason = "";
+    emergencyToneEngineActive = false;
     chordAssetBufferCache.clear();
     chordAssetBufferLoads.clear();
     chordAssetHtmlPools.clear();
@@ -8345,7 +9983,8 @@ function ensureAudio(options = {}) {
         if (sampleEngineReady) {
           flushPendingPlayRequests();
         } else if (!isSampleEngineLoading()) {
-          pendingPlayRequests.length = 0;
+          activateEmergencyToneEngine();
+          flushPendingPlayRequests();
         }
         updateAudioStatusText();
       });
@@ -8443,14 +10082,21 @@ function playMidiNotes(midiNotes, options = {}) {
     return;
   }
 
+  if (emergencyToneEngineActive) {
+    playEmergencyMidiNotes(midiNotes, options);
+    highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+    return;
+  }
+
   if (!sampleEngineReady) {
     if (isSampleEngineLoading()) {
       enqueuePendingPlayRequest(midiNotes, options);
       updateAudioStatusText();
       return;
     }
-    if (el.chordDisplay) {
-      el.chordDisplay.textContent = "Audio samples failed to initialize. Reload to retry.";
+    if (playEmergencyMidiNotes(midiNotes, options)) {
+      highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+      return;
     }
     updateAudioStatusText("error");
     return;
@@ -8572,8 +10218,8 @@ function playPianoVoice(midi, startTime, holdSeconds, velocity) {
         // Fall through to user-facing message below.
       }
     }
-    if (el.chordDisplay) {
-      el.chordDisplay.textContent = "Piano sample engine unavailable. Verify /assets/salamander files and retry.";
+    if (playEmergencyMidiNotes([midi], { hold: holdSeconds, asChord: true, velocity })) {
+      return;
     }
     updateAudioStatusText("error");
   }
@@ -8795,6 +10441,591 @@ function randomOf(array) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getActivePracticePath() {
+  const paths = Array.isArray(window.BABY_STEPS_PRACTICE_PATHS) ? window.BABY_STEPS_PRACTICE_PATHS : [];
+  return paths.find((path) => path.id === progress.activePracticePathId) || paths[0] || null;
+}
+
+function getPracticeDayInfo() {
+  const path = getActivePracticePath();
+  const startDate = progress.practicePathStartDate || todayKey();
+  const today = todayKey();
+  const start = new Date(`${startDate}T00:00:00`);
+  const now = new Date(`${today}T00:00:00`);
+  const rawDayIndex = Number.isFinite(start.getTime())
+    ? Math.max(0, Math.floor((now - start) / (1000 * 60 * 60 * 24)))
+    : 0;
+  const days = [];
+  path?.weeks?.forEach((week, weekIndex) => {
+    week.days.forEach((day, dayIndex) => {
+      days.push({ ...day, weekTitle: week.title, weekFocus: week.focus, weekIndex, dayIndex });
+    });
+  });
+  const boundedIndex = days.length ? Math.min(rawDayIndex, days.length - 1) : 0;
+  return {
+    path,
+    startDate,
+    today,
+    dayNumber: boundedIndex + 1,
+    totalDays: days.length,
+    day: days[boundedIndex] || null,
+    logKey: today
+  };
+}
+
+function renderPracticeLab() {
+  renderTodayPractice();
+  renderChordMasteryMatrix();
+}
+
+function renderTodayPractice() {
+  const info = getPracticeDayInfo();
+  const day = info.day;
+  if (el.practiceStartDateInput) {
+    el.practiceStartDateInput.value = info.startDate || todayKey();
+  }
+  if (!day) return;
+  const log = progress.dailyPracticeLog?.[info.logKey] || {};
+  if (el.todayPracticeMeta) {
+    el.todayPracticeMeta.textContent = `${info.path.title} • Day ${info.dayNumber}/${info.totalDays} • ${day.weekTitle}`;
+  }
+  if (el.todayPracticeTitle) el.todayPracticeTitle.textContent = day.title;
+  if (el.todayPracticeFocus) {
+    el.todayPracticeFocus.textContent = `${day.weekFocus} Suggested tempo: ${day.suggestedTempo || appState.tempoBpm} BPM.`;
+  }
+  if (el.todayPracticeExercises) {
+    el.todayPracticeExercises.innerHTML = (day.exercises || [])
+      .map((exercise) => `<li>${escapeHtml(exercise)}</li>`)
+      .join("");
+  }
+  if (el.practiceMinutesInput) el.practiceMinutesInput.value = String(log.minutes || 20);
+  if (el.practiceNotesInput) el.practiceNotesInput.value = log.notes || "";
+  if (el.todayPracticeStatus) {
+    el.todayPracticeStatus.textContent = log.done
+      ? `Done today. ${log.minutes || 0} minutes logged.`
+      : `Next action: open the ${labLabel(day.linkedLab)} lab, name the pattern, then play or click one clean rep.`;
+  }
+}
+
+function labLabel(labId) {
+  if (labId === "1564") return "1-5-6-4";
+  if (labId === "vocabulary") return "Vocabulary";
+  if (labId === "modulation") return "Modulation";
+  return "Scale Notes to Chords";
+}
+
+function markTodayPracticeDone() {
+  const info = getPracticeDayInfo();
+  if (!info.day) return;
+  const minutes = Math.max(0, Math.min(240, Number(el.practiceMinutesInput?.value || 0)));
+  const notes = String(el.practiceNotesInput?.value || "").trim();
+  progress.dailyPracticeLog[info.logKey] = {
+    pathId: info.path.id,
+    dayNumber: info.dayNumber,
+    title: info.day.title,
+    done: true,
+    minutes,
+    notes,
+    completedAt: nowIsoString()
+  };
+  saveProgress();
+  markSessionComplete({ quiet: true });
+  emitFeelFeedback("complete", "Today's baby step complete.", { haptic: true });
+  renderPracticeLab();
+  renderProgress();
+}
+
+function getChordMasteryAverageForKey(key) {
+  const scores = progress.chordMasteryScores?.[key] || {};
+  const entered = CHORD_MASTERY_SKILLS
+    .map((skill) => Number(scores[skill.id]))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (!entered.length) return 0;
+  return entered.reduce((sum, value) => sum + value, 0) / entered.length;
+}
+
+function getChordMasterySummary() {
+  const keyAverages = CHORD_MASTERY_KEYS.map((key) => ({
+    key,
+    average: getChordMasteryAverageForKey(key),
+    weight: CHORD_MASTERY_KEY_WEIGHTS[key] || 1
+  }));
+  const entered = keyAverages.filter((entry) => entry.average > 0);
+  const weightedScore = entered.length
+    ? entered.reduce((sum, entry) => sum + entry.average * entry.weight, 0)
+      / entered.reduce((sum, entry) => sum + entry.weight, 0)
+    : 0;
+  const strongest = [...entered].sort((a, b) => b.average - a.average)[0]?.key || "—";
+  const weakest = [...keyAverages]
+    .filter((entry) => entry.average < 8)
+    .sort((a, b) => (a.average || -1) - (b.average || -1) || b.weight - a.weight)[0]?.key || "—";
+  return { weightedScore, strongest, weakest };
+}
+
+function renderChordMasteryMatrix() {
+  if (!el.chordMasteryMatrix) return;
+  const summary = getChordMasterySummary();
+  if (el.masteryWeightedScore) el.masteryWeightedScore.textContent = summary.weightedScore.toFixed(1);
+  if (el.masteryStrongestKey) el.masteryStrongestKey.textContent = summary.strongest;
+  if (el.masteryWeakestKey) el.masteryWeakestKey.textContent = summary.weakest;
+  const header = `<tr><th>Key</th>${CHORD_MASTERY_SKILLS.map((skill) => `<th>${skill.label}</th>`).join("")}<th>Avg</th></tr>`;
+  const rows = CHORD_MASTERY_KEYS.map((key) => {
+    const scores = progress.chordMasteryScores?.[key] || {};
+    const cells = CHORD_MASTERY_SKILLS.map((skill) => {
+      const value = scores[skill.id];
+      return `<td><input data-mastery-key="${key}" data-mastery-skill="${skill.id}" type="number" min="0" max="10" step="1" value="${Number.isFinite(Number(value)) ? Number(value) : ""}" aria-label="${key} ${skill.label}" /></td>`;
+    }).join("");
+    return `<tr><th>${key}</th>${cells}<td>${getChordMasteryAverageForKey(key).toFixed(1)}</td></tr>`;
+  }).join("");
+  el.chordMasteryMatrix.innerHTML = `<table><thead>${header}</thead><tbody>${rows}</tbody></table>`;
+}
+
+function updateChordMasteryScore(key, skillId, rawValue) {
+  if (!CHORD_MASTERY_KEYS.includes(key) || !CHORD_MASTERY_SKILLS.some((skill) => skill.id === skillId)) return;
+  const numeric = Number(rawValue);
+  if (!progress.chordMasteryScores[key]) progress.chordMasteryScores[key] = {};
+  if (!Number.isFinite(numeric) || rawValue === "") {
+    delete progress.chordMasteryScores[key][skillId];
+  } else {
+    progress.chordMasteryScores[key][skillId] = Math.max(0, Math.min(10, Math.round(numeric)));
+  }
+  saveProgress();
+  renderChordMasteryMatrix();
+}
+
+function renderExploreLabs() {
+  renderStudyModeSwitch();
+  renderPianoLabContext();
+  renderNowStudyingPanel();
+  renderLabMicroMissions();
+  renderScaleChordLab();
+  render1564Lab();
+  renderVocabularyLab();
+  renderModulationLab();
+  renderSavedLabIdeas();
+}
+
+function getLabKey() {
+  return el.keySelect?.value || appState.root || "C";
+}
+
+function getCurrentPaletteChordLabel() {
+  const short = CHORDS[appState.quality]?.short || "";
+  return `${appState.root}${short}`;
+}
+
+function renderPianoLabContext() {
+  if (!el.pianoLabContext) return;
+  const key = getLabKey();
+  const paletteChord = getCurrentPaletteChordLabel();
+  const progression = el.progressionSelect?.value || "I-vi-IV-V (Pop)";
+  const modeLabel = progress.labLearningMode === "play" ? "Piano transfer" : "Computer study";
+  const modeCopy = progress.labLearningMode === "play"
+    ? "Hear it, see it, then take the same number idea to the keys."
+    : "Name the numbers, compare the notes, and understand the pattern even without a piano.";
+  el.pianoLabContext.innerHTML = `
+    <div class="lab-context-copy">
+      <span class="lab-context-kicker">Using current palette context</span>
+      <strong>Key: ${escapeHtml(key)} Major</strong>
+      <span>Selected chord: ${escapeHtml(paletteChord)}</span>
+      <span>Progression lens: ${escapeHtml(progression)}</span>
+      <span>${escapeHtml(modeLabel)}: ${escapeHtml(modeCopy)}</span>
+    </div>
+    <button id="jumpToChordPaletteBtn" class="btn-ghost" type="button">Show Chord Palette</button>
+  `;
+  const jumpBtn = el.pianoLabContext.querySelector("#jumpToChordPaletteBtn");
+  jumpBtn?.addEventListener("click", () => {
+    document.querySelector(".console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function renderNowStudyingPanel() {
+  if (!el.nowStudyingPanel) return;
+  const type = currentStudyContext?.type || "chord";
+  if (type === "progression") {
+    el.nowStudyingPanel.innerHTML = renderProgressionStudyPanel(currentStudyContext.name || el.progressionSelect?.value);
+    return;
+  }
+  if (type === "scale") {
+    el.nowStudyingPanel.innerHTML = renderScaleStudyPanel(currentStudyContext);
+    return;
+  }
+  el.nowStudyingPanel.innerHTML = renderChordStudyPanel(currentStudyContext);
+}
+
+function renderProgressionStudyPanel(name) {
+  const context = getProgressionPaletteContext();
+  const item = findProgressionPaletteItem(name) || findProgressionPaletteItem(el.progressionSelect?.value || "") || findProgressionPaletteItem("I-V-vi-IV (Anthem)");
+  if (!item) {
+    return `<p class="practice-meta">Choose a chord, progression, scale, or vocabulary sound above and this panel will explain it.</p>`;
+  }
+  const voicingMode = getProgressionVoicingMode();
+  const chords = buildProgressionPaletteChords(context, item, voicingMode);
+  const timing = getProgressionPaletteTiming(item, chords);
+  return `
+    <div class="now-study-head">
+      <div>
+        <p class="eyebrow">Now studying</p>
+        <h3>${escapeHtml(item.name)} in ${escapeHtml(context.label)}</h3>
+      </div>
+      <span>${escapeHtml(progressionVoicingLabel(voicingMode))}</span>
+    </div>
+    <div class="now-study-token-row">
+      ${chords.map((chord) => `<span>${escapeHtml(chord.degree)} ${escapeHtml(chord.symbol)}</span>`).join("")}
+    </div>
+    <div class="now-study-grid">
+      <p><strong>What it means:</strong> ${escapeHtml(item.theory)}</p>
+      <p><strong>Listen for:</strong> ${escapeHtml(item.listenFor)}</p>
+      <p><strong>Move it:</strong> keep the numbers, change the key, and the chord names will update.</p>
+    </div>
+    ${renderProgressionSongExamples(item)}
+  `;
+}
+
+function renderChordStudyPanel(context = {}) {
+  const key = getLabKey();
+  const root = context.root || appState.root || key;
+  const quality = context.quality || appState.quality || "major";
+  const symbol = chordSymbol(root, quality);
+  const tones = buildChordMidi(root, quality, "root position", 3).map((midi) => NOTES[(midi % 12 + 12) % 12]);
+  const diatonicMatch = diatonicTriadsForKey(key).find((chord) => chord.symbol === symbol);
+  const location = diatonicMatch
+    ? `${symbol} is the ${diatonicMatch.roman} chord in ${key} major.`
+    : `${symbol} is a color chord against ${key} major, so listen for how it changes the mood.`;
+  return `
+    <div class="now-study-head">
+      <div>
+        <p class="eyebrow">Now studying</p>
+        <h3>${escapeHtml(symbol)}</h3>
+      </div>
+      <span>${escapeHtml(CHORDS[quality]?.label || quality)}</span>
+    </div>
+    <div class="now-study-token-row">
+      ${tones.map((tone) => `<span>${escapeHtml(tone)}</span>`).join("")}
+    </div>
+    <div class="now-study-grid">
+      <p><strong>What it is:</strong> ${escapeHtml(symbol)} uses the chord tones ${tones.map(escapeHtml).join(", ")}.</p>
+      <p><strong>Where it lives:</strong> ${escapeHtml(location)}</p>
+      <p><strong>Try it:</strong> compare root position, 1st inversion, and 2nd inversion, then find the closest move into the next chord.</p>
+    </div>
+  `;
+}
+
+function renderScaleStudyPanel(context = {}) {
+  const key = getLabKey();
+  const row = getPaletteScaleRow(context.tab, context.rowId) || SCALES_PALETTE_ROWS[0];
+  const intervals = row.intervals || getLabScaleIntervals(row.id);
+  const notes = intervals.map((interval) => keyOffsetRoot(key, interval));
+  const chords = diatonicTriadsForKey(key).slice(0, 7);
+  return `
+    <div class="now-study-head">
+      <div>
+        <p class="eyebrow">Now studying</p>
+        <h3>${escapeHtml(key)} ${escapeHtml(row.name || "scale")}</h3>
+      </div>
+      <span>Scale color</span>
+    </div>
+    <div class="now-study-token-row">
+      ${notes.map((note, idx) => `<span>${idx + 1}: ${escapeHtml(note)}</span>`).join("")}
+    </div>
+    <div class="now-study-grid">
+      <p><strong>What it is:</strong> a note collection you can hear, compare, and turn into chord choices.</p>
+      <p><strong>Chords from the key:</strong> ${chords.map((chord) => `${chord.roman} ${chord.symbol}`).join(", ")}.</p>
+      <p><strong>Try it:</strong> play or click the scale, then land on I, IV, V, or vi to hear which notes feel stable.</p>
+    </div>
+  `;
+}
+
+function getPaletteScaleRow(tab, rowId) {
+  const rowsByTab = {
+    scales: SCALES_PALETTE_ROWS,
+    modes: MODES_PALETTE_ROWS,
+    pentatonic: PENTATONIC_PALETTE_ROWS,
+    color: COLOR_PALETTE_ROWS
+  };
+  return (rowsByTab[tab] || []).find((row) => row.id === rowId);
+}
+
+function renderStudyModeSwitch() {
+  if (!el.studyModeSwitch) return;
+  const mode = progress.labLearningMode === "play" ? "play" : "study";
+  el.studyModeSwitch.querySelectorAll("button[data-study-mode]").forEach((btn) => {
+    const isActive = btn.dataset.studyMode === mode;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+}
+
+function renderLabMicroMissions() {
+  if (!el.labMicroMissions) return;
+  const key = getLabKey();
+  const chords = build1564LabChords(key, el.lab1564InversionSelect?.value || "root position");
+  const firstChord = chords[0]?.symbol || key;
+  const lastChord = chords[chords.length - 1]?.symbol || majorDegreeRoot(key, 4);
+  const missions = progress.labLearningMode === "play"
+    ? [
+      { time: "30 sec", action: `Play or click ${firstChord}, then say "one" out loud.` },
+      { time: "2 min", action: `Loop ${chords.map((chord) => chord.roman).join("-")} slowly and watch the keyboard highlights.` },
+      { time: "5 min", action: `Move the same number idea to another key and save the result.` }
+    ]
+    : [
+      { time: "30 sec", action: `Name the notes in ${key} major before pressing play.` },
+      { time: "2 min", action: `Translate ${chords.map((chord) => chord.symbol).join(" -> ")} into numbers: ${chords.map((chord) => chord.roman).join(" -> ")}.` },
+      { time: "5 min", action: `Explain why ${lastChord} feels different from ${firstChord}, then try a new key.` }
+    ];
+  el.labMicroMissions.innerHTML = missions.map((mission) => `
+    <div class="micro-mission">
+      <strong>${escapeHtml(mission.time)}</strong>
+      <span>${escapeHtml(mission.action)}</span>
+    </div>
+  `).join("");
+}
+
+function resetToSafeLabStep() {
+  progress.labLearningMode = "study";
+  saveProgress();
+  setMode("compose");
+  renderExploreLabs();
+  if (el.pianoLabContext) {
+    el.pianoLabContext.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  if (el.chordDisplay) {
+    const key = getLabKey();
+    const chords = build1564LabChords(key, "root position");
+    el.chordDisplay.textContent = `Reset point: ${key} major. Read the scale notes, name ${chords.map((chord) => chord.roman).join("-")}, then press Play when you want to hear it.`;
+  }
+}
+
+function diatonicTriadsForKey(key) {
+  return DEGREE_TO_SEMITONE.map((semi, idx) => {
+    const root = NOTES[(NOTES.indexOf(key) + semi + 12) % 12];
+    const quality = MAJOR_KEY_TRIAD_QUALITIES[idx];
+    return { root, quality, roman: ROMAN[idx], symbol: chordSymbol(root, quality) };
+  });
+}
+
+function renderScaleChordLab() {
+  if (!el.scaleChordLab) return;
+  const key = getLabKey();
+  const notes = DEGREE_TO_SEMITONE.map((semi) => NOTES[(NOTES.indexOf(key) + semi + 12) % 12]);
+  const chords = diatonicTriadsForKey(key);
+  el.scaleChordLab.innerHTML = `
+    <div class="lab-note-row">${notes.map((note, idx) => `<span>${idx + 1}: ${note}</span>`).join("")}</div>
+    <div class="lab-note-row">${chords.map((chord) => `<span>${chord.roman}: ${chord.symbol}</span>`).join("")}</div>
+    <p><strong>What it is:</strong> scale notes become chords when you stack every other note.</p>
+    <p><strong>Study it:</strong> say the roman numerals first, then check the chord names.</p>
+    <p><strong>Use it:</strong> move the same number pattern to any key when you want to transpose.</p>
+  `;
+}
+
+function render1564Lab() {
+  if (!el.lab1564Output) return;
+  const key = getLabKey();
+  const chords = build1564LabChords(key, el.lab1564InversionSelect?.value || "root position");
+  el.lab1564Output.innerHTML = `
+    <div>${escapeHtml(key)}: ${chords.map((chord) => `${escapeHtml(chord.roman)} ${escapeHtml(chord.symbol)}`).join(" -> ")}</div>
+    <p><strong>What it is:</strong> a common song loop you can understand as numbers before you play it.</p>
+    <p><strong>Study it:</strong> notice that the shape is still 1-5-6-4 even when the chord names change.</p>
+    <p><strong>Play it now:</strong> use the button when you want to hear the loop or transfer it to piano.</p>
+  `;
+}
+
+function build1564LabChords(key, inversion) {
+  const degreeIndexes = [0, 4, 5, 3];
+  return degreeIndexes.map((degreeIndex) => {
+    const root = majorDegreeRoot(key, degreeIndex);
+    const quality = MAJOR_KEY_TRIAD_QUALITIES[degreeIndex];
+    return {
+      roman: ROMAN[degreeIndex],
+      root,
+      quality,
+      symbol: chordSymbol(root, quality),
+      midi: buildChordMidi(root, quality, inversion, 3)
+    };
+  });
+}
+
+function labWait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function play1564Lab() {
+  const ready = await ensureHarmonicPlaybackReady();
+  if (!ready) return;
+  const key = getLabKey();
+  const inversion = el.lab1564InversionSelect?.value || "root position";
+  const pattern = el.lab1564PatternSelect?.value || "blocks";
+  const chords = pattern === "voice-led" ? buildVoiceLed1564Chords(key) : build1564LabChords(key, inversion);
+  const hold = Math.max(0.35, getHarmonyBeatSeconds() * 1.8);
+  for (const chord of chords) {
+    if (pattern === "top-bottom-middle-top") {
+      const sorted = [...chord.midi].sort((a, b) => a - b);
+      const notes = [sorted[2], sorted[0], sorted[1], sorted[2]].filter(Number.isFinite);
+      await playPatternScheduled({ notes: notes.map(midiToNoteName), showFingers: false, snapshot: true });
+    } else {
+      playMidiNotes(chord.midi, { hold, asChord: true, restrictToWindow: false });
+    }
+    await labWait(Math.max(320, hold * 650));
+  }
+  trackRep("progressions", `1-5-6-4 ${key}`);
+}
+
+function buildVoiceLed1564Chords(key) {
+  const rootChords = build1564LabChords(key, "root position");
+  let previous = null;
+  return rootChords.map((chord) => {
+    const options = ["root position", "1st inversion", "2nd inversion"].map((inv) => ({
+      ...chord,
+      midi: buildChordMidi(chord.root, chord.quality, inv, 3)
+    }));
+    const best = !previous ? options[0] : options.sort((a, b) => voiceLeadDistance(previous, a.midi) - voiceLeadDistance(previous, b.midi))[0];
+    previous = best.midi;
+    return best;
+  });
+}
+
+function voiceLeadDistance(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return 999;
+  return b.reduce((sum, note, idx) => sum + Math.abs(note - (a[idx] || note)), 0);
+}
+
+function renderVocabularyLab() {
+  if (!el.vocabularyLab) return;
+  el.vocabularyLab.innerHTML = VOCABULARY_LAB_ROWS.map((row) => `
+    <button type="button" class="vocab-lab-row" data-vocab-id="${row.id}">
+      <strong>${row.label}</strong><span>${row.note}</span>
+      <small>${row.type === "scale" ? "Study sound color, then try it over a chord." : "Study the movement, then listen for the pull."}</small>
+    </button>
+  `).join("");
+}
+
+async function playVocabularyLabRow(rowId) {
+  const row = VOCABULARY_LAB_ROWS.find((entry) => entry.id === rowId);
+  if (!row) return;
+  const key = getLabKey();
+  if (row.type === "scale") {
+    const root = row.degree === 1 ? majorDegreeRoot(key, 1) : row.degree === 4 ? majorDegreeRoot(key, 4) : key;
+    const patternKey = row.scale || "major";
+    const intervals = row.intervals || getLabScaleIntervals(patternKey);
+    const notes = buildAscendingScaleMidiFromIntervals(root, intervals, 3, true).map(midiToNoteName);
+    await playPatternScheduled({ notes, showFingers: false, snapshot: true });
+    trackRep("scales", row.label);
+    return;
+  }
+  const offsets = row.offsets || row.steps?.map((degreeIndex) => DEGREE_TO_SEMITONE[degreeIndex]) || [0];
+  const hold = Math.max(0.35, getHarmonyBeatSeconds() * 1.7);
+  for (let idx = 0; idx < offsets.length; idx += 1) {
+    const root = keyOffsetRoot(key, offsets[idx]);
+    const quality = row.qualities[idx] || "major";
+    playMidiNotes(buildChordMidi(root, quality, "root position", 3), { hold, asChord: true, restrictToWindow: false });
+    await labWait(Math.max(320, hold * 700));
+  }
+  trackRep("chords", row.label);
+}
+
+function getLabScaleIntervals(patternKey) {
+  const allRows = [...SCALES_PALETTE_ROWS, ...MODES_PALETTE_ROWS, ...PENTATONIC_PALETTE_ROWS, ...COLOR_PALETTE_ROWS];
+  const found = allRows.find((row) => row.id === patternKey);
+  return found?.intervals || SCALE_PATTERN_LIBRARY[resolveScalePatternKey(patternKey)]?.intervals || SCALE_PATTERN_LIBRARY.major.intervals;
+}
+
+function renderModulationLab() {
+  if (!el.modulationLabOutput) return;
+  const fromKey = el.modFromKeySelect?.value || "C";
+  const toKey = el.modToKeySelect?.value || "F";
+  const path = el.modPathSelect?.value || "dominant";
+  const labels = buildModulationSteps(fromKey, toKey, path).map((step) => step.symbol);
+  el.modulationLabOutput.innerHTML = `
+    <div>${escapeHtml(fromKey)} to ${escapeHtml(toKey)}: ${labels.map(escapeHtml).join(" -> ")}</div>
+    <p><strong>What it is:</strong> a way to make one key feel like it naturally becomes another key.</p>
+    <p><strong>Study it:</strong> identify the setup chord, then name the new home key.</p>
+    <p><strong>Use it:</strong> move an idea by numbers instead of memorizing one fixed set of chord names.</p>
+  `;
+}
+
+function buildModulationSteps(fromKey, toKey, path) {
+  const targetV = keyOffsetRoot(toKey, 7);
+  if (path === "pivot") {
+    return [
+      { root: fromKey, quality: "major", symbol: chordSymbol(fromKey, "major") },
+      { root: majorDegreeRoot(fromKey, 5), quality: "minor", symbol: chordSymbol(majorDegreeRoot(fromKey, 5), "minor") },
+      { root: targetV, quality: "dom7", symbol: chordSymbol(targetV, "dom7") },
+      { root: toKey, quality: "major", symbol: chordSymbol(toKey, "major") }
+    ];
+  }
+  if (path === "circle") {
+    return [
+      { root: fromKey, quality: "major", symbol: chordSymbol(fromKey, "major") },
+      { root: keyOffsetRoot(fromKey, 7), quality: "dom7", symbol: chordSymbol(keyOffsetRoot(fromKey, 7), "dom7") },
+      { root: targetV, quality: "dom7", symbol: chordSymbol(targetV, "dom7") },
+      { root: toKey, quality: "major", symbol: chordSymbol(toKey, "major") }
+    ];
+  }
+  if (path === "chromatic") {
+    const passing = keyOffsetRoot(toKey, 11);
+    return [
+      { root: fromKey, quality: "major", symbol: chordSymbol(fromKey, "major") },
+      { root: passing, quality: "diminished", symbol: chordSymbol(passing, "diminished") },
+      { root: targetV, quality: "dom7", symbol: chordSymbol(targetV, "dom7") },
+      { root: toKey, quality: "major", symbol: chordSymbol(toKey, "major") }
+    ];
+  }
+  return [
+    { root: fromKey, quality: "major", symbol: chordSymbol(fromKey, "major") },
+    { root: targetV, quality: "dom7", symbol: chordSymbol(targetV, "dom7") },
+    { root: toKey, quality: "major", symbol: chordSymbol(toKey, "major") }
+  ];
+}
+
+async function playModulationLab() {
+  const ready = await ensureHarmonicPlaybackReady();
+  if (!ready) return;
+  const fromKey = el.modFromKeySelect?.value || "C";
+  const toKey = el.modToKeySelect?.value || "F";
+  const path = el.modPathSelect?.value || "dominant";
+  const hold = Math.max(0.35, getHarmonyBeatSeconds() * 1.8);
+  for (const step of buildModulationSteps(fromKey, toKey, path)) {
+    playMidiNotes(buildChordMidi(step.root, step.quality, "root position", 3), { hold, asChord: true, restrictToWindow: false });
+    await labWait(Math.max(340, hold * 720));
+  }
+  trackRep("progressions", `modulation ${fromKey}-${toKey}`);
+}
+
+function saveCurrentLabIdea() {
+  const key = getLabKey();
+  const idea = {
+    id: `lab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    title: `${key} ${progress.labLearningMode === "play" ? "play" : "study"} idea`,
+    key,
+    learningMode: progress.labLearningMode === "play" ? "play" : "study",
+    createdAt: nowIsoString(),
+    summary: [
+      el.lab1564Output?.textContent || "",
+      el.modulationLabOutput?.textContent || ""
+    ].filter(Boolean).join(" | ")
+  };
+  progress.savedLabIdeas.unshift(idea);
+  progress.savedLabIdeas = progress.savedLabIdeas.slice(0, 24);
+  saveProgress();
+  renderSavedLabIdeas();
+  emitFeelFeedback("save", "Saved to your idea tray.", { haptic: true });
+}
+
+function renderSavedLabIdeas() {
+  if (!el.savedLabIdeas) return;
+  const ideas = Array.isArray(progress.savedLabIdeas) ? progress.savedLabIdeas : [];
+  if (!ideas.length) {
+    el.savedLabIdeas.innerHTML = `<p class="practice-meta">Saved ideas will appear here.</p>`;
+    return;
+  }
+  el.savedLabIdeas.innerHTML = `<h3>Saved Lab Ideas</h3>${ideas.map((idea) => `
+    <div class="saved-lab-idea">
+      <strong>${escapeHtml(idea.title)}</strong>
+      <span>${escapeHtml(idea.summary || "")}</span>
+    </div>
+  `).join("")}`;
 }
 
 function renderLessonTracks() {
@@ -9477,6 +11708,7 @@ function renderCoachArtifactQuizPanel(container, artifact) {
         el.coachOutput.textContent = outcome.isCorrect
           ? `Correct. ${answerLabel}.`
           : `Not yet. Correct answer: ${answerLabel}.`;
+        emitFeelFeedback(outcome.isCorrect ? "success" : "retry", outcome.isCorrect ? "Nice ear." : "Listen once more.", { haptic: true });
       }
       renderCoachArtifactQuizPanel(container, artifact);
     });
@@ -9735,6 +11967,7 @@ function saveCoachArtifactToStack(artifact) {
       ? `Updated in lesson stack: ${result.entry.title}`
       : `Saved to lesson stack: ${result.entry.title}`;
   }
+  emitFeelFeedback("save", result.exists ? "Updated in lesson stack." : "Saved to lesson stack.", { haptic: true });
 }
 
 function removeCoachLessonStackEntry(entryId) {
@@ -9831,6 +12064,7 @@ function openCoachArtifactFullLesson(artifact) {
   renderCoachKanban();
   if (result.entry.trackId && result.entry.lessonId) {
     openTheoryLessonFromCoachStack(result.entry.trackId, result.entry.lessonId, result.entry.title);
+    emitFeelFeedback("soft", "Lesson opened.", { haptic: true });
   }
 }
 
@@ -10026,7 +12260,7 @@ function trackRep(area, topic) {
   renderProgress();
 }
 
-function markSessionComplete() {
+function markSessionComplete(options = {}) {
   const today = todayKey();
   if (progress.lastSessionDate === today) return;
 
@@ -10040,6 +12274,9 @@ function markSessionComplete() {
   progress.lastSessionDate = today;
   progress.sessionsCompleted += 1;
   saveProgress();
+  if (!options.quiet) {
+    emitFeelFeedback("complete", "Session complete.", { haptic: true });
+  }
 }
 
 function renderProgress() {
@@ -10050,6 +12287,8 @@ function renderProgress() {
   el.statArps.textContent = String(progress.arpeggioReps);
   el.statProgressions.textContent = String(progress.progressionReps);
   renderPersonalizedSequence();
+  renderPracticeLab();
+  renderExploreLabs();
   renderTheoryProgressSummary();
 }
 
@@ -10066,10 +12305,10 @@ function renderPersonalizedSequence() {
   const second = areas[1].name;
 
   const plan = {
-    chords: `Play ${appState.root}${CHORDS[appState.quality].short} in all inversions, slow and connected.`,
+    chords: `Study ${appState.root}${CHORDS[appState.quality].short} in all inversions, then play or click them slow and connected.`,
     progressions: `Loop ${el.progressionSelect?.value || "I-vi-IV-V (Pop)"} in ${el.keySelect?.value || appState.root}, say chord function out loud.`,
-    scales: `Run ${el.scaleRootSelect?.value || appState.root} ${scalePatternLabel(resolveScalePatternKey(el.scaleTypeSelect?.value))} @ ${appState.tempoBpm} BPM with relaxed hand shape.`,
-    arpeggios: `Practice ${el.arpRootSelect?.value || appState.root} ${el.arpTypeSelect?.value || "major triad"} with ${el.handSelect?.value || "right"} hand first, then both hands.`
+    scales: `Map ${el.scaleRootSelect?.value || appState.root} ${scalePatternLabel(resolveScalePatternKey(el.scaleTypeSelect?.value))} @ ${appState.tempoBpm} BPM, then hear or play it.`,
+    arpeggios: `Study ${el.arpRootSelect?.value || appState.root} ${el.arpTypeSelect?.value || "major triad"} as chord tones, then transfer it to one hand if a keyboard is nearby.`
   };
 
   el.nextSequence.textContent = [
@@ -10093,6 +12332,9 @@ function loadProgress() {
         theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson },
         theoryCustomLessons: { ...defaultProgress.theoryCustomLessons },
         theoryLessonRuns: { ...defaultProgress.theoryLessonRuns },
+        dailyPracticeLog: { ...defaultProgress.dailyPracticeLog },
+        chordMasteryScores: { ...defaultProgress.chordMasteryScores },
+        savedLabIdeas: [...defaultProgress.savedLabIdeas],
         recent: []
       };
     }
@@ -10108,6 +12350,9 @@ function loadProgress() {
       theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson, ...(parsed.theoryAudioByLesson || {}) },
       theoryCustomLessons: { ...defaultProgress.theoryCustomLessons, ...(parsed.theoryCustomLessons || {}) },
       theoryLessonRuns: { ...defaultProgress.theoryLessonRuns, ...(parsed.theoryLessonRuns || {}) },
+      dailyPracticeLog: { ...defaultProgress.dailyPracticeLog, ...(parsed.dailyPracticeLog || {}) },
+      chordMasteryScores: { ...defaultProgress.chordMasteryScores, ...(parsed.chordMasteryScores || {}) },
+      savedLabIdeas: Array.isArray(parsed.savedLabIdeas) ? parsed.savedLabIdeas : [],
       recent: Array.isArray(parsed.recent) ? parsed.recent : []
     };
   } catch {
@@ -10120,6 +12365,9 @@ function loadProgress() {
       theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson },
       theoryCustomLessons: { ...defaultProgress.theoryCustomLessons },
       theoryLessonRuns: { ...defaultProgress.theoryLessonRuns },
+      dailyPracticeLog: { ...defaultProgress.dailyPracticeLog },
+      chordMasteryScores: { ...defaultProgress.chordMasteryScores },
+      savedLabIdeas: [...defaultProgress.savedLabIdeas],
       recent: []
     };
   }
@@ -10172,6 +12420,7 @@ function showBadgeToast(badge) {
   toast.classList.remove("show");
   void toast.offsetWidth; // reflow
   toast.classList.add("show");
+  emitFeelFeedback("complete", "", { haptic: true, visual: false });
   setTimeout(() => toast.classList.remove("show"), 3500);
 }
 
@@ -10242,7 +12491,7 @@ function initAuth() {
       // Load cloud data (cloud wins)
       const cloudData = await window.BabyStepsAuth.loadProgressFromCloud();
       if (cloudData && cloudData.progress && Object.keys(cloudData.progress).length > 0) {
-        progress = { ...defaultProgress, ...cloudData.progress };
+        progress = normalizeProgressShape(cloudData.progress);
         safeStorageSet(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
       }
 
@@ -10263,6 +12512,24 @@ function initAuth() {
   window.BabyStepsAuth.init();
 }
 
+function normalizeProgressShape(parsed = {}) {
+  return {
+    ...defaultProgress,
+    ...parsed,
+    areas: { ...defaultProgress.areas, ...(parsed.areas || {}) },
+    conceptMastery: { ...defaultProgress.conceptMastery, ...(parsed.conceptMastery || {}) },
+    artifactAttempts: Array.isArray(parsed.artifactAttempts) ? parsed.artifactAttempts : [],
+    theoryCompletedLessons: { ...defaultProgress.theoryCompletedLessons, ...(parsed.theoryCompletedLessons || {}) },
+    theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson, ...(parsed.theoryAudioByLesson || {}) },
+    theoryCustomLessons: { ...defaultProgress.theoryCustomLessons, ...(parsed.theoryCustomLessons || {}) },
+    theoryLessonRuns: { ...defaultProgress.theoryLessonRuns, ...(parsed.theoryLessonRuns || {}) },
+    dailyPracticeLog: { ...defaultProgress.dailyPracticeLog, ...(parsed.dailyPracticeLog || {}) },
+    chordMasteryScores: { ...defaultProgress.chordMasteryScores, ...(parsed.chordMasteryScores || {}) },
+    savedLabIdeas: Array.isArray(parsed.savedLabIdeas) ? parsed.savedLabIdeas : [],
+    recent: Array.isArray(parsed.recent) ? parsed.recent : []
+  };
+}
+
 function resetProgressState() {
   safeStorageRemove(PROGRESS_STORAGE_KEY);
   LEGACY_PROGRESS_KEYS.forEach((key) => safeStorageRemove(key));
@@ -10275,6 +12542,9 @@ function resetProgressState() {
     theoryAudioByLesson: { ...defaultProgress.theoryAudioByLesson },
     theoryCustomLessons: { ...defaultProgress.theoryCustomLessons },
     theoryLessonRuns: { ...defaultProgress.theoryLessonRuns },
+    dailyPracticeLog: { ...defaultProgress.dailyPracticeLog },
+    chordMasteryScores: { ...defaultProgress.chordMasteryScores },
+    savedLabIdeas: [...defaultProgress.savedLabIdeas],
     recent: []
   };
   saveProgress();
@@ -10375,6 +12645,8 @@ function updateAudioStatusText(priority = "") {
   let text = "";
   if (isToneEngineAvailable() && toneEngineReady) {
     text = "Audio: Tone sampler active (low-latency mode).";
+  } else if (emergencyToneEngineActive) {
+    text = "Audio: resilient fallback tone active while piano samples recover.";
   } else if (isToneEngineAvailable() && toneEngineInitPromise) {
     text = "Audio: initializing Tone sampler...";
   } else if (rnboEngineActive) {
@@ -10386,10 +12658,12 @@ function updateAudioStatusText(priority = "") {
       : "Audio: RNBO unavailable. Using local piano samples.";
   } else if (shouldUseRnboPrimaryEngine() && rnboLoadPromise) {
     text = "Audio: loading RNBO piano engine...";
-  } else if (priority === "error" || (!htmlSampleEngineActive && failed >= total && total > 0)) {
-    text = `Audio: sample engine failed (${failed}/${total}). Check sample files and reload.`;
   } else if (htmlSampleEngineActive) {
-    text = "Audio: real piano samples active (compatibility mode).";
+    text = window.location.protocol === "file:"
+      ? "Audio: file mode uses compatibility playback. For best tone, run the local server."
+      : "Audio: real piano samples active (compatibility mode).";
+  } else if (!htmlSampleEngineActive && failed >= total && total > 0) {
+    text = `Audio: sample engine failed (${failed}/${total}). Check sample files and reload.`;
   } else if (loaded > 0) {
     text = `Audio: real piano samples ready (${loaded}/${total}).`;
   } else if (loading) {
@@ -10398,15 +12672,25 @@ function updateAudioStatusText(priority = "") {
     text = "Audio: waiting for first interaction to initialize piano samples.";
   }
 
-  if (audioStatusLastRendered === text) return;
-  audioStatusLastRendered = text;
-  el.audioStatus.textContent = text;
-  el.audioStatus.classList.toggle(
-    "audio-status-error",
-    priority === "error"
-    || (!htmlSampleEngineActive && failed >= total && total > 0)
-    || (shouldUseRnboPrimaryEngine() && Boolean(rnboEngineFailedReason) && !rnboEngineActive)
-  );
+  const isErrorStatus = !emergencyToneEngineActive
+    && !htmlSampleEngineActive
+    && failed >= total
+    && total > 0;
+  const isWarningStatus = (shouldUseRnboPrimaryEngine() && Boolean(rnboEngineFailedReason) && !rnboEngineActive)
+    || window.location.protocol === "file:"
+    || emergencyToneEngineActive
+    || (htmlSampleEngineActive && !htmlEngineForcedByProtocol);
+  const isLoadingStatus = loading
+    || (isToneEngineAvailable() && toneEngineInitPromise && !toneEngineReady)
+    || (shouldUseRnboPrimaryEngine() && rnboLoadPromise && !rnboEngineActive);
+  const shouldShowStatus = isErrorStatus || isWarningStatus || isLoadingStatus;
+
+  const visibleText = shouldShowStatus ? text : "";
+  if (audioStatusLastRendered === visibleText) return;
+  audioStatusLastRendered = visibleText;
+  el.audioStatus.textContent = visibleText;
+  el.audioStatus.hidden = !shouldShowStatus;
+  el.audioStatus.classList.toggle("audio-status-error", isErrorStatus || isWarningStatus);
 }
 
 function sampleUrlForNote(sampleNote) {
@@ -10434,6 +12718,7 @@ function activateHtmlSampleEngine() {
     return false;
   }
   if (!htmlSampleEngineActive) htmlSampleEngineActive = true;
+  emergencyToneEngineActive = false;
   updateSampleEngineReadiness();
   updateAudioStatusText();
   return true;
@@ -10485,7 +12770,7 @@ function playHtmlSampleForMidi(midi, holdSeconds, velocity) {
   const voice = acquireHtmlSampleVoice(sample.note);
   if (!prepareHtmlSampleVoice(voice, midi, sample.midi, velocity)) return;
   void voice.audio.play().catch(() => {
-    updateAudioStatusText("error");
+    playEmergencyMidiNotes([midi], { hold: holdSeconds, asChord: true, velocity });
   });
   scheduleHtmlSampleStop(voice, holdSeconds);
 }
@@ -10498,12 +12783,95 @@ function playHtmlSampleChord(midiNotes, holdSeconds, velocity) {
     if (!prepareHtmlSampleVoice(voice, midi, sample.midi, velocity)) return;
     preparedVoices.push(voice);
   });
+  let emergencyFallbackStarted = false;
   preparedVoices.forEach((voice) => {
     void voice.audio.play().catch(() => {
-      updateAudioStatusText("error");
+      if (!emergencyFallbackStarted) {
+        emergencyFallbackStarted = true;
+        playEmergencyMidiNotes(midiNotes, { hold: holdSeconds, asChord: true, velocity });
+      }
     });
     scheduleHtmlSampleStop(voice, holdSeconds);
   });
+}
+
+function activateEmergencyToneEngine() {
+  if (!audioCtx || !audioMaster) return false;
+  emergencyToneEngineActive = true;
+  sampleEngineReady = true;
+  updateAudioStatusText();
+  return true;
+}
+
+function midiToFrequency(midi) {
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
+function playEmergencyToneForMidi(midi, startTime, holdSeconds, velocity) {
+  if (!audioCtx || !audioMaster) return false;
+  try {
+    const frequency = midiToFrequency(midi);
+    const hold = Math.max(0.18, Math.min(3.2, holdSeconds || 1.2));
+    const release = Math.max(0.16, Math.min(0.7, hold * 0.42));
+    const peak = Math.max(0.05, Math.min(0.34, (velocity || 0.78) * 0.3));
+    const sustain = Math.max(0.018, peak * 0.28);
+    const endTime = startTime + hold + release;
+    const fundamental = audioCtx.createOscillator();
+    const shimmer = audioCtx.createOscillator();
+    const filter = audioCtx.createBiquadFilter();
+    const gain = audioCtx.createGain();
+
+    fundamental.type = "triangle";
+    shimmer.type = "sine";
+    fundamental.frequency.setValueAtTime(frequency, startTime);
+    shimmer.frequency.setValueAtTime(frequency * 2.01, startTime);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(Math.min(5200, Math.max(1400, frequency * 5.5)), startTime);
+    filter.Q.setValueAtTime(0.7, startTime);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.linearRampToValueAtTime(peak, startTime + 0.012);
+    gain.gain.exponentialRampToValueAtTime(sustain, startTime + 0.24);
+    gain.gain.setValueAtTime(sustain, startTime + hold);
+    gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+    fundamental.connect(filter);
+    shimmer.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioMaster);
+    fundamental.start(startTime);
+    shimmer.start(startTime);
+    fundamental.stop(endTime + 0.02);
+    shimmer.stop(endTime + 0.02);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function playEmergencyMidiNotes(midiNotes, options = {}) {
+  if (!activateEmergencyToneEngine()) return false;
+  const notes = Array.isArray(midiNotes) ? midiNotes.filter((midi) => Number.isFinite(midi)) : [];
+  if (notes.length === 0) return true;
+  const hold = options.hold || 1.2;
+  const asChord = options.asChord !== false;
+  const velocity = Math.max(0.05, Math.min(1, options.velocity || 0.78));
+  const schedule = () => {
+    const startBase = audioCtx.currentTime + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
+    notes.forEach((midi, idx) => {
+      const start = asChord ? startBase : startBase + idx * 0.08;
+      playEmergencyToneForMidi(midi, start, hold, velocity);
+    });
+  };
+  if (audioCtx.state === "running") {
+    schedule();
+    return true;
+  }
+  void audioCtx.resume().then(schedule).catch(() => {
+    if (el.chordDisplay) {
+      el.chordDisplay.textContent = "Audio is blocked. Click again to enable sound.";
+    }
+  });
+  return true;
 }
 
 function detectSampleOnsetSeconds(buffer) {
@@ -11296,3 +13664,936 @@ if (document.readyState === "loading") {
 } else {
   requestAnimationFrame(initScanner);
 }
+
+
+/* — high-fidelity chord decoder study wheel — */
+const circleKeys = [
+  {
+    label: "C",
+    scale: ["C", "D", "E", "F", "G", "A", "B"],
+    signature: "No sharps or flats"
+  },
+  {
+    label: "G",
+    scale: ["G", "A", "B", "C", "D", "E", "F#"],
+    signature: "1 sharp: F#"
+  },
+  {
+    label: "D",
+    scale: ["D", "E", "F#", "G", "A", "B", "C#"],
+    signature: "2 sharps: F#, C#"
+  },
+  {
+    label: "A",
+    scale: ["A", "B", "C#", "D", "E", "F#", "G#"],
+    signature: "3 sharps: F#, C#, G#"
+  },
+  {
+    label: "E",
+    scale: ["E", "F#", "G#", "A", "B", "C#", "D#"],
+    signature: "4 sharps: F#, C#, G#, D#"
+  },
+  {
+    label: "B",
+    scale: ["B", "C#", "D#", "E", "F#", "G#", "A#"],
+    signature: "5 sharps: F#, C#, G#, D#, A#"
+  },
+  {
+    label: "F#",
+    displayLabel: "F# / Gb",
+    scale: ["F#", "G#", "A#", "B", "C#", "D#", "E#"],
+    signature: "6 sharps: F#, C#, G#, D#, A#, E#"
+  },
+  {
+    label: "Db",
+    scale: ["Db", "Eb", "F", "Gb", "Ab", "Bb", "C"],
+    signature: "5 flats: Bb, Eb, Ab, Db, Gb"
+  },
+  {
+    label: "Ab",
+    scale: ["Ab", "Bb", "C", "Db", "Eb", "F", "G"],
+    signature: "4 flats: Bb, Eb, Ab, Db"
+  },
+  {
+    label: "Eb",
+    scale: ["Eb", "F", "G", "Ab", "Bb", "C", "D"],
+    signature: "3 flats: Bb, Eb, Ab"
+  },
+  {
+    label: "Bb",
+    scale: ["Bb", "C", "D", "Eb", "F", "G", "A"],
+    signature: "2 flats: Bb, Eb"
+  },
+  {
+    label: "F",
+    scale: ["F", "G", "A", "Bb", "C", "D", "E"],
+    signature: "1 flat: Bb"
+  }
+];
+
+const degreeInfo = [
+  { roman: "I", index: 0, quality: "major", role: "tonic home", suffix: "" },
+  { roman: "ii", index: 1, quality: "minor", role: "pre-dominant color", suffix: "m" },
+  { roman: "iii", index: 2, quality: "minor", role: "tonic substitute", suffix: "m" },
+  { roman: "IV", index: 3, quality: "major", role: "subdominant lift", suffix: "" },
+  { roman: "V", index: 4, quality: "major", role: "dominant pull", suffix: "" },
+  { roman: "vi", index: 5, quality: "minor", role: "relative minor", suffix: "m" },
+  { roman: "vii°", index: 6, quality: "diminished", role: "leading-tone tension", suffix: "dim" }
+];
+
+const windowSlots = [
+  { roman: "IV", x: 250, y: 188, r: 51, quick: ["4", "6", "1"], markerX: 213, markerY: 245 },
+  { roman: "I", x: 400, y: 122, r: 56, quick: ["1", "3", "5"], markerX: 400, markerY: 198 },
+  { roman: "V", x: 550, y: 188, r: 51, quick: ["5", "7", "2"], markerX: 587, markerY: 245 },
+  { roman: "vii°", x: 210, y: 420, r: 49, quick: ["7", "2", "4"], markerX: 294, markerY: 458 },
+  { roman: "iii", x: 292, y: 644, r: 50, quick: ["3", "5", "7"], markerX: 218, markerY: 622 },
+  { roman: "vi", x: 400, y: 702, r: 58, quick: ["6", "1", "3"], markerX: 400, markerY: 642 },
+  { roman: "ii", x: 522, y: 644, r: 50, quick: ["2", "4", "6"], markerX: 602, markerY: 622 }
+];
+
+const displayOrder = ["IV", "I", "V", "iii", "vii°", "vi", "ii"];
+
+const progressions = [
+  { name: "I - V - vi - IV", degrees: ["I", "V", "vi", "IV"] },
+  { name: "ii - V - I", degrees: ["ii", "V", "I"] },
+  { name: "I - vi - IV - V", degrees: ["I", "vi", "IV", "V"] },
+  { name: "vi - IV - I - V", degrees: ["vi", "IV", "I", "V"] }
+];
+
+const noteSemitones = {
+  C: 0,
+  "B#": 0,
+  "C#": 1,
+  Db: 1,
+  D: 2,
+  "D#": 3,
+  Eb: 3,
+  E: 4,
+  Fb: 4,
+  "E#": 5,
+  F: 5,
+  "F#": 6,
+  Gb: 6,
+  G: 7,
+  "G#": 8,
+  Ab: 8,
+  A: 9,
+  "A#": 10,
+  Bb: 10,
+  B: 11,
+  Cb: 11
+};
+
+const preferredKeyByPitch = {
+  C: "C",
+  "C#": "Db",
+  Db: "Db",
+  D: "D",
+  "D#": "Eb",
+  Eb: "Eb",
+  E: "E",
+  Fb: "E",
+  "E#": "F",
+  F: "F",
+  "F#": "F#",
+  Gb: "F#",
+  G: "G",
+  "G#": "Ab",
+  Ab: "Ab",
+  A: "A",
+  "A#": "Bb",
+  Bb: "Bb",
+  B: "B",
+  Cb: "B"
+};
+
+const svgNS = "http://www.w3.org/2000/svg";
+const center = { x: 400, y: 410 };
+const snapStep = 30;
+
+const state = {
+  keyIndex: 0,
+  selectedProgression: progressions[0].name,
+  activeDegree: null,
+  rotorAngle: 0,
+  animationFrame: null,
+  timers: [],
+  drag: null
+};
+
+const elements = {
+  activeKey: document.querySelector("#active-key"),
+  signature: document.querySelector("#signature"),
+  relativeMinor: document.querySelector("#relative-minor"),
+  decoderSvg: document.querySelector("#decoder-svg"),
+  chordGrid: document.querySelector("#chord-grid"),
+  scaleNotes: document.querySelector("#scale-notes"),
+  progressionControls: document.querySelector("#progression-controls"),
+  progressionOutput: document.querySelector("#progression-output")
+};
+
+let rotorContent;
+
+function getCurrentKey() {
+  return circleKeys[state.keyIndex];
+}
+
+function getDegreeMap(keyData = getCurrentKey()) {
+  return degreeInfo.reduce((map, degree) => {
+    const triad = getTriad(keyData.scale, degree.index);
+    map[degree.roman] = {
+      ...degree,
+      root: keyData.scale[degree.index],
+      triad
+    };
+    return map;
+  }, {});
+}
+
+function getTriad(scale, rootIndex) {
+  return [
+    scale[rootIndex],
+    scale[(rootIndex + 2) % 7],
+    scale[(rootIndex + 4) % 7]
+  ];
+}
+
+function formatChordName(chord) {
+  if (chord.quality === "major") {
+    return `${chord.root} major`;
+  }
+
+  if (chord.quality === "minor") {
+    return `${chord.root} minor`;
+  }
+
+  return `${chord.root} diminished`;
+}
+
+function createSvgElement(tag, attributes = {}, text = "") {
+  const node = document.createElementNS(svgNS, tag);
+
+  Object.entries(attributes).forEach(([name, value]) => {
+    node.setAttribute(name, String(value));
+  });
+
+  if (text) {
+    node.textContent = text;
+  }
+
+  return node;
+}
+
+function initControls() {
+  progressions.forEach((progression) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "progression-button";
+    button.textContent = progression.name;
+    button.addEventListener("click", () => {
+      state.selectedProgression = progression.name;
+      renderReadouts();
+      playProgression(progression);
+    });
+    elements.progressionControls.append(button);
+  });
+}
+
+function initDecoderSvg() {
+  elements.decoderSvg.setAttribute("tabindex", "0");
+  elements.decoderSvg.replaceChildren();
+  drawDefs();
+  drawBasePlate();
+  drawRotor();
+  drawFaceplateInk();
+  bindDragEvents();
+  setRotorAngle(0);
+}
+
+function drawDefs() {
+  const defs = createSvgElement("defs");
+
+  const clipPath = createSvgElement("clipPath", { id: "decoder-window-mask" });
+  windowSlots.forEach((slot) => {
+    clipPath.append(createSvgElement("circle", { cx: slot.x, cy: slot.y, r: slot.r }));
+  });
+  clipPath.append(createSvgElement("rect", { x: 326, y: 242, width: 148, height: 56, rx: 10 }));
+  clipPath.append(createSvgElement("rect", { x: 315, y: 308, width: 170, height: 30, rx: 7 }));
+  defs.append(clipPath);
+
+  const plateGradient = createSvgElement("linearGradient", {
+    id: "plate-gradient",
+    x1: "0%",
+    x2: "100%",
+    y1: "0%",
+    y2: "100%"
+  });
+  plateGradient.append(createSvgElement("stop", { offset: "0%", "stop-color": "#ffe65d" }));
+  plateGradient.append(createSvgElement("stop", { offset: "55%", "stop-color": "#f2ce22" }));
+  plateGradient.append(createSvgElement("stop", { offset: "100%", "stop-color": "#d9af0c" }));
+  defs.append(plateGradient);
+
+  const windowGradient = createSvgElement("radialGradient", { id: "window-gradient", cx: "38%", cy: "30%" });
+  windowGradient.append(createSvgElement("stop", { offset: "0%", "stop-color": "#384247" }));
+  windowGradient.append(createSvgElement("stop", { offset: "100%", "stop-color": "#121719" }));
+  defs.append(windowGradient);
+
+  const arrowMarker = createSvgElement("marker", {
+    id: "ink-arrow",
+    markerWidth: 12,
+    markerHeight: 12,
+    refX: 10,
+    refY: 6,
+    orient: "auto",
+    markerUnits: "strokeWidth"
+  });
+  arrowMarker.append(createSvgElement("path", {
+    d: "M2 2 L10 6 L2 10",
+    fill: "none",
+    stroke: "#20282c",
+    "stroke-width": 2,
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round"
+  }));
+  defs.append(arrowMarker);
+
+  elements.decoderSvg.append(defs);
+}
+
+function drawBasePlate() {
+  const base = createSvgElement("g", { "aria-hidden": "true" });
+  base.append(createSvgElement("rect", {
+    x: 80,
+    y: 42,
+    width: 640,
+    height: 760,
+    rx: 58,
+    fill: "url(#plate-gradient)",
+    stroke: "#232b2e",
+    "stroke-width": 6
+  }));
+  base.append(createSvgElement("path", {
+    d: "M190 68 C260 36 327 70 400 70 C473 70 540 36 610 68",
+    fill: "none",
+    stroke: "rgba(255,255,255,0.55)",
+    "stroke-width": 8,
+    "stroke-linecap": "round"
+  }));
+  base.append(createSvgElement("circle", {
+    cx: center.x,
+    cy: center.y,
+    r: 286,
+    fill: "rgba(255,255,255,0.08)",
+    stroke: "rgba(36,43,46,0.2)",
+    "stroke-width": 2
+  }));
+  elements.decoderSvg.append(base);
+}
+
+function drawRotor() {
+  const clipped = createSvgElement("g", { "clip-path": "url(#decoder-window-mask)" });
+  rotorContent = createSvgElement("g", { id: "rotor-content" });
+
+  clipped.append(rotorContent);
+  elements.decoderSvg.append(clipped);
+  renderRotorLabels();
+}
+
+function renderRotorLabels() {
+  const keyData = getCurrentKey();
+  const degreeMap = getDegreeMap(keyData);
+  const keyGroup = createSvgElement("g", {
+    transform: `rotate(${state.keyIndex * snapStep} ${center.x} ${center.y})`
+  });
+
+  windowSlots.forEach((slot) => {
+    const chord = degreeMap[slot.roman];
+    keyGroup.append(drawRotorChord(slot, chord));
+  });
+
+  keyGroup.append(drawRotorSignature(keyData));
+  rotorContent.replaceChildren(keyGroup);
+}
+
+function drawRotorChord(slot, chord) {
+  const group = createSvgElement("g", { transform: `translate(${slot.x} ${slot.y})` });
+  const qualityClass = chord.quality === "major" ? "#f15a4e" : chord.quality === "minor" ? "#4ed0b3" : "#9ea8ff";
+  const hasSuffix = Boolean(chord.suffix);
+  const rootFontSize = chord.root.length > 1 ? (hasSuffix ? 38 : 44) : (hasSuffix ? 48 : 52);
+
+  group.append(createSvgElement("circle", {
+    cx: 0,
+    cy: 0,
+    r: slot.r + 3,
+    fill: "url(#window-gradient)"
+  }));
+  group.append(createSvgElement("circle", {
+    cx: 0,
+    cy: 0,
+    r: slot.r - 6,
+    fill: "none",
+    stroke: "rgba(255,255,255,0.12)",
+    "stroke-width": 2
+  }));
+
+  const root = createSvgElement("text", {
+    x: 0,
+    y: hasSuffix ? 3 : 12,
+    "text-anchor": "middle",
+    "font-family": "Inter, Arial, sans-serif",
+    "font-size": rootFontSize,
+    "font-weight": 900,
+    fill: "#f8faf3"
+  }, chord.root);
+  group.append(root);
+
+  if (hasSuffix) {
+    group.append(createSvgElement("text", {
+      x: 0,
+      y: 27,
+      "text-anchor": "middle",
+      "font-family": "Inter, Arial, sans-serif",
+      "font-size": chord.suffix === "dim" ? 15 : 18,
+      "font-weight": 900,
+      fill: qualityClass
+    }, chord.suffix));
+  }
+
+  group.append(createSvgElement("text", {
+    x: 0,
+    y: slot.r - 11,
+    "text-anchor": "middle",
+    "font-family": "Inter, Arial, sans-serif",
+    "font-size": 12,
+    "font-weight": 850,
+    fill: qualityClass
+  }, chord.roman));
+
+  return group;
+}
+
+function drawRotorSignature(keyData) {
+  const group = createSvgElement("g");
+  group.append(createSvgElement("rect", {
+    x: 326,
+    y: 242,
+    width: 148,
+    height: 56,
+    rx: 10,
+    fill: "url(#window-gradient)"
+  }));
+  group.append(createSvgElement("text", {
+    x: 400,
+    y: 263,
+    "text-anchor": "middle",
+    "font-family": "Inter, Arial, sans-serif",
+    "font-size": 15,
+    "font-weight": 900,
+    fill: "#f8faf3"
+  }, keyData.displayLabel || keyData.label));
+  group.append(createSvgElement("text", {
+    x: 400,
+    y: 284,
+    "text-anchor": "middle",
+    "font-family": "Inter, Arial, sans-serif",
+    "font-size": 12,
+    "font-weight": 780,
+    fill: "#f8faf3"
+  }, compactSignature(keyData.signature)));
+
+  group.append(createSvgElement("rect", {
+    x: 315,
+    y: 308,
+    width: 170,
+    height: 30,
+    rx: 7,
+    fill: "rgba(18,23,25,0.95)"
+  }));
+  group.append(createSvgElement("text", {
+    x: 400,
+    y: 329,
+    "text-anchor": "middle",
+    "font-family": "Inter, Arial, sans-serif",
+    "font-size": 12,
+    "font-weight": 800,
+    fill: "#f8faf3"
+  }, keyData.scale.join(" ")));
+
+  return group;
+}
+
+function drawFaceplateInk() {
+  const face = createSvgElement("g", { "aria-hidden": "true" });
+
+  face.append(createSvgElement("path", {
+    d: "M250 188 C300 132 337 122 400 122 C463 122 500 132 550 188",
+    fill: "none",
+    stroke: "#222b2e",
+    "stroke-width": 3,
+    "stroke-linecap": "round"
+  }));
+  face.append(createSvgElement("path", {
+    d: "M210 420 C256 524 302 592 400 702 C464 636 488 604 522 644",
+    fill: "none",
+    stroke: "#222b2e",
+    "stroke-width": 2,
+    "stroke-linecap": "round",
+    "stroke-dasharray": "6 10"
+  }));
+  face.append(createSvgElement("line", {
+    x1: 176,
+    y1: 500,
+    x2: 624,
+    y2: 500,
+    stroke: "#222b2e",
+    "stroke-width": 2,
+    "stroke-dasharray": "4 12"
+  }));
+  face.append(createSvgElement("line", {
+    x1: 400,
+    y1: 348,
+    x2: 400,
+    y2: 574,
+    stroke: "#222b2e",
+    "stroke-width": 2,
+    "marker-end": ""
+  }));
+
+  drawWindowFrames(face);
+  drawFaceText(face);
+  drawPivot(face);
+
+  elements.decoderSvg.append(face);
+}
+
+function drawWindowFrames(face) {
+  windowSlots.forEach((slot) => {
+    face.append(createSvgElement("circle", {
+      cx: slot.x,
+      cy: slot.y,
+      r: slot.r + 6,
+      fill: "none",
+      stroke: "rgba(255,255,255,0.42)",
+      "stroke-width": 7
+    }));
+    face.append(createSvgElement("circle", {
+      cx: slot.x,
+      cy: slot.y,
+      r: slot.r + 5,
+      fill: "none",
+      stroke: "#232b2e",
+      "stroke-width": 4
+    }));
+    drawQuickDots(face, slot);
+    face.append(drawWindowHitTarget(slot));
+  });
+
+  face.append(createSvgElement("rect", {
+    x: 322,
+    y: 238,
+    width: 156,
+    height: 64,
+    rx: 13,
+    fill: "none",
+    stroke: "#232b2e",
+    "stroke-width": 4
+  }));
+  face.append(createSvgElement("rect", {
+    x: 311,
+    y: 304,
+    width: 178,
+    height: 38,
+    rx: 10,
+    fill: "none",
+    stroke: "#232b2e",
+    "stroke-width": 3
+  }));
+}
+
+function drawWindowHitTarget(slot) {
+  const target = createSvgElement("circle", {
+    cx: slot.x,
+    cy: slot.y,
+    r: slot.r + 10,
+    fill: "#ffffff",
+    opacity: 0.01,
+    class: "decoder-window-hit",
+    tabindex: 0,
+    role: "button",
+    "aria-label": `Make the ${slot.roman} window note the key`
+  });
+
+  const activate = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setKeyFromWindowSlot(slot.roman);
+  };
+
+  target.addEventListener("pointerdown", activate);
+  target.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      activate(event);
+    }
+  });
+
+  return target;
+}
+
+function drawFaceText(face) {
+  face.append(faceText("KEY", 400, 222, 15, 900));
+  face.append(faceText("Signature", 400, 234, 10, 800));
+  face.append(faceText("MAJOR", 492, 433, 30, 900));
+  face.append(faceText("chords", 542, 455, 14, 800));
+  face.append(faceText("minor", 492, 536, 29, 900));
+  face.append(faceText("chords", 542, 557, 14, 800));
+  face.append(faceText("relative minor", 400, 617, 13, 800));
+  face.append(faceText("Chord", 160, 742, 19, 900));
+  face.append(faceText("Decoder", 161, 765, 26, 900));
+  face.append(faceText("Study Wheel", 158, 786, 14, 800));
+  face.append(createSvgElement("path", {
+    d: "M596 722 C588 708 575 696 562 684",
+    fill: "none",
+    stroke: "rgba(255,255,255,0.62)",
+    "stroke-width": 8,
+    "stroke-linecap": "round"
+  }));
+  face.append(createSvgElement("path", {
+    d: "M596 722 C588 708 575 696 562 684",
+    fill: "none",
+    stroke: "#20282c",
+    "stroke-width": 3,
+    "stroke-linecap": "round",
+    "marker-end": "url(#ink-arrow)"
+  }));
+  face.append(faceText("CUT-OUT WINDOWS", 609, 737, 13, 900));
+  face.append(faceText("DRAG TO TURN", 610, 758, 19, 900));
+
+  const labels = [
+    ["IV", 250, 111],
+    ["I", 400, 52],
+    ["V", 550, 111],
+    ["vii°", 210, 351],
+    ["iii", 292, 578],
+    ["vi", 400, 622],
+    ["ii", 522, 578]
+  ];
+
+  labels.forEach(([text, x, y]) => {
+    face.append(faceText(text, x, y, 18, 900));
+  });
+}
+
+function drawQuickDots(face, slot) {
+  const startX = slot.markerX - 22;
+  slot.quick.forEach((value, index) => {
+    const x = startX + index * 22;
+    face.append(createSvgElement("circle", {
+      cx: x,
+      cy: slot.markerY,
+      r: 10,
+      fill: "rgba(35,43,46,0.96)"
+    }));
+    face.append(createSvgElement("text", {
+      x,
+      y: slot.markerY + 4,
+      "text-anchor": "middle",
+      "font-family": "Inter, Arial, sans-serif",
+      "font-size": 11,
+      "font-weight": 900,
+      fill: "#f7eaa1"
+    }, value));
+  });
+}
+
+function drawPivot(face) {
+  face.append(createSvgElement("circle", {
+    cx: center.x,
+    cy: center.y,
+    r: 18,
+    fill: "#d4aa0a",
+    stroke: "#232b2e",
+    "stroke-width": 4
+  }));
+  face.append(createSvgElement("circle", {
+    cx: center.x,
+    cy: center.y,
+    r: 6,
+    fill: "#232b2e"
+  }));
+}
+
+function faceText(text, x, y, size, weight) {
+  return createSvgElement("text", {
+    x,
+    y,
+    "text-anchor": "middle",
+    "font-family": "Inter, Arial, sans-serif",
+    "font-size": size,
+    "font-weight": weight,
+    fill: "#20282c"
+  }, text);
+}
+
+function bindDragEvents() {
+  elements.decoderSvg.addEventListener("pointerdown", (event) => {
+    elements.decoderSvg.setPointerCapture(event.pointerId);
+    elements.decoderSvg.classList.add("is-dragging");
+    cancelAnimation();
+    state.drag = {
+      startAngle: pointerAngle(event),
+      startRotorAngle: state.rotorAngle
+    };
+  });
+
+  elements.decoderSvg.addEventListener("pointermove", (event) => {
+    if (!state.drag) {
+      return;
+    }
+
+    const delta = pointerAngle(event) - state.drag.startAngle;
+    const nextAngle = state.drag.startRotorAngle + delta;
+    setRotorAngle(nextAngle);
+    const index = angleToIndex(nextAngle);
+    if (index !== state.keyIndex) {
+      state.keyIndex = index;
+      state.activeDegree = null;
+      clearTimers();
+      renderReadouts();
+    }
+  });
+
+  elements.decoderSvg.addEventListener("pointerup", () => finishDrag());
+  elements.decoderSvg.addEventListener("pointercancel", () => finishDrag());
+
+  elements.decoderSvg.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      setKey((state.keyIndex + 1) % circleKeys.length);
+    }
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setKey((state.keyIndex - 1 + circleKeys.length) % circleKeys.length);
+    }
+  });
+}
+
+function finishDrag() {
+  if (!state.drag) {
+    return;
+  }
+
+  elements.decoderSvg.classList.remove("is-dragging");
+  state.drag = null;
+  const index = angleToIndex(state.rotorAngle);
+  setKey(index);
+}
+
+function pointerAngle(event) {
+  const point = elements.decoderSvg.createSVGPoint();
+  point.x = event.clientX;
+  point.y = event.clientY;
+  const svgPoint = point.matrixTransform(elements.decoderSvg.getScreenCTM().inverse());
+  return Math.atan2(svgPoint.y - center.y, svgPoint.x - center.x) * (180 / Math.PI);
+}
+
+function angleToIndex(angle) {
+  return wrapIndex(Math.round(-angle / snapStep));
+}
+
+function wrapIndex(index) {
+  return ((index % circleKeys.length) + circleKeys.length) % circleKeys.length;
+}
+
+function setKey(index) {
+  state.keyIndex = wrapIndex(index);
+  state.activeDegree = null;
+  clearTimers();
+  renderReadouts();
+  animateRotorTo(-state.keyIndex * snapStep);
+}
+
+function setKeyFromWindowSlot(roman) {
+  const chord = getDegreeMap()[roman];
+  if (!chord?.root) {
+    return;
+  }
+
+  const index = getKeyIndexForRoot(chord.root);
+  if (index >= 0) {
+    setKey(index);
+  }
+}
+
+function getKeyIndexForRoot(root) {
+  const preferredLabel = preferredKeyByPitch[root] || root;
+  return circleKeys.findIndex((keyData) => keyData.label === preferredLabel);
+}
+
+function setRotorAngle(angle) {
+  state.rotorAngle = angle;
+  rotorContent.setAttribute("transform", `rotate(${angle} ${center.x} ${center.y})`);
+}
+
+function animateRotorTo(targetAngle) {
+  cancelAnimation();
+  const startAngle = state.rotorAngle;
+  const adjustedTarget = targetAngle + Math.round((startAngle - targetAngle) / 360) * 360;
+  const duration = 260;
+  const start = performance.now();
+
+  function tick(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - (1 - progress) ** 3;
+    setRotorAngle(startAngle + (adjustedTarget - startAngle) * eased);
+
+    if (progress < 1) {
+      state.animationFrame = requestAnimationFrame(tick);
+      return;
+    }
+
+    state.animationFrame = null;
+    setRotorAngle(targetAngle);
+  }
+
+  state.animationFrame = requestAnimationFrame(tick);
+}
+
+function cancelAnimation() {
+  if (state.animationFrame) {
+    cancelAnimationFrame(state.animationFrame);
+    state.animationFrame = null;
+  }
+}
+
+function renderReadouts() {
+  const keyData = getCurrentKey();
+  const degreeMap = getDegreeMap(keyData);
+
+  elements.activeKey.textContent = keyData.displayLabel || keyData.label;
+  elements.signature.textContent = keyData.signature;
+  elements.relativeMinor.textContent = `${keyData.scale[5]} minor`;
+  elements.scaleNotes.textContent = `Scale notes: ${keyData.scale.join("  ")}`;
+
+  renderRotorLabels();
+  renderChordGrid(degreeMap);
+  renderProgressions(degreeMap);
+}
+
+function renderChordGrid(degreeMap) {
+  elements.chordGrid.replaceChildren();
+
+  displayOrder.forEach((roman) => {
+    const chord = degreeMap[roman];
+    const card = document.createElement("article");
+    card.className = "chord-card";
+    card.dataset.degree = roman;
+    card.dataset.quality = chord.quality;
+    card.classList.toggle("is-active", state.activeDegree === roman);
+
+    const degree = document.createElement("div");
+    degree.className = "degree";
+    degree.textContent = roman;
+
+    const name = document.createElement("div");
+    name.className = "chord-name";
+    name.textContent = formatChordName(chord);
+
+    const triad = document.createElement("p");
+    triad.className = "chord-meta";
+    triad.textContent = `Triad: ${chord.triad.join(" - ")}`;
+
+    const role = document.createElement("p");
+    role.className = "chord-meta";
+    role.textContent = chord.role;
+
+    card.append(degree, name, triad, role);
+    elements.chordGrid.append(card);
+  });
+}
+
+function renderProgressions(degreeMap) {
+  const selected = progressions.find((item) => item.name === state.selectedProgression) || progressions[0];
+
+  [...elements.progressionControls.querySelectorAll(".progression-button")].forEach((button) => {
+    button.classList.toggle("is-selected", button.textContent === selected.name);
+  });
+
+  elements.progressionOutput.replaceChildren();
+  selected.degrees.forEach((roman) => {
+    const chord = degreeMap[roman];
+    const pill = document.createElement("span");
+    pill.className = "progression-pill";
+    pill.textContent = `${roman}: ${formatChordName(chord)}`;
+    elements.progressionOutput.append(pill);
+  });
+}
+
+function playProgression(progression) {
+  clearTimers();
+
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  const audioContext = AudioContext ? new AudioContext() : null;
+  const degreeMap = getDegreeMap();
+
+  progression.degrees.forEach((roman, index) => {
+    const timer = window.setTimeout(() => {
+      state.activeDegree = roman;
+      renderChordGrid(degreeMap);
+
+      if (audioContext) {
+        playChord(audioContext, degreeMap[roman].triad, index * 0.02);
+      }
+    }, index * 620);
+    state.timers.push(timer);
+  });
+
+  const resetTimer = window.setTimeout(() => {
+    state.activeDegree = null;
+    renderChordGrid(degreeMap);
+    if (audioContext) {
+      audioContext.close();
+    }
+  }, progression.degrees.length * 620 + 250);
+  state.timers.push(resetTimer);
+}
+
+function playChord(audioContext, notes, offset) {
+  const now = audioContext.currentTime + offset;
+  notes.forEach((note, voiceIndex) => {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = noteToFrequency(note, voiceIndex);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.09, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.52);
+    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.55);
+  });
+}
+
+function noteToFrequency(note, voiceIndex) {
+  const semitone = noteSemitones[note] ?? 0;
+  const midi = 60 + semitone + voiceIndex * 12;
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
+function clearTimers() {
+  state.timers.forEach((timer) => window.clearTimeout(timer));
+  state.timers = [];
+}
+
+function compactSignature(signature) {
+  return signature
+    .replace("No sharps or flats", "0 sharps / flats")
+    .replace("sharps:", "#:")
+    .replace("sharp:", "#:")
+    .replace("flats:", "b:")
+    .replace("flat:", "b:");
+}
+
+initControls();
+initDecoderSvg();
+renderReadouts();

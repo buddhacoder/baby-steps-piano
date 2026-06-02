@@ -788,6 +788,190 @@ const THEORY_CURRICULUM = {
     }
 };
 
+THEORY_CURRICULUM.chordMastery = {
+    title: "Chord Mastery",
+    icon: "🎛️",
+    description: "Think in keys, numbers, chord shapes, inversions, and smooth movement.",
+    lessons: [
+        {
+            id: "chordMastery:scale-notes-to-chords",
+            tier: 1,
+            title: "From Scale Notes to Chords",
+            desc: "Turn any major scale into diatonic triads by stacking every other note.",
+            prerequisites: ["scales:major"],
+            resources: [],
+            tags: ["chords", "scale-degrees", "diatonic", "numbers"]
+        },
+        {
+            id: "chordMastery:inversion-fluency",
+            tier: 1,
+            title: "Inversion Fluency",
+            desc: "Use root, 1st, and 2nd inversion as playable hand shapes, not vocabulary trivia.",
+            prerequisites: ["chordMastery:scale-notes-to-chords"],
+            resources: [],
+            tags: ["inversions", "triads", "shapes"]
+        },
+        {
+            id: "chordMastery:one-five-six-four",
+            tier: 2,
+            title: "1-5-6-4 Progression Lab",
+            desc: "Move a core pop progression through keys, inversions, and simple patterns.",
+            prerequisites: ["chordMastery:inversion-fluency"],
+            resources: [],
+            tags: ["progressions", "1564", "transpose", "pop"]
+        },
+        {
+            id: "chordMastery:voice-led-progressions",
+            tier: 2,
+            title: "Voice-Led Progressions",
+            desc: "Choose the closest inversion so chord changes feel connected under the hands.",
+            prerequisites: ["chordMastery:one-five-six-four"],
+            resources: [],
+            tags: ["voice-leading", "inversions", "smooth"]
+        }
+    ]
+};
+
+THEORY_CURRICULUM.bluesLanguage = {
+    title: "Blues Language",
+    icon: "🎚️",
+    description: "Blues scales, dominant chords, call-and-response, turnarounds, and feel.",
+    lessons: [
+        {
+            id: "bluesLanguage:minor-blues-scale",
+            tier: 1,
+            title: "Minor Blues Scale",
+            desc: "Use the minor blues scale as a compact improvising vocabulary over dominant chords.",
+            prerequisites: ["scales:pentatonic"],
+            resources: [],
+            tags: ["blues", "scale", "improvisation"]
+        },
+        {
+            id: "bluesLanguage:dominant-seventh-home",
+            tier: 2,
+            title: "Dominant Seventh Home Base",
+            desc: "Hear I7, IV7, and V7 as the sound of blues harmony.",
+            prerequisites: ["chords:seventh"],
+            resources: [],
+            tags: ["blues", "dominant", "12-bar"]
+        },
+        {
+            id: "bluesLanguage:call-response",
+            tier: 2,
+            title: "Call and Response Licks",
+            desc: "Make short phrases answer the chord instead of running scales endlessly.",
+            prerequisites: ["bluesLanguage:minor-blues-scale"],
+            resources: [],
+            tags: ["blues", "phrasing", "licks"]
+        }
+    ]
+};
+
+THEORY_CURRICULUM.jazzVocabulary = {
+    title: "Jazz Vocabulary",
+    icon: "🎷",
+    description: "Modes, ii-V-I, guide tones, bebop color, and dominant movement.",
+    lessons: [
+        {
+            id: "jazzVocabulary:dorian-mixolydian",
+            tier: 2,
+            title: "Dorian to Mixolydian",
+            desc: "Connect ii and V with scale colors that point toward I.",
+            prerequisites: ["scales:modes", "progressions:ii-v-i"],
+            resources: [],
+            tags: ["jazz", "modes", "ii-v-i"]
+        },
+        {
+            id: "jazzVocabulary:guide-tone-paths",
+            tier: 3,
+            title: "Guide-Tone Paths",
+            desc: "Track 3rds and 7ths so jazz chords move with purpose.",
+            prerequisites: ["chords:seventh"],
+            resources: [],
+            tags: ["jazz", "guide-tones", "voice-leading"]
+        },
+        {
+            id: "jazzVocabulary:dominant-colors",
+            tier: 3,
+            title: "Dominant Colors",
+            desc: "Compare plain V7, altered V7, backdoor dominant, and tritone substitute.",
+            prerequisites: ["progressions:tritone-sub"],
+            resources: [],
+            tags: ["jazz", "dominant", "substitution"]
+        }
+    ]
+};
+
+THEORY_CURRICULUM.churchHarmony = {
+    title: "Church Harmony",
+    icon: "⛪",
+    description: "Gospel movement, Amen/plagal color, passing chords, and emotional resolution.",
+    lessons: [
+        {
+            id: "churchHarmony:amen-movement",
+            tier: 1,
+            title: "Amen Movement",
+            desc: "Use IV to I as a warm plagal resolution and compare it with V to I.",
+            prerequisites: ["progressions:cadences"],
+            resources: [],
+            tags: ["church", "gospel", "plagal"]
+        },
+        {
+            id: "churchHarmony:passing-to-four",
+            tier: 2,
+            title: "Passing to IV",
+            desc: "Use bass motion and passing chords to make I to IV feel alive.",
+            prerequisites: ["chordMastery:scale-notes-to-chords"],
+            resources: [],
+            tags: ["church", "passing-chords", "bass"]
+        },
+        {
+            id: "churchHarmony:seven-three-six",
+            tier: 3,
+            title: "7-3-6 Movement",
+            desc: "Hear gospel/jazz gravity into vi through half-diminished and dominant color.",
+            prerequisites: ["chords:seventh"],
+            resources: [],
+            tags: ["church", "gospel", "736"]
+        }
+    ]
+};
+
+THEORY_CURRICULUM.modulation = {
+    title: "Modulation",
+    icon: "🧭",
+    description: "Move ideas between keys with number thinking, pivots, dominants, and circle motion.",
+    lessons: [
+        {
+            id: "modulation:number-thinking",
+            tier: 2,
+            title: "Move by Numbers",
+            desc: "Translate progressions by roman numerals before naming the new chords.",
+            prerequisites: ["foundations:transposition", "chordMastery:scale-notes-to-chords"],
+            resources: [],
+            tags: ["modulation", "numbers", "transposition"]
+        },
+        {
+            id: "modulation:dominant-setup",
+            tier: 3,
+            title: "Dominant Setup",
+            desc: "Use the V7 of the destination key to make the new key feel inevitable.",
+            prerequisites: ["progressions:secondary-dominants"],
+            resources: [],
+            tags: ["modulation", "dominant", "resolution"]
+        },
+        {
+            id: "modulation:pivot-and-circle",
+            tier: 3,
+            title: "Pivot and Circle Motion",
+            desc: "Compare common-chord pivots, circle motion, and chromatic passing routes.",
+            prerequisites: ["foundations:circle-of-fifths"],
+            resources: [],
+            tags: ["modulation", "pivot", "circle"]
+        }
+    ]
+};
+
 /* ── Curriculum Helpers ── */
 
 /** Flat array of all lessons */
