@@ -78,6 +78,7 @@ const CHORD_MODE_TRANSITION_CLEANUP_MS = 860;
 const CHORD_MODE_GLISS_SPACING_SECONDS = 0.052;
 const CHORD_MODE_GLISS_HOLD_SECONDS = 0.15;
 const CHORD_MODE_GLISS_THROTTLE_MS = 180;
+const DEFAULT_SEQUENCE_SPACING_SECONDS = 0.08;
 
 const CHORDS = {
   major: { intervals: [0, 4, 7], label: "Major", short: "" },
@@ -1971,27 +1972,17 @@ function playChordModeGlissando(fromMode, toMode) {
   if (nowMs - lastChordModeGlissAtMs < CHORD_MODE_GLISS_THROTTLE_MS) return;
   lastChordModeGlissAtMs = nowMs;
 
-  if (!ensureAudio()) return;
-  const schedule = () => {
-    if (!audioCtx || !audioMaster) return;
-    const root = el.keySelect?.value || appState.root || "C";
-    const rootMidi = midiForPitchClass(root, 5);
-    const ascending = toIndex > fromIndex;
-    const intervals = ascending ? [0, 2, 4, 7, 12] : [12, 9, 7, 4, 0];
-    const startBase = audioCtx.currentTime + Math.max(0.012, getInteractiveStartLeadTimeSeconds());
-    intervals.forEach((interval, index) => {
-      const start = startBase + index * CHORD_MODE_GLISS_SPACING_SECONDS;
-      const velocity = 0.34 - index * 0.018;
-      playEmergencyToneForMidi(rootMidi + interval, start, CHORD_MODE_GLISS_HOLD_SECONDS, velocity);
-    });
-  };
-
-  if (audioCtx?.state === "running") {
-    schedule();
-    return;
-  }
-  void audioCtx?.resume().then(schedule).catch(() => {
-    // Browser audio policy can still block sound until the next direct gesture.
+  const root = el.keySelect?.value || appState.root || "C";
+  const rootMidi = midiForPitchClass(root, 5);
+  const ascending = toIndex > fromIndex;
+  const intervals = ascending ? [0, 2, 4, 7, 12] : [12, 9, 7, 4, 0];
+  playMidiNotes(intervals.map((interval) => rootMidi + interval), {
+    hold: CHORD_MODE_GLISS_HOLD_SECONDS,
+    asChord: false,
+    velocity: 0.58,
+    restrictToWindow: false,
+    sequenceSpacingSeconds: CHORD_MODE_GLISS_SPACING_SECONDS,
+    highlight: false
   });
 }
 
@@ -9631,9 +9622,10 @@ function playMidiNotesWithRnbo(midiNotes, options = {}) {
   const hold = options.hold || 1.2;
   const asChord = options.asChord !== false;
   const velocity = options.velocity || 0.82;
+  const sequenceSpacing = getSequenceSpacingSeconds(options);
   const startBase = audioCtx.currentTime + getInteractiveStartLeadTimeSeconds();
   midiNotes.forEach((midi, idx) => {
-    const start = asChord ? startBase : startBase + idx * 0.08;
+    const start = asChord ? startBase : startBase + idx * sequenceSpacing;
     scheduleRnboNote(midi, start, hold, velocity);
   });
   return true;
@@ -9646,6 +9638,7 @@ function playMidiNotesWithToneEngine(midiNotes, options = {}) {
   const hold = options.hold || 1.2;
   const asChord = options.asChord !== false;
   const velocity = Math.max(0.05, Math.min(1, options.velocity || 0.82));
+  const sequenceSpacing = getSequenceSpacingSeconds(options);
 
   const trigger = () => {
     const toneNotes = notes.map((midi) => midiToNoteName(midi));
@@ -9655,7 +9648,7 @@ function playMidiNotesWithToneEngine(midiNotes, options = {}) {
       return;
     }
     toneNotes.forEach((note, idx) => {
-      toneSampler.triggerAttackRelease(note, hold, start + idx * 0.08, velocity);
+      toneSampler.triggerAttackRelease(note, hold, start + idx * sequenceSpacing, velocity);
     });
   };
 
@@ -9998,13 +9991,19 @@ function playMidiNotes(midiNotes, options = {}) {
   const hold = options.hold || 1.2;
   const asChord = options.asChord !== false;
   const velocity = options.velocity || 0.82;
+  const shouldHighlight = options.highlight !== false;
+  const sequenceSpacing = getSequenceSpacingSeconds(options);
   const restrictToWindow = options.restrictToWindow === true;
   const skipStrictChordMode = options.__skipStrictChordMode === true;
   const isMultiNoteChord = asChord && Array.isArray(midiNotes) && midiNotes.length > 1;
+  const highlightPlayedNotes = (explicitMs = options.highlightMs) => {
+    if (!shouldHighlight) return;
+    highlightKeyboard(midiNotes, getHighlightMs(hold, explicitMs), restrictToWindow);
+  };
 
   const toneHandled = playMidiNotesWithToneEngine(midiNotes, options);
   if (toneHandled === true) {
-    highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+    highlightPlayedNotes();
     return;
   }
 
@@ -10021,7 +10020,7 @@ function playMidiNotes(midiNotes, options = {}) {
     }
     const highlightMs = getHighlightMs(hold, options.highlightMs);
     if (queueChordAssetPlayback(midiNotes, hold, velocity)) {
-      highlightKeyboard(midiNotes, highlightMs, restrictToWindow);
+      highlightPlayedNotes(highlightMs);
       return;
     }
     const signature = normalizeMidiSignature(midiNotes);
@@ -10045,7 +10044,7 @@ function playMidiNotes(midiNotes, options = {}) {
 
   if (shouldUseRnboPrimaryEngine() && !htmlSampleEngineActive) {
     if (rnboEngineActive && playMidiNotesWithRnbo(midiNotes, options)) {
-      highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+      highlightPlayedNotes();
       return;
     }
     if (!rnboEngineFailedReason) {
@@ -10063,7 +10062,7 @@ function playMidiNotes(midiNotes, options = {}) {
   }
 
   if (isMultiNoteChord && queueChordAssetPlayback(midiNotes, hold, velocity)) {
-    highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+    highlightPlayedNotes();
     return;
   }
 
@@ -10072,19 +10071,19 @@ function playMidiNotes(midiNotes, options = {}) {
       playHtmlSampleChord(midiNotes, hold, velocity);
     } else {
       midiNotes.forEach((midi, idx) => {
-        const delayMs = idx * 80;
+        const delayMs = idx * sequenceSpacing * 1000;
         window.setTimeout(() => {
           playHtmlSampleForMidi(midi, hold, velocity);
         }, delayMs);
       });
     }
-    highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+    highlightPlayedNotes();
     return;
   }
 
   if (emergencyToneEngineActive) {
     playEmergencyMidiNotes(midiNotes, options);
-    highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+    highlightPlayedNotes();
     return;
   }
 
@@ -10095,7 +10094,7 @@ function playMidiNotes(midiNotes, options = {}) {
       return;
     }
     if (playEmergencyMidiNotes(midiNotes, options)) {
-      highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+      highlightPlayedNotes();
       return;
     }
     updateAudioStatusText("error");
@@ -10105,7 +10104,7 @@ function playMidiNotes(midiNotes, options = {}) {
   const scheduleNotes = () => {
     const now = audioCtx.currentTime + getInteractiveStartLeadTimeSeconds();
     midiNotes.forEach((midi, idx) => {
-      const start = asChord ? now : now + idx * 0.08;
+      const start = asChord ? now : now + idx * sequenceSpacing;
       playPianoVoice(midi, start, hold, velocity);
     });
   };
@@ -10159,7 +10158,13 @@ function playMidiNotes(midiNotes, options = {}) {
     });
   }
 
-  highlightKeyboard(midiNotes, getHighlightMs(hold, options.highlightMs), restrictToWindow);
+  highlightPlayedNotes();
+}
+
+function getSequenceSpacingSeconds(options = {}) {
+  const spacing = Number(options.sequenceSpacingSeconds);
+  if (!Number.isFinite(spacing) || spacing <= 0) return DEFAULT_SEQUENCE_SPACING_SECONDS;
+  return Math.max(0.025, Math.min(0.18, spacing));
 }
 
 function collectMissingSampleTargets(midiNotes) {
@@ -12855,10 +12860,11 @@ function playEmergencyMidiNotes(midiNotes, options = {}) {
   const hold = options.hold || 1.2;
   const asChord = options.asChord !== false;
   const velocity = Math.max(0.05, Math.min(1, options.velocity || 0.78));
+  const sequenceSpacing = getSequenceSpacingSeconds(options);
   const schedule = () => {
     const startBase = audioCtx.currentTime + Math.max(0.01, getInteractiveStartLeadTimeSeconds());
     notes.forEach((midi, idx) => {
-      const start = asChord ? startBase : startBase + idx * 0.08;
+      const start = asChord ? startBase : startBase + idx * sequenceSpacing;
       playEmergencyToneForMidi(midi, start, hold, velocity);
     });
   };

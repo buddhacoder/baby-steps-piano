@@ -196,3 +196,12 @@ In progress.
 - Files touched: .gitignore, .vercelignore, vercel.json, index.html, app.js, styles.css, server.js, supabase.js, theory.js, data/practice-paths.js, context/*.md
 - Technical decisions:
   - Removed the Superpowers planning artifact before merge, kept durable project rules in context/, and verified the current feature branch as a stable local checkpoint before committing.
+
+## Session Completion - 2026-06-02 01:08 EDT
+
+- Milestone: Natural chord mode glissando
+- Status: Completed
+- Clean check: `npm run check; git diff --check; instrumented Playwright verified mode-switch glissando used 10 buffer-source starts and 0 oscillator starts in the normal sample-backed path, with app.js v20260602a, no page/console errors, and no keyboard highlight flicker; in-app preview refreshed`
+- Files touched: index.html, app.js, context/progress_tracker.md
+- Technical decisions:
+  - Chord mode glissando now routes through playMidiNotes with shared sequence timing so it uses the same piano/Tone/sample engine as keyboard playback, while suppressing keyboard highlights for this UI sound.
