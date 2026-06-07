@@ -14,7 +14,7 @@ Adult piano learners, especially users who benefit from ADHD-friendly study surf
 - Persist progress locally and, where enabled, through Supabase profile workflows.
 
 ## Current Milestone
-Add the Baby Steps Feel Layer: an app-wide premium interaction system that blends Apple-like tactile restraint with Duolingo-like encouragement for adult piano learners. The first implementation slice should touch the whole app lightly through shared motion, feedback, keyboard tactility, coach/lesson card polish, and accessible reduced-motion fallbacks.
+Milestone 4: make Baby Steps usable across devices by finishing Supabase Google sign-in, signed-in profile persistence, local-to-cloud migration, lesson stack sync, concept mastery sync, artifact attempt sync, and profile/badge verification.
 
 ## Non-Goals
 - Do not replace the existing piano lab, AI coach, or audio engine.
@@ -22,3 +22,4 @@ Add the Baby Steps Feel Layer: an app-wide premium interaction system that blend
 - Do not add remote image assets or copied product artwork.
 - Do not disturb existing progression playback defaults, chord-palette behavior, or threaded coach behavior.
 - Do not make the app childish, mascot-driven, noisy, or gamified in a way that distracts from serious music learning.
+- Do not break signed-out localStorage progress, the existing lesson stack surface, or the existing profile/badge surface while adding signed-in sync.

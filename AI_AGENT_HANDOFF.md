@@ -15,8 +15,8 @@ Core UX principles:
 
 ## 2) Current Build Status
 
-Branch at handoff: `codex/lesson-artifacts-m2-artifact-quiz`  
-Latest pushed commit: `73bb5a5`
+Branch at handoff: `codex/baby-steps-hallmark-journey`
+Latest verified base commit: `ef902c1`
 
 ### Completed milestones
 - Milestone 1: Threaded AI coach + structured artifact response.
@@ -106,20 +106,48 @@ Reference checklist:
 ## Milestone 4: Auth + Profile + Badges (Supabase + Google)
 
 Goal:
-- User account system with Google login and cloud persistence for progress/mastery/lesson stack.
+- User account system with Google login and cloud persistence for progress, concept mastery, artifact attempts, coach threads, lesson stack, profile, and badges.
+- Product inspiration may come from real piano lessons, personal piano exploration, ADHD-friendly learning needs, and app-design iteration, but do not treat any outside lesson date as the app's use case or deadline unless the user explicitly says so.
+
+Current code already present in this branch:
+- `supabase.js` with Supabase client bootstrap, Google OAuth, profile creation, progress load/save, local-to-cloud migration, and badge helpers.
+- `/api/config` in `server.js` exposing public Supabase URL and anon key from environment variables.
+- `supabase/migrations/001_user_profiles.sql` for `profiles`, `user_progress`, `badges`, and RLS policies.
+- Header sign-in/user pill markup and drawer profile/badge markup in `index.html`.
+- Profile/badge/auth integration helpers in `app.js`.
 
 Tasks:
-1. Add Supabase client integration and env wiring.
-2. Add auth UI (sign-in/sign-out) in drawer or header.
-3. Create profile section:
-   - mastery summary
-   - badge list
-4. Add badge rules from concept mastery thresholds.
-5. Migration path:
-   - on first sign-in, upload local progress to cloud profile.
+1. Confirm Supabase project setup:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - Google provider enabled
+   - local and hosted redirect URLs configured
+   - migration SQL applied
+2. Confirm Google sign-in/out works from the existing header controls.
+3. Harden migration and merge behavior:
+   - first sign-in uploads local data only when the cloud profile is empty
+   - existing cloud data wins unless an explicit merge strategy is added
+   - never break signed-out localStorage use
+4. Persist/load the full lesson-ready profile payload:
+   - `progress`
+   - `progress.conceptMastery`
+   - `progress.artifactAttempts`
+   - coach threads
+   - lesson stack
+   - earned badges
+5. After cloud load or migration, re-render:
+   - lesson stack
+   - profile panel
+   - mastery stats
+   - badges
+   - theory progress
+   - coach surfaces
+6. Verify the existing lesson stack and profile surfaces still work signed out, signed in, after refresh, and on a second device/browser.
 
 Acceptance:
-- Signed-in user sees persistent lesson stack + mastery + badges across sessions/devices.
+- Signed-in user sees persistent progress, lesson stack, concept mastery, artifact attempts, and earned badges across sessions/devices.
+- User can start on one device, sign in on another, and see the same Baby Steps learning state.
+- Signed-out local practice remains functional.
 
 ## Milestone 5: Chords Dropdown Mode Redesign
 
@@ -203,8 +231,9 @@ npm start
 ## 11) Recommended First Task for Incoming Agent
 
 Start Milestone 4 in this order:
-1. Add Supabase config + auth shell UI.
-2. Persist/load `progress`, `lessonStack`, `conceptMastery`, `artifactAttempts` for signed-in users.
-3. Add profile panel + initial badge rendering.
-4. Add one-way local-to-cloud migration on first successful login.
-
+1. Run `npm run check` and a signed-out browser smoke test to establish the current branch baseline.
+2. Verify Supabase environment and Google redirect setup without committing secrets.
+3. Apply/confirm `supabase/migrations/001_user_profiles.sql` in the Supabase project.
+4. Test first sign-in migration from localStorage to `user_progress`.
+5. Fix any gaps in cloud load re-rendering for lesson stack, profile, mastery, badges, theory progress, and coach surfaces.
+6. Run a second-browser/device sync smoke before calling Milestone 4 ready.

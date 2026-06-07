@@ -9,5 +9,8 @@ Baby Steps should feel like a cozy iPad music lab: playful-cozy with serious mus
 ## UX Constraints
 Premium polish must not slow down practice. Motion should be quick, meaningful, and optional through reduced-motion fallbacks. Haptic-style feedback should be progressive enhancement only. Automated playback should not spam tactile effects. Correct, incorrect, save, and completion states should be warm and clear without harsh failure language.
 
+## Milestone 4 UI Note
+Auth/profile work should feel like a quiet utility layer in the existing app, not a new account portal. Keep sign-in, signed-in identity, profile mastery stats, badges, and lesson-stack persistence visible enough to trust, but do not let account UI compete with practice controls or the piano surface.
+
 ## Non-UI Project Note
-This task is UI-first. It should not require backend schema, API, auth, deployment changes, or new dependencies.
+Milestone 4 may require Supabase schema, runtime config, auth, and persistence changes. Keep those changes narrow, optional when unconfigured, and compatible with the existing signed-out localStorage workflow.

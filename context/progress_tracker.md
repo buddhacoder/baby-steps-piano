@@ -1,7 +1,7 @@
 # Progress Tracker
 
 ## Current Milestone
-Add Baby Steps Feel Layer, a whole-app premium interaction layer for tactile, cozy, serious music learning.
+Milestone 4: Supabase Google sign-in, signed-in profile persistence, local-to-cloud migration, lesson stack sync, concept mastery sync, artifact attempt sync, and profile/badge verification for cross-device use.
 
 ## Status
 In progress.
@@ -14,8 +14,42 @@ In progress.
 - Integrate the decoder as an in-app learning/theory artifact without changing the audio stack or coach architecture.
 - Treat premium polish as a shared frontend layer, not a redesign: CSS tokens/classes plus small DOM helpers.
 - Blend Apple-like tactile restraint with Duolingo-like encouragement for adults: cozy, forgiving, serious about music, never mascot-driven.
+- Treat Milestone 4 auth as an optional sync layer: signed-out localStorage remains valid, Supabase credentials stay in environment variables, and the minimum cloud payload is progress, concept mastery, artifact attempts, coach threads, lesson stack, profiles, and badges.
 
 ## Verification Log
+
+## Session Completion - 2026-06-07
+
+- Milestone: Body Beat wearable haptics frontend slice
+- Status: Completed for app-side simulator and custom BLE protocol client; physical wearable validation remains blocked until a compatible firmware/device exists.
+- Clean check: `npm run check`; Playwright smoke on `http://localhost:3000` verified Body Beat `Disconnected -> Ready -> Armed -> Locked -> Ready`, simulator pulse activity `pulseCount: 2`, screenshot `/tmp/baby-steps-body-beat.png`, and no page/console errors.
+- Files touched: index.html, app.js, styles.css, context/progress_tracker.md
+- Technical decisions:
+  - Added Body Beat as a frontend-only progressive enhancement beside the existing metronome, without backend, dependency, persistence, or audio-engine changes.
+  - Used a fail-closed state machine: the app only shows `Locked` after an acknowledgement, runs a watchdog, stops on sync loss/disconnect/bad telemetry, and keeps Bluetooth as a command channel rather than a beat-by-beat pulse stream.
+  - Added a built-in timing simulator that exercises the same app protocol as the future wearable path, so UI and safety behavior can be tested before hardware exists.
+
+## Session Completion - 2026-06-07
+
+- Milestone: Haptic control Soundbrenner direct attempt
+- Status: Completed for app-side direct haptic attempt; real Soundbrenner vibration remains unverified until a physical device can be selected in a Web Bluetooth-capable browser.
+- Clean check: `npm run check`; Playwright smoke on `http://localhost:3000` verified the primary Body Beat action is `Haptic`, the Quick Controls `Haptic` button exists, `window.__babyStepsBodyBeat.connectHaptic` is exposed, simulator pulse activity still works, screenshot `/tmp/baby-steps-haptic-control.png`, and no page/console errors.
+- Files touched: index.html, app.js, styles.css, context/progress_tracker.md
+- Technical decisions:
+  - Changed the wearable UI from generic pairing language to a direct `Haptic` action.
+  - Added a Soundbrenner/Pulse/Core Web Bluetooth request path using name filters and the standard BLE Immediate Alert service as the only browser-visible generic vibration route.
+  - Kept failure explicit: if the selected device does not expose a controllable vibration characteristic, Baby Steps reports that the device paired but did not expose browser-controllable haptics.
+
+## Planning Session - 2026-06-03
+
+- Milestone: Milestone 4 cross-device auth/profile readiness plan
+- Status: Planned.
+- Clean check: `npm run check`; Playwright local smoke on PORT=3001 verified 37-key keyboard, seeded lesson-stack card persisted after refresh, profile/badge DOM rendered with a fake signed-in user, signed-out profile stayed hidden after reload, and no console/page errors were reported.
+- Files touched: IMPLEMENTATION_TODO.md, AI_AGENT_HANDOFF.md, context/project_overview.md, context/architecture.md, context/ai_workflow_rules.md, context/ui_context.md, context/progress_tracker.md
+- Technical decisions:
+  - Updated the validated project context from the completed Feel Layer slice to the cross-device Supabase Google sign-in goal.
+  - Made localStorage fallback a hard invariant while allowing Milestone 4 work to touch Supabase client code, migration SQL, runtime config, profile UI, and cloud sync re-rendering.
+  - Defined the required signed-in payload as progress, concept mastery, artifact attempts, coach threads, lesson stack, and badges.
 
 ## Session Completion - 2026-05-30 22:52 EDT
 

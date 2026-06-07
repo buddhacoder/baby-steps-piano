@@ -175,6 +175,31 @@ body.practice-setup-open .app-shell {
   color: #32456c;
 }
 
+.session-haptic-btn {
+  min-height: 30px;
+  padding: 0.28rem 0.72rem;
+  border: 1px solid rgba(64, 86, 126, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff, #eef4ff);
+  color: #31456c;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 12px -12px rgba(32, 53, 92, 0.7);
+}
+
+.session-haptic-btn:hover,
+.session-haptic-btn.is-active {
+  border-color: rgba(29, 132, 92, 0.32);
+  background: rgba(221, 247, 235, 0.94);
+  color: #176848;
+}
+
+.session-haptic-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .studio-brand {
   display: flex;
   align-items: center;
@@ -1299,6 +1324,122 @@ textarea:focus-visible {
   background: linear-gradient(135deg, #4A90D9, #1d64ce);
   border-color: #4A90D9;
   color: #fff;
+}
+
+.body-beat-panel {
+  display: grid;
+  gap: 0.62rem;
+  margin: 0.32rem 0 0.6rem;
+  padding: 0.78rem;
+  border: 1px solid rgba(62, 86, 124, 0.22);
+  border-radius: 10px;
+  background: rgba(250, 252, 255, 0.88);
+  box-shadow: 0 10px 28px rgba(38, 54, 78, 0.07);
+}
+
+.body-beat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.72rem;
+}
+
+.body-beat-head h3 {
+  margin: 0;
+  color: #203b63;
+  font-size: 1rem;
+  line-height: 1.12;
+}
+
+.body-beat-status-pill {
+  min-width: 92px;
+  padding: 0.28rem 0.48rem;
+  border: 1px solid rgba(62, 86, 124, 0.2);
+  border-radius: 999px;
+  background: rgba(235, 241, 250, 0.86);
+  color: #405a83;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.body-beat-panel[data-body-beat-state="ready"] .body-beat-status-pill,
+.body-beat-panel[data-body-beat-state="locked"] .body-beat-status-pill {
+  border-color: rgba(29, 132, 92, 0.26);
+  background: rgba(221, 247, 235, 0.94);
+  color: #176848;
+}
+
+.body-beat-panel[data-body-beat-state="pairing"] .body-beat-status-pill,
+.body-beat-panel[data-body-beat-state="arming"] .body-beat-status-pill,
+.body-beat-panel[data-body-beat-state="warning"] .body-beat-status-pill {
+  border-color: rgba(184, 126, 31, 0.28);
+  background: rgba(255, 241, 212, 0.94);
+  color: #815313;
+}
+
+.body-beat-panel[data-body-beat-state="error"] .body-beat-status-pill {
+  border-color: rgba(188, 67, 67, 0.28);
+  background: rgba(255, 231, 231, 0.95);
+  color: #8e2f2f;
+}
+
+.body-beat-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.body-beat-controls button {
+  min-height: 34px;
+  padding-inline: 0.5rem;
+  white-space: nowrap;
+}
+
+.body-beat-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.body-beat-readout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(72px, 0.7fr) minmax(0, 1fr);
+  gap: 0.38rem;
+  color: #455c80;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.body-beat-readout span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.body-beat-pulse-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.38rem;
+}
+
+.body-beat-pulse-dot {
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(105, 123, 154, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(62, 86, 124, 0.12);
+  transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.body-beat-pulse-dot.is-active {
+  background: #4A90D9;
+  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.16);
+  transform: translateY(-1px);
+}
+
+.body-beat-pulse-dot.is-accent {
+  background: #1d6f4f;
+  box-shadow: 0 0 0 3px rgba(29, 111, 79, 0.18);
 }
 
 .console-live-output {
@@ -3879,6 +4020,14 @@ body[data-active-mode="theory"] .console #progressionOutput {
 
   .progression-palette-head {
     display: grid;
+  }
+
+  .body-beat-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .body-beat-readout {
+    grid-template-columns: 1fr;
   }
 
   .progression-family-grid {

@@ -218,6 +218,33 @@
           </button>
         </div>
       </div>
+      <section id="bodyBeatPanel" class="body-beat-panel" data-body-beat-state="disconnected"
+        aria-label="Body Beat wearable haptics">
+        <div class="body-beat-head">
+          <div>
+            <p class="eyebrow">Body Beat</p>
+            <h3>Wearable pulse</h3>
+          </div>
+          <span id="bodyBeatStatusPill" class="body-beat-status-pill">Disconnected</span>
+        </div>
+        <div class="body-beat-controls" role="group" aria-label="Body Beat controls">
+          <button id="bodyBeatBluetoothBtn" class="btn-primary" type="button">Haptic</button>
+          <button id="bodyBeatSimulatorBtn" class="btn-tonal" type="button">Simulator</button>
+          <button id="bodyBeatArmBtn" class="btn-primary" type="button" aria-pressed="false">Arm</button>
+          <button id="bodyBeatStopBtn" class="btn-tonal" type="button">Stop</button>
+        </div>
+        <div class="body-beat-readout">
+          <span id="bodyBeatDeviceLabel">No wearable</span>
+          <span id="bodyBeatBpmLabel">100 BPM</span>
+          <span id="bodyBeatSyncLabel">Sync off</span>
+        </div>
+        <div id="bodyBeatPulseRail" class="body-beat-pulse-rail" aria-label="Body Beat pulse monitor">
+          <span class="body-beat-pulse-dot" data-beat="1"></span>
+          <span class="body-beat-pulse-dot" data-beat="2"></span>
+          <span class="body-beat-pulse-dot" data-beat="3"></span>
+          <span class="body-beat-pulse-dot" data-beat="4"></span>
+        </div>
+      </section>
       <div class="console-live-output" aria-live="polite">
         <p id="chordDisplay" class="output"></p>
         <div id="progressionOutput" class="agent-output"></div>
@@ -246,6 +273,7 @@
               <option value="0.3333333333333333">Eighth Triplet</option>
               <option value="0.16666666666666666">Sixteenth Triplet</option>
             </select>
+            <button id="sessionHapticBtn" type="button" class="session-haptic-btn">Haptic</button>
           </div>
           <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="workspace mode">
             <button class="mode-pill active" data-mode-target="compose" role="tab" aria-selected="true">Explore</button>
