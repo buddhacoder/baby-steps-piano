@@ -205,3 +205,14 @@ In progress.
 - Files touched: index.html, app.js, context/progress_tracker.md
 - Technical decisions:
   - Chord mode glissando now routes through playMidiNotes with shared sequence timing so it uses the same piano/Tone/sample engine as keyboard playback, while suppressing keyboard highlights for this UI sound.
+
+## Session Completion - 2026-06-07
+
+- Milestone: Generative UI merge-readiness pass
+- Status: Completed
+- Clean check: `npm run check; git diff --check; Playwright smoke at http://localhost:3000 verified mixed generated artifacts, chord-sequence quiz behavior, playable score rendering, and no page/console errors`
+- Files touched: app.js, styles.css, context/progress_tracker.md
+- Technical decisions:
+  - Replayed the old `feature/generative-ui` work onto a fresh `codex/generative-ui-merge-ready` branch from current `main`, then hardened the frontend artifact system instead of changing backend APIs or adding a new model/provider.
+  - Kept AI output as bounded structured artifact recipes: max three rendered artifacts per response, normalized text lengths, DOM-safe artifact IDs, validated quiz indexes, and one display-time normalization checkpoint before rendering.
+  - Preserved the current deep-link `navigateToLesson` helper, saved/loaded `artifacts[]` alongside the legacy single `artifact`, routed generated board items through the existing lesson-stack board, and made non-chord artifacts safe to continue from the board.

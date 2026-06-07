@@ -11048,6 +11048,7 @@ function nowIsoString() {
 }
 
 function createCoachMessage(role, content, extras = {}) {
+  const artifacts = normalizeCoachArtifacts(extras.artifacts || extras.artifact || null);
   return {
     id: extras.id || `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     role,
@@ -11055,7 +11056,8 @@ function createCoachMessage(role, content, extras = {}) {
     createdAt: extras.createdAt || nowIsoString(),
     mode: extras.mode || "",
     warning: extras.warning || "",
-    artifact: extras.artifact || null,
+    artifact: artifacts[0] || null,
+    artifacts,
     pending: Boolean(extras.pending)
   };
 }
@@ -11092,6 +11094,7 @@ function loadCoachThreads() {
                 mode: String(msg?.mode || "").trim(),
                 warning: String(msg?.warning || "").trim(),
                 artifact: msg?.artifact || null,
+                artifacts: msg?.artifacts || msg?.artifact || null,
                 pending: false
               });
             })
@@ -11125,7 +11128,8 @@ function saveCoachThreads() {
       createdAt: msg.createdAt,
       mode: msg.mode || "",
       warning: msg.warning || "",
-      artifact: msg.artifact || null
+      artifact: msg.artifact || null,
+      artifacts: msg.artifacts || (msg.artifact ? [msg.artifact] : [])
     }))
   }));
   safeStorageSet(COACH_THREADS_STORAGE_KEY, JSON.stringify(serializable));
@@ -11418,8 +11422,12 @@ function renderCoachMessages() {
     text.innerHTML = parseCoachDeepLinks(msg.content || "");
     bubble.appendChild(text);
 
-    if (msg.role === "assistant" && msg.artifact) {
-      bubble.appendChild(buildCoachArtifactCardElement(msg.artifact));
+    if (msg.role === "assistant") {
+      const artifacts = normalizeCoachArtifacts(msg.artifacts || msg.artifact || null);
+      artifacts.forEach(a => {
+        const rendered = buildCoachArtifactCardElement(a);
+        if (rendered) bubble.appendChild(rendered);
+      });
     }
 
     const meta = document.createElement("span");
@@ -11458,42 +11466,132 @@ function updatePendingAssistantMessage(thread, messageId, patch = {}) {
     msg.warning = patch.warning || "";
   }
   if (Object.prototype.hasOwnProperty.call(patch, "artifact")) {
-    msg.artifact = patch.artifact || null;
+    msg.artifact = normalizeCoachArtifact(patch.artifact || null);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "artifacts")) {
+    msg.artifacts = normalizeCoachArtifacts(patch.artifacts || []);
+    msg.artifact = msg.artifacts[0] || msg.artifact || null;
   }
   if (Object.prototype.hasOwnProperty.call(patch, "pending")) {
     msg.pending = Boolean(patch.pending);
   }
 }
 
+/* ═══════════════════════════════════════════
+ * GENERATIVE UI — Artifact Type System
+ * 7 types: chord_sequence, lesson_card, playable_score,
+ *          kanban_task, theory_concept, quiz_challenge, practice_drill
+ * ═══════════════════════════════════════════ */
+
+const ARTIFACT_NORMALIZERS = {
+  chord_sequence: normalizeChordSequenceArtifact,
+  lesson_card: normalizeLessonCardArtifact,
+  playable_score: normalizePlayableScoreArtifact,
+  kanban_task: normalizeKanbanTaskArtifact,
+  theory_concept: normalizeTheoryConceptArtifact,
+  quiz_challenge: normalizeQuizChallengeArtifact,
+  practice_drill: normalizePracticeDrillArtifact,
+};
+
+const ARTIFACT_RENDERERS = {
+  chord_sequence: renderArtifactChordSequence,
+  lesson_card: renderArtifactLessonCard,
+  playable_score: renderArtifactPlayableScore,
+  kanban_task: renderArtifactKanbanTask,
+  theory_concept: renderArtifactTheoryConcept,
+  quiz_challenge: renderArtifactQuizChallenge,
+  practice_drill: renderArtifactPracticeDrill,
+};
+
+const COACH_ARTIFACT_MAX_ITEMS = 3;
+const COACH_ARTIFACT_MAX_TEXT = 240;
+const COACH_ARTIFACT_MAX_LONG_TEXT = 900;
+const COACH_ARTIFACT_MAX_SCORE_CHARS = 4000;
+const COACH_ARTIFACT_ALLOWED_TYPES = new Set(Object.keys(ARTIFACT_NORMALIZERS));
+
+function cleanCoachArtifactText(value, maxLength = COACH_ARTIFACT_MAX_TEXT) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function cleanCoachArtifactBlockText(value, maxLength = COACH_ARTIFACT_MAX_LONG_TEXT) {
+  const text = String(value || "").replace(/\r\n/g, "\n").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function clampCoachArtifactNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
+function createCoachArtifactId(rawId, type) {
+  const raw = String(rawId || "").trim();
+  const base = raw || `${type || "artifact"}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  return base
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80)
+    || `artifact-${Date.now().toString(36)}`;
+}
+
+function createCoachArtifactDomId(prefix, artifact) {
+  return `${prefix}-${createCoachArtifactId(artifact?.id, artifact?.type)}`;
+}
+
+/** Dispatch normalizer. Also handles legacy artifacts without explicit type. */
 function normalizeCoachArtifact(artifact) {
   if (!artifact || typeof artifact !== "object") return null;
-  const title = String(artifact.title || "").trim();
-  const type = String(artifact.type || "").trim();
-  const key = String(artifact.key || el.keySelect?.value || appState.root).trim();
-  const bpm = Math.max(30, Math.min(240, Number(artifact.bpm) || appState.tempoBpm));
+  let type = String(artifact.type || "").trim().toLowerCase();
+  // Legacy: if no type but has sequence, assume chord_sequence
+  if (!type && Array.isArray(artifact.sequence) && artifact.sequence.length) {
+    type = "chord_sequence";
+  }
+  if (!COACH_ARTIFACT_ALLOWED_TYPES.has(type)) return null;
+  const normalizer = ARTIFACT_NORMALIZERS[type];
+  if (!normalizer) return null;
+  return normalizer(artifact);
+}
+
+/** Normalize an array of artifacts from the server response */
+function normalizeCoachArtifacts(raw) {
+  if (!raw) return [];
+  const items = Array.isArray(raw) ? raw : [raw];
+  return items
+    .slice(0, COACH_ARTIFACT_MAX_ITEMS)
+    .map(normalizeCoachArtifact)
+    .filter(Boolean);
+}
+
+/* ── Chord Sequence (original type) ── */
+function normalizeChordSequenceArtifact(artifact) {
+  const title = cleanCoachArtifactText(artifact.title);
+  const type = String(artifact.type || "chord_sequence").trim();
+  const key = cleanCoachArtifactText(artifact.key || el.keySelect?.value || appState.root, 16);
+  const bpm = clampCoachArtifactNumber(artifact.bpm, appState.tempoBpm, 30, 240);
   const policyMode = String(artifact?.playbackPolicy?.mode || "fixed_sequence").trim();
   const normalizedType = type.toLowerCase();
   const supportsCircularSweep = /(row|palette|sweep|loop)/.test(normalizedType) && !normalizedType.includes("cadence");
   const useCircularPolicy = policyMode === "circular_row_sweep" && supportsCircularSweep;
   const sequence = Array.isArray(artifact.sequence)
     ? artifact.sequence
+      .slice(0, 16)
       .map((step) => {
-        const root = String(step?.root || "").trim();
-        const quality = String(step?.quality || "").trim();
-        const chord = String(step?.chord || "").trim();
-        const beats = Math.max(1, Math.min(8, Number(step?.beats) || 2));
+        const root = cleanCoachArtifactText(step?.root, 12);
+        const quality = cleanCoachArtifactText(step?.quality, 24);
+        const chord = cleanCoachArtifactText(step?.chord, 32);
+        const beats = clampCoachArtifactNumber(step?.beats, 2, 1, 8);
         if (!root || !quality) return null;
         return { root, quality, chord: chord || `${root}${quality}`, beats };
       })
       .filter(Boolean)
     : [];
-  if (!title || !type || !sequence.length) return null;
+  if (!title || !sequence.length) return null;
   return {
-    id: String(artifact.id || `artifact-${Date.now()}`),
-    title,
-    type,
-    key,
-    bpm,
+    id: createCoachArtifactId(artifact.id, "chord_sequence"),
+    title, type: "chord_sequence", key, bpm,
     playbackPolicy: {
       mode: useCircularPolicy ? "circular_row_sweep" : "fixed_sequence",
       circularResolve: useCircularPolicy,
@@ -11501,11 +11599,526 @@ function normalizeCoachArtifact(artifact) {
     },
     sequence,
     quiz: {
-      prompt: String(artifact?.quiz?.prompt || "").trim() || `Play ${title} in another key.`,
-      conceptId: String(artifact?.quiz?.conceptId || "").trim() || "core-harmony"
+      prompt: cleanCoachArtifactText(artifact?.quiz?.prompt) || `Play ${title} in another key.`,
+      conceptId: cleanCoachArtifactText(artifact?.quiz?.conceptId, 80) || "core-harmony"
     },
     actions: ["play", "try", "save_to_stack", "open_full_lesson"]
   };
+}
+
+/* ── Lesson Card ── */
+function normalizeLessonCardArtifact(artifact) {
+  const lessonId = cleanCoachArtifactText(artifact.lessonId, 100);
+  const title = cleanCoachArtifactText(artifact.title);
+  if (!title && !lessonId) return null;
+  const lesson = lessonId && typeof getLessonById === "function" ? getLessonById(lessonId) : null;
+  return {
+    id: createCoachArtifactId(artifact.id, "lesson_card"),
+    type: "lesson_card",
+    lessonId,
+    title: title || (lesson?.title) || "Lesson",
+    tier: clampCoachArtifactNumber(artifact.tier, lesson?.tier || 1, 1, 4),
+    desc: cleanCoachArtifactText(artifact.description || artifact.desc || lesson?.desc || ""),
+    category: cleanCoachArtifactText(lessonId.split(":")[0] || "", 40),
+    tags: lesson?.tags || [],
+    actions: ["go_to_lesson", "add_to_kanban"]
+  };
+}
+
+/* ── Playable Score ── */
+function normalizePlayableScoreArtifact(artifact) {
+  const abc = cleanCoachArtifactBlockText(artifact.abc, COACH_ARTIFACT_MAX_SCORE_CHARS);
+  const title = cleanCoachArtifactText(artifact.title || "Score");
+  if (!abc) return null;
+  return {
+    id: createCoachArtifactId(artifact.id, "playable_score"),
+    type: "playable_score",
+    title,
+    abc,
+    key: cleanCoachArtifactText(artifact.key || "C", 16),
+    bpm: clampCoachArtifactNumber(artifact.bpm, 120, 30, 240),
+    actions: ["play", "loop", "speed"]
+  };
+}
+
+/* ── Kanban Task ── */
+function normalizeKanbanTaskArtifact(artifact) {
+  const title = cleanCoachArtifactText(artifact.title);
+  if (!title) return null;
+  const validLanes = ["todo", "in-progress", "done"];
+  const lane = validLanes.includes(artifact.lane) ? artifact.lane : "todo";
+  return {
+    id: createCoachArtifactId(artifact.id, "kanban_task"),
+    type: "kanban_task",
+    title,
+    lane,
+    desc: cleanCoachArtifactText(artifact.description || artifact.desc || ""),
+    lessonId: cleanCoachArtifactText(artifact.lessonId, 100) || null,
+    actions: ["add_to_board", "dismiss"]
+  };
+}
+
+/* ── Theory Concept ── */
+function normalizeTheoryConceptArtifact(artifact) {
+  const title = cleanCoachArtifactText(artifact.title);
+  if (!title) return null;
+  const facts = Array.isArray(artifact.facts)
+    ? artifact.facts.slice(0, 6).map(f => cleanCoachArtifactText(f)).filter(Boolean)
+    : [];
+  const relatedLessons = Array.isArray(artifact.relatedLessons)
+    ? artifact.relatedLessons.slice(0, 6).map(id => cleanCoachArtifactText(id, 100)).filter(Boolean)
+    : [];
+  return {
+    id: createCoachArtifactId(artifact.id, "theory_concept"),
+    type: "theory_concept",
+    title,
+    facts,
+    relatedLessons,
+    actions: ["explore", "related_lessons"]
+  };
+}
+
+/* ── Quiz Challenge ── */
+function normalizeQuizChallengeArtifact(artifact) {
+  const question = cleanCoachArtifactText(artifact.question);
+  const options = Array.isArray(artifact.options)
+    ? artifact.options.slice(0, 6).map(o => cleanCoachArtifactText(o)).filter(Boolean)
+    : [];
+  const correctIndex = Number(artifact.correctIndex);
+  if (!question || options.length < 2 || !Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) return null;
+  return {
+    id: createCoachArtifactId(artifact.id, "quiz_challenge"),
+    type: "quiz_challenge",
+    question,
+    options,
+    correctIndex,
+    explanation: cleanCoachArtifactText(artifact.explanation),
+    actions: ["answer", "skip"]
+  };
+}
+
+/* ── Practice Drill ── */
+function normalizePracticeDrillArtifact(artifact) {
+  const title = cleanCoachArtifactText(artifact.title);
+  const instructions = cleanCoachArtifactText(artifact.instructions, COACH_ARTIFACT_MAX_LONG_TEXT);
+  if (!title || !instructions) return null;
+  return {
+    id: createCoachArtifactId(artifact.id, "practice_drill"),
+    type: "practice_drill",
+    title,
+    instructions,
+    durationSec: clampCoachArtifactNumber(artifact.durationSec, 60, 10, 600),
+    lessonId: cleanCoachArtifactText(artifact.lessonId, 100) || null,
+    actions: ["start", "skip"]
+  };
+}
+
+/* ═══════════════════════════════════════════
+ * GENERATIVE UI — Artifact Renderers
+ * Each returns a DOM element for a chat bubble
+ * ═══════════════════════════════════════════ */
+
+/** Create a styled action button */
+function createArtifactAction(label, icon, className, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `coach-artifact-action ${className}`;
+  setArtifactActionLabel(btn, icon, label);
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
+function setArtifactActionLabel(btn, icon, label) {
+  if (!btn) return;
+  btn.textContent = "";
+  if (icon) {
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "artifact-action-icon";
+    iconSpan.setAttribute("aria-hidden", "true");
+    iconSpan.textContent = icon;
+    btn.appendChild(iconSpan);
+  }
+  btn.append(document.createTextNode(label));
+}
+
+/* ── Chord Sequence Renderer (existing, refactored) ── */
+function renderArtifactChordSequence(artifact) {
+  // Delegate to existing builder which handles Play/Try/Save/Open
+  return buildCoachArtifactCardFromChordSequence(artifact);
+}
+
+/* ── Lesson Card Renderer ── */
+function renderArtifactLessonCard(artifact) {
+  const card = document.createElement("div");
+  card.className = "coach-artifact-card coach-artifact-lesson";
+  card.dataset.artifactType = "lesson_card";
+
+  const tierColors = { 1: "#4ade80", 2: "#facc15", 3: "#fb923c", 4: "#f87171" };
+  const tierNames = { 1: "Foundations", 2: "Building", 3: "Stretch", 4: "Challenge" };
+
+  const header = document.createElement("div");
+  header.className = "coach-artifact-header";
+  const badge = document.createElement("span");
+  badge.className = "artifact-tier-badge";
+  badge.style.background = tierColors[artifact.tier] || "#94a3b8";
+  badge.textContent = tierNames[artifact.tier] || "?";
+  header.appendChild(badge);
+  const categoryLabel = document.createElement("span");
+  categoryLabel.className = "artifact-category";
+  categoryLabel.textContent = artifact.category || "";
+  header.appendChild(categoryLabel);
+  card.appendChild(header);
+
+  const title = document.createElement("div");
+  title.className = "coach-artifact-title";
+  title.textContent = artifact.title;
+  card.appendChild(title);
+
+  if (artifact.desc) {
+    const desc = document.createElement("div");
+    desc.className = "coach-artifact-summary";
+    desc.textContent = artifact.desc;
+    card.appendChild(desc);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "coach-artifact-actions";
+  if (artifact.lessonId) {
+    actions.appendChild(createArtifactAction("Go to Lesson", "📖", "action-primary", () => {
+      navigateToLesson(artifact.lessonId);
+    }));
+  }
+  actions.appendChild(createArtifactAction("Add to Board", "📋", "action-secondary", () => {
+    addCoachKanbanCardFromArtifact(artifact);
+  }));
+  card.appendChild(actions);
+  return card;
+}
+
+/* ── Playable Score Renderer ── */
+function renderArtifactPlayableScore(artifact) {
+  const card = document.createElement("div");
+  card.className = "coach-artifact-card coach-artifact-score";
+  card.dataset.artifactType = "playable_score";
+
+  const title = document.createElement("div");
+  title.className = "coach-artifact-title";
+  title.textContent = `🎵 ${artifact.title}`;
+  card.appendChild(title);
+
+  const notation = document.createElement("div");
+  notation.className = "artifact-notation-container";
+  notation.id = createCoachArtifactDomId("notation", artifact);
+  card.appendChild(notation);
+
+  requestAnimationFrame(() => {
+    void renderArtifactScoreNotation(artifact, notation);
+  });
+
+  const meta = document.createElement("div");
+  meta.className = "coach-artifact-summary";
+  meta.textContent = `Key: ${artifact.key} • ${artifact.bpm} BPM`;
+  card.appendChild(meta);
+
+  const actions = document.createElement("div");
+  actions.className = "coach-artifact-actions";
+  let isPlaying = false;
+  let synthControl = null;
+
+  actions.appendChild(createArtifactAction("Play", "▶", "action-primary", async (e) => {
+    if (isPlaying) {
+      stopArtifactScoreSynth(synthControl);
+      isPlaying = false;
+      setArtifactActionLabel(e.currentTarget, "▶", "Play");
+      return;
+    }
+    try {
+      await ensureArtifactAbcjs();
+      if (!window.ABCJS?.synth?.supportsAudio?.()) {
+        e.currentTarget.disabled = true;
+        setArtifactActionLabel(e.currentTarget, "▶", "Score only");
+        return;
+      }
+      const visualObj = window.ABCJS.renderAbc(notation.id, artifact.abc, {
+        responsive: "resize",
+        staffwidth: 300,
+        paddingtop: 0,
+        paddingbottom: 0
+      });
+      if (!visualObj?.[0]) return;
+      synthControl = new window.ABCJS.synth.CreateSynth();
+      await synthControl.init({ visualObj: visualObj[0], options: { qpm: artifact.bpm } });
+      await synthControl.prime();
+      synthControl.start();
+      isPlaying = true;
+      setArtifactActionLabel(e.currentTarget, "⏸", "Pause");
+    } catch (err) {
+      console.error("Score playback error:", err);
+      e.currentTarget.disabled = true;
+      setArtifactActionLabel(e.currentTarget, "▶", "Unavailable");
+    }
+  }));
+
+  card.appendChild(actions);
+  return card;
+}
+
+async function ensureArtifactAbcjs() {
+  if (window.ABCJS) return true;
+  if (typeof loadAbcjs === "function") {
+    await loadAbcjs();
+  }
+  return Boolean(window.ABCJS);
+}
+
+async function renderArtifactScoreNotation(artifact, notation) {
+  if (!notation || !document.getElementById(notation.id)) return;
+  try {
+    await ensureArtifactAbcjs();
+    if (window.ABCJS && document.getElementById(notation.id)) {
+      window.ABCJS.renderAbc(notation.id, artifact.abc, {
+        responsive: "resize",
+        staffwidth: 300,
+        paddingtop: 0,
+        paddingbottom: 0
+      });
+      return;
+    }
+  } catch (err) {
+    console.warn("Score notation render unavailable:", err);
+  }
+  notation.textContent = artifact.abc;
+  notation.style.fontFamily = "monospace";
+  notation.style.whiteSpace = "pre-wrap";
+  notation.style.fontSize = "0.8rem";
+}
+
+function stopArtifactScoreSynth(synthControl) {
+  if (!synthControl) return;
+  try {
+    if (typeof synthControl.pause === "function") synthControl.pause();
+    else if (typeof synthControl.stop === "function") synthControl.stop();
+    else if (typeof synthControl.destroy === "function") synthControl.destroy();
+  } catch {
+    // Score playback is optional; leave the app usable if ABCJS cannot stop cleanly.
+  }
+}
+
+/* ── Kanban Task Renderer ── */
+function renderArtifactKanbanTask(artifact) {
+  const card = document.createElement("div");
+  card.className = "coach-artifact-card coach-artifact-kanban";
+  card.dataset.artifactType = "kanban_task";
+
+  const laneColors = { todo: "#60a5fa", "in-progress": "#facc15", done: "#4ade80" };
+  const laneIcons = { todo: "📝", "in-progress": "⏳", done: "✅" };
+
+  const header = document.createElement("div");
+  header.className = "coach-artifact-header";
+  const laneBadge = document.createElement("span");
+  laneBadge.className = "artifact-lane-badge";
+  laneBadge.style.background = laneColors[artifact.lane] || "#94a3b8";
+  laneBadge.textContent = `${laneIcons[artifact.lane] || "📋"} ${artifact.lane}`;
+  header.appendChild(laneBadge);
+  card.appendChild(header);
+
+  const title = document.createElement("div");
+  title.className = "coach-artifact-title";
+  title.textContent = artifact.title;
+  card.appendChild(title);
+
+  if (artifact.desc) {
+    const desc = document.createElement("div");
+    desc.className = "coach-artifact-summary";
+    desc.textContent = artifact.desc;
+    card.appendChild(desc);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "coach-artifact-actions";
+  actions.appendChild(createArtifactAction("Add to Board", "📋", "action-primary", () => {
+    addCoachKanbanCardFromArtifact(artifact);
+    card.classList.add("artifact-added");
+    const addButton = card.querySelector(".action-primary");
+    setArtifactActionLabel(addButton, "✓", "Added");
+    addButton.disabled = true;
+  }));
+  actions.appendChild(createArtifactAction("Dismiss", "✕", "action-ghost", () => {
+    card.style.opacity = "0";
+    setTimeout(() => card.remove(), 300);
+  }));
+  card.appendChild(actions);
+  return card;
+}
+
+/* ── Theory Concept Renderer ── */
+function renderArtifactTheoryConcept(artifact) {
+  const card = document.createElement("div");
+  card.className = "coach-artifact-card coach-artifact-concept";
+  card.dataset.artifactType = "theory_concept";
+
+  const title = document.createElement("div");
+  title.className = "coach-artifact-title";
+  title.textContent = `💡 ${artifact.title}`;
+  card.appendChild(title);
+
+  if (artifact.facts.length) {
+    const factList = document.createElement("ul");
+    factList.className = "artifact-fact-list";
+    artifact.facts.forEach(fact => {
+      const li = document.createElement("li");
+      li.textContent = fact;
+      factList.appendChild(li);
+    });
+    card.appendChild(factList);
+  }
+
+  if (artifact.relatedLessons.length) {
+    const related = document.createElement("div");
+    related.className = "artifact-related-lessons";
+    related.innerHTML = "<span class='artifact-related-label'>Related Lessons:</span> ";
+    artifact.relatedLessons.forEach(lessonId => {
+      const lesson = typeof getLessonById === "function" ? getLessonById(lessonId) : null;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "artifact-lesson-chip";
+      chip.textContent = lesson ? lesson.title : lessonId;
+      chip.addEventListener("click", () => navigateToLesson(lessonId));
+      related.appendChild(chip);
+    });
+    card.appendChild(related);
+  }
+
+  return card;
+}
+
+/* ── Quiz Challenge Renderer ── */
+function renderArtifactQuizChallenge(artifact) {
+  const card = document.createElement("div");
+  card.className = "coach-artifact-card coach-artifact-quiz-challenge";
+  card.dataset.artifactType = "quiz_challenge";
+
+  const question = document.createElement("div");
+  question.className = "coach-artifact-title";
+  question.textContent = `❓ ${artifact.question}`;
+  card.appendChild(question);
+
+  const optionsContainer = document.createElement("div");
+  optionsContainer.className = "artifact-quiz-options";
+  let answered = false;
+
+  artifact.options.forEach((option, idx) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "artifact-quiz-option";
+    btn.textContent = `${String.fromCharCode(65 + idx)}. ${option}`;
+    btn.addEventListener("click", () => {
+      if (answered) return;
+      answered = true;
+      const isCorrect = idx === artifact.correctIndex;
+      btn.classList.add(isCorrect ? "quiz-correct" : "quiz-incorrect");
+      // Highlight the correct answer
+      optionsContainer.querySelectorAll(".artifact-quiz-option").forEach((b, i) => {
+        if (i === artifact.correctIndex) b.classList.add("quiz-correct");
+        b.disabled = true;
+      });
+      // Show explanation
+      if (artifact.explanation) {
+        const explain = document.createElement("div");
+        explain.className = "artifact-quiz-explanation";
+        explain.textContent = isCorrect
+          ? `✓ Correct! ${artifact.explanation}`
+          : `✗ ${artifact.explanation}`;
+        card.appendChild(explain);
+      }
+    });
+    optionsContainer.appendChild(btn);
+  });
+
+  card.appendChild(optionsContainer);
+  return card;
+}
+
+/* ── Practice Drill Renderer ── */
+function renderArtifactPracticeDrill(artifact) {
+  const card = document.createElement("div");
+  card.className = "coach-artifact-card coach-artifact-drill";
+  card.dataset.artifactType = "practice_drill";
+
+  const title = document.createElement("div");
+  title.className = "coach-artifact-title";
+  title.textContent = `🏋️ ${artifact.title}`;
+  card.appendChild(title);
+
+  const instructions = document.createElement("div");
+  instructions.className = "coach-artifact-summary";
+  instructions.textContent = artifact.instructions;
+  card.appendChild(instructions);
+
+  const timerDisplay = document.createElement("div");
+  timerDisplay.className = "artifact-drill-timer";
+  timerDisplay.textContent = formatDrillTime(artifact.durationSec);
+  timerDisplay.hidden = true;
+  card.appendChild(timerDisplay);
+
+  const actions = document.createElement("div");
+  actions.className = "coach-artifact-actions";
+  let timerInterval = null;
+  let remaining = artifact.durationSec;
+
+  actions.appendChild(createArtifactAction("Start", "▶", "action-primary", (e) => {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      setArtifactActionLabel(e.currentTarget, "▶", "Resume");
+      return;
+    }
+    timerDisplay.hidden = false;
+    setArtifactActionLabel(e.currentTarget, "⏸", "Pause");
+    timerInterval = setInterval(() => {
+      remaining--;
+      timerDisplay.textContent = formatDrillTime(remaining);
+      if (remaining <= 0) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        timerDisplay.textContent = "✓ Complete!";
+        timerDisplay.classList.add("drill-complete");
+        e.currentTarget.remove();
+      }
+    }, 1000);
+  }));
+
+  if (artifact.lessonId) {
+    actions.appendChild(createArtifactAction("Open Lesson", "📖", "action-secondary", () => {
+      navigateToLesson(artifact.lessonId);
+    }));
+  }
+
+  card.appendChild(actions);
+  return card;
+}
+
+function formatDrillTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** Helper: add a kanban card from any artifact */
+function addCoachKanbanCardFromArtifact(artifact) {
+  const normalized = normalizeCoachArtifact(artifact);
+  if (!normalized) return null;
+  const result = upsertCoachStackEntry(normalized, {
+    ensureLesson: normalized.type === "chord_sequence",
+    bumpToTop: true
+  });
+  if (result && el.coachOutput) {
+    el.coachOutput.textContent = result.exists
+      ? `Updated on board: ${result.entry.title}`
+      : `Added to board: ${result.entry.title}`;
+    emitFeelFeedback("save", result.exists ? "Updated on board." : "Added to board.", { haptic: true });
+  }
+  return result;
 }
 
 function coachNormalizeRoot(root) {
@@ -11761,11 +12374,21 @@ function scheduleCoachCircularResolveCelebration(cell, atTimeSec, token) {
   }, delayMs);
 }
 
+/** Route artifact to correct renderer via the type registry */
 function buildCoachArtifactCardElement(artifact) {
   const normalized = normalizeCoachArtifact(artifact);
+  if (!normalized) return null;
+  const renderer = ARTIFACT_RENDERERS[normalized.type];
+  return renderer ? renderer(normalized) : null;
+}
+
+/** Chord-sequence card builder (original implementation, renamed) */
+function buildCoachArtifactCardFromChordSequence(artifact) {
+  const normalized = normalizeChordSequenceArtifact(artifact);
   if (!normalized) return document.createElement("div");
   const card = document.createElement("div");
-  card.className = "coach-artifact-card";
+  card.className = "coach-artifact-card coach-artifact-chord-seq";
+  card.dataset.artifactType = "chord_sequence";
 
   const title = document.createElement("div");
   title.className = "coach-artifact-title";
@@ -11774,7 +12397,7 @@ function buildCoachArtifactCardElement(artifact) {
 
   const summary = document.createElement("div");
   summary.className = "coach-artifact-summary";
-  const sequenceLabel = normalized.sequence.map((step) => step.chord || `${step.root}${step.quality}`).join(" -> ");
+  const sequenceLabel = normalized.sequence.map((step) => step.chord || `${step.root}${step.quality}`).join(" → ");
   summary.textContent = `${normalized.key} • ${normalized.bpm} BPM • ${sequenceLabel}`;
   card.appendChild(summary);
 
@@ -11873,6 +12496,7 @@ function mapArtifactToLessonTrack(artifact) {
   if (type.includes("cadence")) return "classical";
   if (type.includes("arpeggio")) return "jazz";
   if (type.includes("scale")) return "classical";
+  if (type === "theory_concept" || type === "lesson_card" || type === "quiz_challenge") return "classical";
   return "pop";
 }
 
@@ -11881,7 +12505,40 @@ function mapArtifactTopic(artifact) {
   if (type.includes("cadence")) return "cadences";
   if (type.includes("arpeggio")) return "voicings";
   if (type.includes("scale")) return "progressions";
+  if (type === "theory_concept") return "foundations";
+  if (type === "quiz_challenge") return "ear-training";
+  if (type === "practice_drill") return "practice";
   return "progressions";
+}
+
+function describeCoachArtifactForLesson(artifact) {
+  const type = String(artifact?.type || "").toLowerCase();
+  if (type === "practice_drill") return artifact.instructions || artifact.title;
+  if (type === "quiz_challenge") return artifact.question || artifact.title;
+  if (type === "theory_concept" && Array.isArray(artifact.facts) && artifact.facts.length) {
+    return artifact.facts.join(" ");
+  }
+  return artifact.desc || artifact.description || artifact.title || "Generated from AI coach.";
+}
+
+function getCoachArtifactLessonTokens(artifact) {
+  const sequence = Array.isArray(artifact?.sequence) ? artifact.sequence : [];
+  if (sequence.length) {
+    return sequence
+      .map((step) => step?.chord || `${step?.root || ""}${step?.quality || ""}`.trim())
+      .filter(Boolean)
+      .slice(0, 7);
+  }
+  if (Array.isArray(artifact?.options) && artifact.options.length) {
+    return artifact.options.slice(0, 7);
+  }
+  if (Array.isArray(artifact?.facts) && artifact.facts.length) {
+    return artifact.facts.slice(0, 7);
+  }
+  return String(artifact?.title || "Generated artifact")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 7);
 }
 
 function upsertCoachArtifactLesson(artifact) {
@@ -11891,18 +12548,23 @@ function upsertCoachArtifactLesson(artifact) {
   }
   const lessonId = `coach-artifact-${artifact.id}`;
   const bucket = progress.theoryCustomLessons[trackId];
+  const hasCadenceShape = String(artifact?.type || "").includes("cadence")
+    || String(artifact?.quiz?.conceptId || "").includes("cadence");
+  const keyText = artifact.key ? ` Key ${artifact.key}.` : "";
+  const bpmText = artifact.bpm ? ` ${artifact.bpm} BPM.` : "";
+  const description = describeCoachArtifactForLesson(artifact);
   const lesson = {
     id: lessonId,
     trackId,
     customTopic: mapArtifactTopic(artifact),
     customLevel: "noob",
     title: artifact.title,
-    description: `Generated from AI coach. Key ${artifact.key}.`,
+    description,
     resources: [{ label: "Generated Artifact", url: "" }],
     videoUrl: "",
-    narration: `Practice ${artifact.title} at ${artifact.bpm} BPM in ${artifact.key}.`,
-    infographicType: artifact.type.includes("cadence") ? "ii-v-i" : "functional",
-    customTokens: artifact.sequence.map((step) => step.chord).slice(0, 7),
+    narration: `Practice ${artifact.title}.${keyText}${bpmText}`,
+    infographicType: hasCadenceShape ? "ii-v-i" : "functional",
+    customTokens: getCoachArtifactLessonTokens(artifact),
     artifact
   };
   const idx = bucket.findIndex((entry) => entry.id === lessonId);
@@ -12200,14 +12862,15 @@ async function askCoach() {
       }
     });
 
-    const normalizedArtifact = normalizeCoachArtifact(finalDone?.artifact || null);
+    const normalizedArtifacts = normalizeCoachArtifacts(finalDone?.artifacts || finalDone?.artifact || null);
     const finalText = String(finalDone?.assistantText || finalDone?.answer || "").trim()
       || buildClientCoachFallback(question);
     updatePendingAssistantMessage(thread, assistantMessage.id, {
       content: finalText,
       mode: String(finalDone?.mode || "offline"),
       warning: String(finalDone?.warning || "").trim(),
-      artifact: normalizedArtifact,
+      artifact: normalizedArtifacts[0] || null,
+      artifacts: normalizedArtifacts,
       pending: false
     });
   } catch (err) {
@@ -12216,6 +12879,7 @@ async function askCoach() {
       mode: "offline",
       warning: "",
       artifact: null,
+      artifacts: [],
       pending: false
     });
   } finally {
