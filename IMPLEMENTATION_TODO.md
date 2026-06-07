@@ -49,14 +49,44 @@ Definition of done:
 
 ## Milestone 4: Auth + Profile + Badge System (Supabase + Google)
 
-- [ ] Add Supabase project wiring (env + client + server auth checks).
-- [ ] Add Google sign-in/out flow.
-- [ ] Add profile page with mastery summary and badge list.
+Delivery target:
+- [ ] Ready for cross-device use as part of Milestone 4 auth/profile readiness.
+
+Start point:
+- [ ] Continue from current branch `codex/baby-steps-hallmark-journey`.
+- [ ] Preserve local-only fallback behavior when Supabase credentials are missing.
+
+Auth and cloud profile:
+- [ ] Confirm Supabase project wiring is complete for local and hosted environments (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `/api/config`, CDN client, and redirect URLs).
+- [ ] Confirm Google sign-in/out works from the existing header auth controls.
+- [ ] Confirm RLS-backed tables exist for `profiles`, `user_progress`, and `badges`.
+- [ ] Add any missing server-side checks needed before profile data is trusted beyond the browser client.
+
+Profile data to migrate and sync:
+- [ ] Migrate local progress from `baby-steps-progress-v1` into the signed-in `user_progress.progress` payload.
+- [ ] Persist/load coach threads from `baby-steps-coach-threads-v1` into `user_progress.coach_threads`.
+- [ ] Persist/load the lesson stack from `baby-steps-coach-lesson-stack-v1` into `user_progress.lesson_stack`.
+- [ ] Explicitly include `progress.conceptMastery` in the cloud progress payload.
+- [ ] Explicitly include `progress.artifactAttempts` in the cloud progress payload.
+- [ ] Make first sign-in local-to-cloud migration fail-safe: do not overwrite richer existing cloud data with older local data.
+- [ ] After cloud load, re-render the lesson stack, profile panel, mastery stats, badges, theory progress, and coach surfaces.
+
+Profile and badges:
+- [ ] Confirm profile page/drawer section shows Google identity, mastery summary, and badge list.
 - [ ] Add badge award rules from concept mastery thresholds.
-- [ ] Migrate local-only progress into signed-in account data.
+- [ ] Sync earned badge state to Supabase and keep local badge cache as offline fallback.
+
+Verification for cross-device readiness:
+- [ ] `npm run check` passes.
+- [ ] Browser smoke: app loads signed out with no Supabase credentials and localStorage progress still works.
+- [ ] Browser smoke: Google sign-in restores the signed-in profile and does not break the existing lesson stack surface.
+- [ ] Browser smoke: save/open/continue lesson stack flow still works after cloud migration.
+- [ ] Browser smoke: profile surface shows migrated mastery and badges.
+- [ ] Cross-device smoke: sign in on a second browser/device and confirm progress, lesson stack, concept mastery, and artifact attempts appear.
 
 Definition of done:
-- [ ] Signed-in user sees persistent lesson stack, mastery, and earned badges.
+- [ ] Signed-in user sees persistent lesson stack, mastery, artifact attempt history, and earned badges across devices.
+- [ ] The existing lesson stack and profile surfaces still work when signed out, signed in, and after refresh.
 
 ## Milestone 5: Chords Dropdown Mode Redesign
 

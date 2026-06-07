@@ -79,6 +79,17 @@ const CHORD_MODE_GLISS_SPACING_SECONDS = 0.052;
 const CHORD_MODE_GLISS_HOLD_SECONDS = 0.15;
 const CHORD_MODE_GLISS_THROTTLE_MS = 180;
 const DEFAULT_SEQUENCE_SPACING_SECONDS = 0.08;
+const BODY_BEAT_SERVICE_UUID = "2f5a1000-6f30-4b9d-9e4d-2f0e7f5b7101";
+const BODY_BEAT_COMMAND_UUID = "2f5a1001-6f30-4b9d-9e4d-2f0e7f5b7101";
+const BODY_BEAT_TELEMETRY_UUID = "2f5a1002-6f30-4b9d-9e4d-2f0e7f5b7101";
+const BODY_BEAT_IMMEDIATE_ALERT_SERVICE = 0x1802;
+const BODY_BEAT_ALERT_LEVEL_CHARACTERISTIC = 0x2A06;
+const BODY_BEAT_START_DELAY_MS = 800;
+const BODY_BEAT_SYNC_INTERVAL_MS = 3000;
+const BODY_BEAT_WATCHDOG_MS = 5200;
+const BODY_BEAT_ACK_TIMEOUT_MS = 2600;
+const BODY_BEAT_METER = 4;
+const BODY_BEAT_DIRECT_PULSE_MS = 95;
 
 const CHORDS = {
   major: { intervals: [0, 4, 7], label: "Major", short: "" },
@@ -1208,6 +1219,32 @@ const appState = {
   tempoBpm: 80,
   subdivision: 0.5
 };
+const bodyBeatState = {
+  adapter: "none",
+  status: "disconnected",
+  message: "Sync off",
+  deviceName: "",
+  batteryPercent: null,
+  driftMs: null,
+  isArmed: false,
+  isRunning: false,
+  sessionId: 0,
+  sequence: 0,
+  beatIndex: 0,
+  pulseCount: 0,
+  startedAtMs: 0,
+  lastAckAtMs: 0,
+  lastPulseAtMs: 0,
+  simulatorTimerId: null,
+  syncTimerId: null,
+  watchdogTimerId: null,
+  ackTimerId: null,
+  directPulseTimerId: null,
+  commandCharacteristic: null,
+  immediateAlertCharacteristic: null,
+  telemetryCharacteristic: null,
+  bluetoothDevice: null
+};
 const repertoireState = {
   items: [],
   stylePresets: {},
@@ -1356,6 +1393,7 @@ function init() {
     tempoPlusBtn: byId("tempoPlusBtn"),
     tempoValue: byId("tempoValue"),
     subdivisionSelect: byId("subdivisionSelect"),
+    sessionHapticBtn: byId("sessionHapticBtn"),
     keyboard: byId("keyboard"),
     paletteTabSwitch: byId("paletteTabSwitch"),
     metronome: byId("metronome"),
@@ -1364,6 +1402,16 @@ function init() {
     metronomeBpmBtn: byId("metronomeBpmBtn"),
     metronomeBpmDisplay: byId("metronomeBpmDisplay"),
     metronomeToggleBtn: byId("metronomeToggleBtn"),
+    bodyBeatPanel: byId("bodyBeatPanel"),
+    bodyBeatStatusPill: byId("bodyBeatStatusPill"),
+    bodyBeatSimulatorBtn: byId("bodyBeatSimulatorBtn"),
+    bodyBeatBluetoothBtn: byId("bodyBeatBluetoothBtn"),
+    bodyBeatArmBtn: byId("bodyBeatArmBtn"),
+    bodyBeatStopBtn: byId("bodyBeatStopBtn"),
+    bodyBeatDeviceLabel: byId("bodyBeatDeviceLabel"),
+    bodyBeatBpmLabel: byId("bodyBeatBpmLabel"),
+    bodyBeatSyncLabel: byId("bodyBeatSyncLabel"),
+    bodyBeatPulseRail: byId("bodyBeatPulseRail"),
     exploreTensionLabel: byId("exploreTensionLabel"),
     chordTableTitle: byId("chordTableTitle"),
     chordTableHead: byId("chordTableHead"),
@@ -1599,6 +1647,7 @@ function init() {
   initializeCompanionPanels();
   syncTempoControls();
   renderTempoControls();
+  renderBodyBeatUi();
   syncExploreHarmonyControls();
 
   updateButtonActiveState(el.rootBtnGroup, appState.root);
@@ -2670,6 +2719,8 @@ function bindEvents() {
       setSubdivision(Number(el.subdivisionSelect.value));
     });
   }
+
+  bindBodyBeatEvents();
 
   if (el.paletteTabSwitch) {
     el.paletteTabSwitch.addEventListener("click", (event) => {
@@ -13850,6 +13901,538 @@ class CadenceGame {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   BODY BEAT WEARABLE HAPTICS
+   ═══════════════════════════════════════════════════════════════ */
+function getBodyBeatBpm() {
+  return Math.max(30, Math.min(240, Math.round(Number(appState.bpm) || 100)));
+}
+
+function isBodyBeatConnected() {
+  return bodyBeatState.adapter === "simulator" || Boolean(bodyBeatState.commandCharacteristic) || Boolean(bodyBeatState.immediateAlertCharacteristic);
+}
+
+function clearBodyBeatTimer(timerKey) {
+  const timerId = bodyBeatState[timerKey];
+  if (timerId !== null) {
+    window.clearTimeout(timerId);
+    window.clearInterval(timerId);
+    bodyBeatState[timerKey] = null;
+  }
+}
+
+function clearBodyBeatRuntimeTimers() {
+  clearBodyBeatTimer("simulatorTimerId");
+  clearBodyBeatTimer("syncTimerId");
+  clearBodyBeatTimer("watchdogTimerId");
+  clearBodyBeatTimer("ackTimerId");
+  clearBodyBeatTimer("directPulseTimerId");
+}
+
+function setBodyBeatStatus(status, message = "") {
+  bodyBeatState.status = status;
+  if (message) bodyBeatState.message = message;
+  renderBodyBeatUi();
+}
+
+function renderBodyBeatUi() {
+  if (!el.bodyBeatPanel) return;
+  const statusLabels = {
+    disconnected: "Disconnected",
+    pairing: "Pairing",
+    ready: bodyBeatState.isArmed ? "Armed" : "Ready",
+    arming: "Locking",
+    locked: "Locked",
+    warning: "Check",
+    error: "Stopped"
+  };
+  el.bodyBeatPanel.dataset.bodyBeatState = bodyBeatState.status;
+  if (el.bodyBeatStatusPill) {
+    el.bodyBeatStatusPill.textContent = statusLabels[bodyBeatState.status] || "Disconnected";
+  }
+  if (el.bodyBeatDeviceLabel) {
+    el.bodyBeatDeviceLabel.textContent = bodyBeatState.deviceName || "No wearable";
+  }
+  if (el.bodyBeatBpmLabel) {
+    el.bodyBeatBpmLabel.textContent = `${getBodyBeatBpm()} BPM`;
+  }
+  if (el.bodyBeatSyncLabel) {
+    const drift = Number.isFinite(bodyBeatState.driftMs) ? `, drift ${Math.round(bodyBeatState.driftMs)}ms` : "";
+    const battery = Number.isFinite(bodyBeatState.batteryPercent) ? `, ${Math.round(bodyBeatState.batteryPercent)}%` : "";
+    el.bodyBeatSyncLabel.textContent = `${bodyBeatState.message || "Sync off"}${drift}${battery}`;
+  }
+  if (el.bodyBeatBluetoothBtn) {
+    const hasBluetooth = Boolean(navigator.bluetooth);
+    el.bodyBeatBluetoothBtn.disabled = bodyBeatState.isRunning || bodyBeatState.status === "pairing" || !hasBluetooth;
+    el.bodyBeatBluetoothBtn.title = hasBluetooth ? "Connect Soundbrenner haptic device" : "Web Bluetooth is not available in this browser";
+  }
+  if (el.sessionHapticBtn) {
+    const hasBluetooth = Boolean(navigator.bluetooth);
+    el.sessionHapticBtn.disabled = bodyBeatState.isRunning || bodyBeatState.status === "pairing" || !hasBluetooth;
+    el.sessionHapticBtn.classList.toggle("is-active", bodyBeatState.status === "ready" || bodyBeatState.status === "locked");
+    el.sessionHapticBtn.title = hasBluetooth ? "Connect Soundbrenner haptic device" : "Web Bluetooth is not available in this browser";
+  }
+  if (el.bodyBeatSimulatorBtn) {
+    el.bodyBeatSimulatorBtn.disabled = bodyBeatState.isRunning || bodyBeatState.status === "pairing";
+  }
+  if (el.bodyBeatArmBtn) {
+    el.bodyBeatArmBtn.disabled = !isBodyBeatConnected() || bodyBeatState.status === "pairing" || bodyBeatState.status === "arming";
+    el.bodyBeatArmBtn.textContent = bodyBeatState.isArmed ? "Disarm" : "Arm";
+    el.bodyBeatArmBtn.setAttribute("aria-pressed", String(bodyBeatState.isArmed));
+  }
+  if (el.bodyBeatStopBtn) {
+    el.bodyBeatStopBtn.disabled = !bodyBeatState.isRunning && !bodyBeatState.isArmed && bodyBeatState.status !== "error";
+  }
+}
+
+function buildBodyBeatCommand(op, extras = {}) {
+  bodyBeatState.sequence += 1;
+  return {
+    v: 1,
+    op,
+    seq: bodyBeatState.sequence,
+    session: bodyBeatState.sessionId,
+    bpm: getBodyBeatBpm(),
+    meter: BODY_BEAT_METER,
+    accent: ["strong", "weak", "weak", "weak"],
+    ...extras
+  };
+}
+
+async function sendBodyBeatCommand(op, extras = {}) {
+  const payload = buildBodyBeatCommand(op, extras);
+  if (bodyBeatState.adapter === "simulator") {
+    handleBodyBeatSimulatorCommand(payload);
+    return payload;
+  }
+  if (bodyBeatState.adapter === "soundbrenner-alert") {
+    handleBodyBeatDirectAlertCommand(payload);
+    return payload;
+  }
+  if (!bodyBeatState.commandCharacteristic) {
+    throw new Error("Body Beat wearable is not connected");
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  if (bytes.byteLength > 180) {
+    throw new Error("Body Beat command is too large for the BLE control packet");
+  }
+  const writer = bodyBeatState.commandCharacteristic;
+  if (typeof writer.writeValueWithResponse === "function") {
+    await writer.writeValueWithResponse(bytes);
+  } else {
+    await writer.writeValue(bytes);
+  }
+  return payload;
+}
+
+async function connectBodyBeatSimulator() {
+  stopBodyBeatSession({ keepConnection: false, notifyWearable: false });
+  bodyBeatState.adapter = "simulator";
+  bodyBeatState.deviceName = "Timing simulator";
+  bodyBeatState.commandCharacteristic = null;
+  bodyBeatState.immediateAlertCharacteristic = null;
+  bodyBeatState.telemetryCharacteristic = null;
+  bodyBeatState.bluetoothDevice = null;
+  bodyBeatState.lastAckAtMs = performance.now();
+  bodyBeatState.driftMs = 0;
+  setBodyBeatStatus("ready", "Simulator ready");
+}
+
+async function connectBodyBeatBluetooth() {
+  if (!navigator.bluetooth) {
+    setBodyBeatStatus("error", "Bluetooth unavailable");
+    return;
+  }
+  stopBodyBeatSession({ keepConnection: false, notifyWearable: false });
+  setBodyBeatStatus("pairing", "Choose Soundbrenner");
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { namePrefix: "Soundbrenner" },
+        { namePrefix: "Pulse" },
+        { namePrefix: "Core" }
+      ],
+      optionalServices: [
+        BODY_BEAT_SERVICE_UUID,
+        BODY_BEAT_IMMEDIATE_ALERT_SERVICE,
+        "battery_service",
+        "device_information"
+      ]
+    });
+    device.addEventListener("gattserverdisconnected", handleBodyBeatBluetoothDisconnect);
+    const server = await device.gatt.connect();
+
+    bodyBeatState.bluetoothDevice = device;
+    bodyBeatState.deviceName = device.name || "Soundbrenner device";
+    bodyBeatState.lastAckAtMs = performance.now();
+
+    try {
+      const service = await server.getPrimaryService(BODY_BEAT_SERVICE_UUID);
+      bodyBeatState.commandCharacteristic = await service.getCharacteristic(BODY_BEAT_COMMAND_UUID);
+      try {
+        bodyBeatState.telemetryCharacteristic = await service.getCharacteristic(BODY_BEAT_TELEMETRY_UUID);
+        bodyBeatState.telemetryCharacteristic.addEventListener("characteristicvaluechanged", handleBodyBeatTelemetry);
+        await bodyBeatState.telemetryCharacteristic.startNotifications();
+      } catch {
+        bodyBeatState.telemetryCharacteristic = null;
+      }
+      bodyBeatState.adapter = "bluetooth";
+      setBodyBeatStatus("ready", "Custom haptic ready");
+      return;
+    } catch {
+      bodyBeatState.commandCharacteristic = null;
+      bodyBeatState.telemetryCharacteristic = null;
+    }
+
+    try {
+      const alertService = await server.getPrimaryService(BODY_BEAT_IMMEDIATE_ALERT_SERVICE);
+      bodyBeatState.immediateAlertCharacteristic = await alertService.getCharacteristic(BODY_BEAT_ALERT_LEVEL_CHARACTERISTIC);
+      bodyBeatState.adapter = "soundbrenner-alert";
+      setBodyBeatStatus("ready", "Haptic ready");
+      await pulseBodyBeatImmediateAlert();
+      return;
+    } catch {
+      throw new Error("Device paired, but no browser-controllable vibration service was exposed");
+    }
+  } catch (error) {
+    bodyBeatState.adapter = "none";
+    bodyBeatState.commandCharacteristic = null;
+    bodyBeatState.immediateAlertCharacteristic = null;
+    bodyBeatState.telemetryCharacteristic = null;
+    bodyBeatState.bluetoothDevice = null;
+    setBodyBeatStatus("error", error?.message || "Haptic pairing failed");
+  }
+}
+
+function handleBodyBeatBluetoothDisconnect() {
+  bodyBeatState.commandCharacteristic = null;
+  bodyBeatState.immediateAlertCharacteristic = null;
+  bodyBeatState.telemetryCharacteristic = null;
+  bodyBeatState.bluetoothDevice = null;
+  bodyBeatState.adapter = "none";
+  bodyBeatState.deviceName = "";
+  failBodyBeatSession("Wearable disconnected");
+}
+
+function handleBodyBeatTelemetry(event) {
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(event.target.value));
+    applyBodyBeatTelemetry(payload);
+  } catch {
+    failBodyBeatSession("Bad wearable telemetry");
+  }
+}
+
+function applyBodyBeatTelemetry(payload = {}) {
+  if (payload.session && payload.session !== bodyBeatState.sessionId) return;
+  bodyBeatState.lastAckAtMs = performance.now();
+  if (Number.isFinite(Number(payload.battery))) {
+    bodyBeatState.batteryPercent = Number(payload.battery);
+  }
+  if (Number.isFinite(Number(payload.driftMs))) {
+    bodyBeatState.driftMs = Number(payload.driftMs);
+  }
+  if (payload.type === "fault") {
+    failBodyBeatSession(payload.reason || "Wearable fault");
+    return;
+  }
+  if (payload.type === "pulse") {
+    renderBodyBeatPulse(Number(payload.beatIndex) || bodyBeatState.beatIndex);
+    return;
+  }
+  if (payload.type === "ack" && payload.op === "start") {
+    clearBodyBeatTimer("ackTimerId");
+    bodyBeatState.isRunning = true;
+    setBodyBeatStatus("locked", "Wearable locked");
+    startBodyBeatWatchdog();
+    return;
+  }
+  if (payload.type === "ack" || payload.type === "status") {
+    renderBodyBeatUi();
+  }
+}
+
+function renderBodyBeatPulse(beatIndex) {
+  bodyBeatState.lastPulseAtMs = performance.now();
+  bodyBeatState.beatIndex = beatIndex;
+  bodyBeatState.pulseCount += 1;
+  if (!el.bodyBeatPulseRail) return;
+  const beat = ((Math.max(0, beatIndex) % BODY_BEAT_METER) + 1);
+  el.bodyBeatPulseRail.querySelectorAll(".body-beat-pulse-dot").forEach((dot) => {
+    dot.classList.toggle("is-active", dot.dataset.beat === String(beat));
+    dot.classList.toggle("is-accent", beat === 1 && dot.dataset.beat === "1");
+  });
+  window.setTimeout(() => {
+    el.bodyBeatPulseRail?.querySelectorAll(".body-beat-pulse-dot").forEach((dot) => {
+      dot.classList.remove("is-active", "is-accent");
+    });
+  }, 160);
+}
+
+function handleBodyBeatSimulatorCommand(payload) {
+  if (payload.op === "start") {
+    window.setTimeout(() => {
+      applyBodyBeatTelemetry({ type: "ack", op: "start", session: payload.session, driftMs: 0 });
+      startBodyBeatSimulatorPulse(performance.now() + Math.max(0, Number(payload.startDelayMs) || 0), payload.bpm);
+    }, 90);
+    return;
+  }
+  if (payload.op === "stop") {
+    clearBodyBeatTimer("simulatorTimerId");
+    applyBodyBeatTelemetry({ type: "ack", op: "stop", session: payload.session, driftMs: 0 });
+    return;
+  }
+  if (payload.op === "sync") {
+    applyBodyBeatTelemetry({ type: "status", session: payload.session, driftMs: 0 });
+    return;
+  }
+  if (payload.op === "update") {
+    if (bodyBeatState.isRunning) {
+      startBodyBeatSimulatorPulse(performance.now() + 180, payload.bpm);
+    }
+    applyBodyBeatTelemetry({ type: "ack", op: "update", session: payload.session, driftMs: 0 });
+  }
+}
+
+function handleBodyBeatDirectAlertCommand(payload) {
+  if (payload.op === "start") {
+    window.setTimeout(() => {
+      applyBodyBeatTelemetry({ type: "ack", op: "start", session: payload.session, driftMs: 0 });
+      startBodyBeatDirectAlertPulse(performance.now() + Math.max(0, Number(payload.startDelayMs) || 0), payload.bpm);
+    }, 90);
+    return;
+  }
+  if (payload.op === "stop") {
+    clearBodyBeatTimer("directPulseTimerId");
+    void setBodyBeatImmediateAlertLevel(0);
+    applyBodyBeatTelemetry({ type: "ack", op: "stop", session: payload.session, driftMs: 0 });
+    return;
+  }
+  if (payload.op === "sync") {
+    applyBodyBeatTelemetry({ type: "status", session: payload.session, driftMs: 0 });
+    return;
+  }
+  if (payload.op === "update") {
+    if (bodyBeatState.isRunning) {
+      startBodyBeatDirectAlertPulse(performance.now() + 180, payload.bpm);
+    }
+    applyBodyBeatTelemetry({ type: "ack", op: "update", session: payload.session, driftMs: 0 });
+  }
+}
+
+function startBodyBeatDirectAlertPulse(startAtMs, bpm) {
+  clearBodyBeatTimer("directPulseTimerId");
+  bodyBeatState.startedAtMs = startAtMs;
+  bodyBeatState.beatIndex = 0;
+  const beatMs = 60000 / Math.max(30, Math.min(240, Number(bpm) || getBodyBeatBpm()));
+  const tick = () => {
+    if (!bodyBeatState.isRunning || bodyBeatState.adapter !== "soundbrenner-alert") return;
+    const now = performance.now();
+    if (now < startAtMs) {
+      bodyBeatState.directPulseTimerId = window.setTimeout(tick, Math.max(8, startAtMs - now));
+      return;
+    }
+    const elapsedBeats = Math.max(0, Math.floor((now - startAtMs) / beatMs));
+    renderBodyBeatPulse(elapsedBeats);
+    pulseBodyBeatImmediateAlert().catch((error) => {
+      failBodyBeatSession(error?.message || "Haptic pulse failed");
+    });
+    const nextBeatAt = startAtMs + (elapsedBeats + 1) * beatMs;
+    bodyBeatState.directPulseTimerId = window.setTimeout(tick, Math.max(8, nextBeatAt - performance.now()));
+  };
+  tick();
+}
+
+async function setBodyBeatImmediateAlertLevel(level) {
+  if (!bodyBeatState.immediateAlertCharacteristic) {
+    throw new Error("No direct haptic characteristic");
+  }
+  const value = new Uint8Array([Math.max(0, Math.min(2, Number(level) || 0))]);
+  const writer = bodyBeatState.immediateAlertCharacteristic;
+  if (typeof writer.writeValueWithoutResponse === "function") {
+    await writer.writeValueWithoutResponse(value);
+    return;
+  }
+  if (typeof writer.writeValueWithResponse === "function") {
+    await writer.writeValueWithResponse(value);
+    return;
+  }
+  await writer.writeValue(value);
+}
+
+async function pulseBodyBeatImmediateAlert() {
+  await setBodyBeatImmediateAlertLevel(2);
+  window.setTimeout(() => {
+    setBodyBeatImmediateAlertLevel(0).catch(() => {});
+  }, BODY_BEAT_DIRECT_PULSE_MS);
+}
+
+function startBodyBeatSimulatorPulse(startAtMs, bpm) {
+  clearBodyBeatTimer("simulatorTimerId");
+  bodyBeatState.startedAtMs = startAtMs;
+  bodyBeatState.beatIndex = 0;
+  const beatMs = 60000 / Math.max(30, Math.min(240, Number(bpm) || getBodyBeatBpm()));
+  const tick = () => {
+    if (!bodyBeatState.isRunning || bodyBeatState.adapter !== "simulator") return;
+    const now = performance.now();
+    if (now < startAtMs) {
+      bodyBeatState.simulatorTimerId = window.setTimeout(tick, Math.max(8, startAtMs - now));
+      return;
+    }
+    const elapsedBeats = Math.max(0, Math.floor((now - startAtMs) / beatMs));
+    renderBodyBeatPulse(elapsedBeats);
+    const nextBeatAt = startAtMs + (elapsedBeats + 1) * beatMs;
+    bodyBeatState.simulatorTimerId = window.setTimeout(tick, Math.max(8, nextBeatAt - performance.now()));
+  };
+  tick();
+}
+
+function startBodyBeatAckTimer() {
+  clearBodyBeatTimer("ackTimerId");
+  bodyBeatState.ackTimerId = window.setTimeout(() => {
+    failBodyBeatSession("No wearable lock");
+  }, BODY_BEAT_ACK_TIMEOUT_MS);
+}
+
+function startBodyBeatSyncLoop() {
+  clearBodyBeatTimer("syncTimerId");
+  bodyBeatState.syncTimerId = window.setInterval(() => {
+    if (!bodyBeatState.isRunning) return;
+    const beatMs = 60000 / getBodyBeatBpm();
+    const elapsedMs = Math.max(0, performance.now() - bodyBeatState.startedAtMs);
+    const expectedBeat = Math.floor(elapsedMs / beatMs);
+    sendBodyBeatCommand("sync", { elapsedMs: Math.round(elapsedMs), expectedBeat }).catch((error) => {
+      failBodyBeatSession(error?.message || "Sync command failed");
+    });
+  }, BODY_BEAT_SYNC_INTERVAL_MS);
+}
+
+function startBodyBeatWatchdog() {
+  clearBodyBeatTimer("watchdogTimerId");
+  bodyBeatState.watchdogTimerId = window.setInterval(() => {
+    if (!bodyBeatState.isRunning || bodyBeatState.status !== "locked") return;
+    if (performance.now() - bodyBeatState.lastAckAtMs > BODY_BEAT_WATCHDOG_MS) {
+      failBodyBeatSession("Sync lost");
+    }
+  }, 900);
+}
+
+async function startBodyBeatSession() {
+  if (!isBodyBeatConnected()) {
+    setBodyBeatStatus("error", "Pair first");
+    return;
+  }
+  clearBodyBeatRuntimeTimers();
+  bodyBeatState.sessionId = Date.now();
+  bodyBeatState.beatIndex = 0;
+  bodyBeatState.pulseCount = 0;
+  bodyBeatState.startedAtMs = performance.now() + BODY_BEAT_START_DELAY_MS;
+  bodyBeatState.lastAckAtMs = performance.now();
+  bodyBeatState.isRunning = true;
+  setBodyBeatStatus("arming", "Locking wearable");
+  startBodyBeatAckTimer();
+  startBodyBeatSyncLoop();
+  try {
+    await sendBodyBeatCommand("start", { startDelayMs: BODY_BEAT_START_DELAY_MS });
+  } catch (error) {
+    failBodyBeatSession(error?.message || "Start command failed");
+  }
+}
+
+function stopBodyBeatSession(options = {}) {
+  const { keepConnection = true, notifyWearable = true } = options;
+  const wasConnected = isBodyBeatConnected();
+  if (notifyWearable && wasConnected) {
+    sendBodyBeatCommand("stop").catch(() => {});
+  }
+  clearBodyBeatRuntimeTimers();
+  bodyBeatState.isRunning = false;
+  bodyBeatState.isArmed = false;
+  bodyBeatState.beatIndex = 0;
+  bodyBeatState.pulseCount = 0;
+  bodyBeatState.driftMs = null;
+  if (!keepConnection) {
+    bodyBeatState.adapter = "none";
+    bodyBeatState.deviceName = "";
+    bodyBeatState.commandCharacteristic = null;
+    bodyBeatState.immediateAlertCharacteristic = null;
+    bodyBeatState.telemetryCharacteristic = null;
+    bodyBeatState.bluetoothDevice = null;
+  }
+  setBodyBeatStatus(keepConnection && wasConnected ? "ready" : "disconnected", keepConnection && wasConnected ? "Wearable ready" : "Sync off");
+}
+
+function failBodyBeatSession(message) {
+  clearBodyBeatRuntimeTimers();
+  bodyBeatState.isRunning = false;
+  bodyBeatState.isArmed = false;
+  bodyBeatState.driftMs = null;
+  if (bodyBeatState.immediateAlertCharacteristic) {
+    setBodyBeatImmediateAlertLevel(0).catch(() => {});
+  }
+  setBodyBeatStatus("error", message || "Haptic stopped");
+}
+
+function toggleBodyBeatArm() {
+  if (!bodyBeatState.isArmed) {
+    if (!isBodyBeatConnected()) {
+      setBodyBeatStatus("error", "Pair first");
+      return;
+    }
+    bodyBeatState.isArmed = true;
+    setBodyBeatStatus("ready", appState.metronomeRunning ? "Starting with metronome" : "Armed");
+    if (appState.metronomeRunning) {
+      void startBodyBeatSession();
+    }
+    return;
+  }
+  stopBodyBeatSession({ keepConnection: true, notifyWearable: true });
+}
+
+function handleBodyBeatMetronomeStart() {
+  if (bodyBeatState.isArmed && !bodyBeatState.isRunning) {
+    void startBodyBeatSession();
+  }
+}
+
+function handleBodyBeatMetronomeStop() {
+  if (bodyBeatState.isRunning) {
+    stopBodyBeatSession({ keepConnection: true, notifyWearable: true });
+  }
+}
+
+function handleBodyBeatTempoChanged() {
+  renderBodyBeatUi();
+  if (!bodyBeatState.isRunning) return;
+  sendBodyBeatCommand("update", { effectiveInMs: 180 }).catch((error) => {
+    failBodyBeatSession(error?.message || "Tempo update failed");
+  });
+}
+
+function bindBodyBeatEvents() {
+  el.bodyBeatSimulatorBtn?.addEventListener("click", () => {
+    void connectBodyBeatSimulator();
+  });
+  el.bodyBeatBluetoothBtn?.addEventListener("click", () => {
+    void connectBodyBeatBluetooth();
+  });
+  el.sessionHapticBtn?.addEventListener("click", () => {
+    void connectBodyBeatBluetooth();
+  });
+  el.bodyBeatArmBtn?.addEventListener("click", toggleBodyBeatArm);
+  el.bodyBeatStopBtn?.addEventListener("click", () => {
+    stopBodyBeatSession({ keepConnection: true, notifyWearable: true });
+  });
+  window.__babyStepsBodyBeat = {
+    state: bodyBeatState,
+    start: startBodyBeatSession,
+    stop: stopBodyBeatSession,
+    connectHaptic: connectBodyBeatBluetooth,
+    connectSimulator: connectBodyBeatSimulator
+  };
+  renderBodyBeatUi();
+}
+
+/* ═══════════════════════════════════════════════════════════════
    METRONOME
    ═══════════════════════════════════════════════════════════════ */
 let metronomeIntervalId = null;
@@ -13876,6 +14459,7 @@ function setBpm(newBpm) {
     stopMetronomeTick();
     startMetronomeTick();
   }
+  handleBodyBeatTempoChanged();
 }
 
 function commitMetronomeBpmInput() {
@@ -13895,6 +14479,7 @@ function startMetronome() {
     el.metronomeToggleBtn.querySelector('.metronome-toggle-icon').textContent = '⏸';
   }
   startMetronomeTick();
+  handleBodyBeatMetronomeStart();
 }
 
 function stopMetronome() {
@@ -13904,6 +14489,7 @@ function stopMetronome() {
     el.metronomeToggleBtn.querySelector('.metronome-toggle-icon').textContent = '▶';
   }
   stopMetronomeTick();
+  handleBodyBeatMetronomeStop();
 }
 
 function startMetronomeTick() {
