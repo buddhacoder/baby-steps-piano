@@ -1,0 +1,1375 @@
+diff --git a/app.js b/app.js
+index 0bb97a2..976e2c1 100644
+--- a/app.js
++++ b/app.js
+@@ -973,6 +973,7 @@ function init() {
+     gameFeedback: byId("gameFeedback"),
+     openKeyCenterBtn: byId("openKeyCenterBtn"),
+     closeKeyCenterBtn: byId("closeKeyCenterBtn"),
++    drawerHandleTab: byId("drawerHandleTab"),
+     keyCenterDrawer: byId("keyCenterDrawer"),
+     keyCenterDrawerBackdrop: byId("keyCenterDrawerBackdrop"),
+     tempoMinusBtn: byId("tempoMinusBtn"),
+@@ -1837,6 +1838,7 @@ function openKeyCenterDrawer() {
+   }
+   el.keyCenterDrawer.classList.add("is-open");
+   el.keyCenterDrawer.setAttribute("aria-hidden", "false");
++  if (el.drawerHandleTab) el.drawerHandleTab.classList.add("is-drawer-open");
+   if (el.keyCenterDrawerBackdrop) {
+     el.keyCenterDrawerBackdrop.hidden = false;
+     requestAnimationFrame(() => {
+@@ -1849,6 +1851,7 @@ function closeKeyCenterDrawer() {
+   if (!el.keyCenterDrawer) return;
+   el.keyCenterDrawer.classList.remove("is-open");
+   el.keyCenterDrawer.setAttribute("aria-hidden", "true");
++  if (el.drawerHandleTab) el.drawerHandleTab.classList.remove("is-drawer-open");
+   if (el.keyCenterDrawerBackdrop) {
+     el.keyCenterDrawerBackdrop.classList.remove("is-open");
+     keyCenterBackdropHideTimer = window.setTimeout(() => {
+@@ -1860,6 +1863,15 @@ function closeKeyCenterDrawer() {
+   }
+ }
+ 
++function toggleKeyCenterDrawer() {
++  if (!el.keyCenterDrawer) return;
++  if (el.keyCenterDrawer.classList.contains("is-open")) {
++    closeKeyCenterDrawer();
++  } else {
++    openKeyCenterDrawer();
++  }
++}
++
+ function bindEvents() {
+   if (el.tempoMinusBtn) {
+     el.tempoMinusBtn.addEventListener("click", () => {
+@@ -1964,6 +1976,10 @@ function bindEvents() {
+     el.closeKeyCenterBtn.addEventListener("click", closeKeyCenterDrawer);
+   }
+ 
++  if (el.drawerHandleTab) {
++    el.drawerHandleTab.addEventListener("click", toggleKeyCenterDrawer);
++  }
++
+   if (el.keyCenterDrawerBackdrop) {
+     el.keyCenterDrawerBackdrop.addEventListener("click", closeKeyCenterDrawer);
+   }
+@@ -5984,32 +6000,50 @@ async function playChordTableCellSequence(cells, label) {
+   if (!Array.isArray(cells) || cells.length === 0) return;
+   const playableCells = cells.filter((cell) => cell?.dataset?.root && cell?.dataset?.quality);
+   if (playableCells.length === 0) return;
++  const token = ++paletteSequenceToken;
+   const startCell = playableCells[0];
+   const startRoot = startCell.dataset.root;
+   const startQuality = startCell.dataset.quality;
+   const beatSeconds = getHarmonyBeatSeconds();
+-  const stepSeconds = beatSeconds * 2;
+-  const hold = Math.max(0.14, stepSeconds * 0.9);
++  // Step every beat (1:1 with BPM) so the sweep follows the metronome
++  const stepSeconds = beatSeconds;
++  const hold = Math.max(0.14, stepSeconds * 0.85);
+   const stepMs = Math.max(60, Math.round(stepSeconds * 1000));
++
++  // Clear all highlights before starting the walk
++  clearChordTableSelection();
++
+   for (let i = 0; i < playableCells.length; i += 1) {
++    if (token !== paletteSequenceToken) return; // cancelled
+     const cell = playableCells[i];
+     const root = cell?.dataset?.root;
+     const quality = cell?.dataset?.quality;
+     if (!root || !quality) continue;
+-    markChordTableCell(root, quality);
++
++    // Step-by-step walk: light up current, dim previous
++    if (i > 0) playableCells[i - 1].classList.remove("is-selected");
++    cell.classList.add("is-selected");
++
+     const midi = buildChordMidi(root, quality, "root position", 3);
+     playMidiNotes(midi, {
+       hold,
+       asChord: true,
+       highlightMs: getHighlightMs(hold, stepMs),
+-      restrictToWindow: false
++      restrictToWindow: false,
++      releasePrevious: true
+     });
+     await wait(stepMs);
+   }
+ 
++  if (token !== paletteSequenceToken) return; // cancelled
++
++  // Dim the last cell before resolve
++  playableCells[playableCells.length - 1].classList.remove("is-selected");
++
+   // Resolve by replaying the starting chord one octave higher for a full loop finish.
+   const resolvedMidi = buildChordMidi(startRoot, startQuality, "root position", 3).map((midi) => midi + 12);
+-  const resolvedHold = Math.max(0.16, stepSeconds * 0.95);
++  const resolvedHold = Math.max(0.16, stepSeconds * 1.8);
++  releaseAllToneNotes();
+   playCircularResolveAtStartCell(startCell, resolvedMidi, resolvedHold);
+ 
+   if (el.chordDisplay) {
+@@ -6259,11 +6293,13 @@ function renderTheoryContent() {
+ function initializeTheoryCourse() {
+   if (!el.theoryTrackSelect || !window.THEORY_CURRICULUM) return;
+   if (el.theoryTrackSelect.options.length === 0) {
+-    const trackEntries = Object.entries(window.THEORY_CURRICULUM);
+-    trackEntries.forEach(([trackId, track]) => {
++    const categories = typeof getCategoryMeta === "function"
++      ? getCategoryMeta()
++      : Object.entries(window.THEORY_CURRICULUM).map(([key, cat]) => ({ key, title: cat.title, icon: cat.icon || "" }));
++    categories.forEach((cat) => {
+       const opt = document.createElement("option");
+-      opt.value = trackId;
+-      opt.textContent = track.title;
++      opt.value = cat.key;
++      opt.textContent = `${cat.icon || ""} ${cat.title}`.trim();
+       el.theoryTrackSelect.appendChild(opt);
+     });
+   }
+@@ -6286,15 +6322,20 @@ function initializeTheoryCourse() {
+ function getTheoryLessonsForTrack(trackId) {
+   const track = window.THEORY_CURRICULUM?.[trackId];
+   if (!track) return [];
+-  const baseLessons = track.levels.map((level, idx) => ({
+-    id: `${trackId}-${idx}`,
++  const rawLessons = Array.isArray(track.lessons) ? track.lessons : [];
++  const baseLessons = rawLessons.map((lesson) => ({
++    id: lesson.id || `${trackId}-${rawLessons.indexOf(lesson)}`,
+     trackId,
+-    title: level.title,
+-    description: level.desc,
+-    resources: Array.isArray(level.resources) ? level.resources : [],
+-    videoUrl: pickLessonVideoUrl(level.resources, trackId),
+-    narration: `${track.title}. ${level.title}. ${level.desc}`,
+-    infographicType: inferInfographicType(trackId, level)
++    tier: lesson.tier || 1,
++    title: lesson.title,
++    description: lesson.desc || "",
++    prerequisites: Array.isArray(lesson.prerequisites) ? lesson.prerequisites : [],
++    tags: Array.isArray(lesson.tags) ? lesson.tags : [],
++    abc: lesson.abc || "",
++    resources: Array.isArray(lesson.resources) ? lesson.resources : [],
++    videoUrl: pickLessonVideoUrl(lesson.resources, trackId),
++    narration: `${track.title}. ${lesson.title}. ${lesson.desc || ""}`,
++    infographicType: inferInfographicType(trackId, lesson)
+   }));
+   const custom = Array.isArray(progress.theoryCustomLessons?.[trackId]) ? progress.theoryCustomLessons[trackId] : [];
+   return [...custom, ...baseLessons];
+@@ -6466,7 +6507,14 @@ function renderTheoryLessonList() {
+     if (isCompleted) btn.classList.add("is-complete");
+     btn.type = "button";
+     const customPrefix = isCustomTheoryLesson(lesson.id, theoryState.trackId) ? "Generated: " : "";
+-    btn.textContent = `${isCompleted ? "Completed: " : ""}${customPrefix}${lesson.title}`;
++    const tier = lesson.tier && typeof tierLabel === "function" ? tierLabel(lesson.tier) : "";
++    const tierBadge = tier ? `${tier} ` : "";
++    btn.textContent = `${isCompleted ? "Completed: " : ""}${customPrefix}${tierBadge}${lesson.title}`;
++    // Show locked state if prerequisites not met
++    if (hasUnmetPrerequisites(lesson)) {
++      btn.classList.add("is-locked");
++      btn.title = `Prerequisites: ${lesson.prerequisites.join(", ")}`;
++    }
+     btn.addEventListener("click", () => {
+       theoryState.isEditingLesson = false;
+       if (theoryState.activeRunLessonId !== lesson.id) {
+@@ -6480,13 +6528,32 @@ function renderTheoryLessonList() {
+   });
+ }
+ 
++function hasUnmetPrerequisites(lesson) {
++  if (!Array.isArray(lesson.prerequisites) || !lesson.prerequisites.length) return false;
++  return lesson.prerequisites.some((preId) => !progress.theoryCompletedLessons?.[preId]);
++}
++
+ function renderTheoryLessonDetail() {
+   const lesson = getCurrentTheoryLesson();
+   if (!lesson) return;
+   const isCustom = isCustomTheoryLesson(lesson.id);
+ 
+-  if (el.theoryLessonTitle) el.theoryLessonTitle.textContent = lesson.title;
+-  if (el.theoryLessonDesc) el.theoryLessonDesc.textContent = lesson.description;
++  const tier = lesson.tier && typeof tierLabel === "function" ? tierLabel(lesson.tier) : "";
++  if (el.theoryLessonTitle) el.theoryLessonTitle.textContent = `${tier ? tier + " " : ""}${lesson.title}`;
++  if (el.theoryLessonDesc) {
++    let descParts = [lesson.description];
++    if (Array.isArray(lesson.tags) && lesson.tags.length) {
++      descParts.push(`Tags: ${lesson.tags.join(", ")}`);
++    }
++    if (hasUnmetPrerequisites(lesson)) {
++      const chain = typeof getPrerequisiteChain === "function" ? getPrerequisiteChain(lesson.id) : [];
++      const names = chain.map((pre) => pre.title).filter(Boolean);
++      if (names.length) {
++        descParts.push(`Prerequisites: ${names.join(" → ")}`);
++      }
++    }
++    el.theoryLessonDesc.textContent = descParts.join(" | ");
++  }
+   if (el.theoryAudioUrlInput) {
+     el.theoryAudioUrlInput.value = progress.theoryAudioByLesson?.[lesson.id] || "";
+   }
+@@ -6975,12 +7042,17 @@ function onTheoryGuidedKeyPress() {
+ 
+ function renderTheoryProgressSummary() {
+   if (!el.theoryProgressSummary || !window.THEORY_CURRICULUM) return;
+-  const allLessons = Object.keys(window.THEORY_CURRICULUM)
+-    .flatMap((trackId) => getTheoryLessonsForTrack(trackId));
++  const allLessons = typeof getAllLessons === "function" ? getAllLessons() : [];
+   const total = allLessons.length;
+   const completed = allLessons.filter((lesson) => progress.theoryCompletedLessons?.[lesson.id]).length;
+   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+-  el.theoryProgressSummary.textContent = `Theory progress: ${completed}/${total} lessons completed (${percent}%).`;
++  const categoryMeta = typeof getCategoryMeta === "function" ? getCategoryMeta() : [];
++  const categoryBreakdown = categoryMeta.map((cat) => {
++    const catLessons = typeof getLessonsByTags === "function" ? getLessonsByTags([cat.key]) : [];
++    const catDone = catLessons.filter((l) => progress.theoryCompletedLessons?.[l.id]).length;
++    return `${cat.icon} ${cat.title}: ${catDone}/${cat.lessonCount}`;
++  }).join("  ");
++  el.theoryProgressSummary.textContent = `Theory: ${completed}/${total} (${percent}%) ${categoryBreakdown}`;
+ }
+ 
+ function playTheoryLessonAudio() {
+@@ -7803,6 +7875,16 @@ function playMidiNotesWithRnbo(midiNotes, options = {}) {
+   return true;
+ }
+ 
++function releaseAllToneNotes() {
++  if (toneEngineReady && toneSampler) {
++    try {
++      toneSampler.releaseAll(window.Tone.now());
++    } catch {
++      /* swallow – sampler may not have active voices */
++    }
++  }
++}
++
+ function playMidiNotesWithToneEngine(midiNotes, options = {}) {
+   if (!isToneEngineAvailable()) return null;
+   const notes = Array.isArray(midiNotes) ? midiNotes.filter((midi) => Number.isFinite(midi)) : [];
+@@ -7812,6 +7894,9 @@ function playMidiNotesWithToneEngine(midiNotes, options = {}) {
+   const velocity = Math.max(0.05, Math.min(1, options.velocity || 0.82));
+ 
+   const trigger = () => {
++    if (options.releasePrevious) {
++      releaseAllToneNotes();
++    }
+     const toneNotes = notes.map((midi) => midiToNoteName(midi));
+     const start = window.Tone.now() + 0.002;
+     if (asChord) {
+@@ -8911,29 +8996,100 @@ function escapeHtml(text) {
+   return div.innerHTML;
+ }
+ 
+-function parseCoachDeepLinks(content) {
++/**
++ * Lightweight markdown-to-HTML for coach messages.
++ * Supports: **bold**, *italic*, `code`, ## headings, - bullet lists, \n paragraphs, [[deep links]]
++ */
++function renderCoachMarkdown(content) {
+   if (!content) return "";
+   const escaped = escapeHtml(content);
+-  return escaped.replace(
+-    /\[\[([^\]|]+)\|([^\]]+)\]\]/g,
+-    (_, label, route) => {
+-      const safeLabel = label.trim();
+-      const safeRoute = route.trim();
+-      return `<a class="coach-deep-link" href="#" data-route="${safeRoute}" title="Go to ${safeLabel}">${safeLabel}</a>`;
++
++  let html = escaped
++    // Headings: ### h3, ## h2 (must be at line start)
++    .replace(/^### (.+)$/gm, '<h4 class="coach-heading">$1</h4>')
++    .replace(/^## (.+)$/gm, '<h3 class="coach-heading">$1</h3>')
++    // Bold: **text**
++    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
++    // Italic: *text* (but not inside bold)
++    .replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>')
++    // Inline code: `text`
++    .replace(/`([^`]+?)`/g, '<code class="coach-code">$1</code>')
++    // Deep links: [[Label|route]]
++    .replace(
++      /\[\[([^\]|]+)\|([^\]]+)\]\]/g,
++      (_, label, route) => {
++        const safeLabel = label.trim();
++        const safeRoute = route.trim();
++        return `<a class="coach-deep-link" href="#" data-route="${safeRoute}" title="Go to ${safeLabel}">${safeLabel}</a>`;
++      }
++    );
++
++  // Process line-by-line for lists and paragraphs
++  const lines = html.split('\n');
++  const blocks = [];
++  let listBuffer = [];
++
++  const flushList = () => {
++    if (listBuffer.length) {
++      blocks.push('<ul class="coach-list">' + listBuffer.map(li => `<li>${li}</li>`).join('') + '</ul>');
++      listBuffer = [];
+     }
+-  );
++  };
++
++  lines.forEach(line => {
++    const trimmed = line.trim();
++    if (!trimmed) {
++      flushList();
++      return; // blank line = paragraph break
++    }
++    // Bullet list item: - text or * text
++    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
++    if (bulletMatch) {
++      listBuffer.push(bulletMatch[1]);
++      return;
++    }
++    // Numbered list item: 1) text or 1. text
++    const numMatch = trimmed.match(/^\d+[.)]\s+(.+)$/);
++    if (numMatch) {
++      listBuffer.push(numMatch[1]);
++      return;
++    }
++    flushList();
++    // Headings already wrapped in tags pass through; everything else wraps in <p>
++    if (trimmed.startsWith('<h3') || trimmed.startsWith('<h4')) {
++      blocks.push(trimmed);
++    } else {
++      blocks.push(`<p>${trimmed}</p>`);
++    }
++  });
++  flushList();
++
++  return blocks.join('');
++}
++
++/** Legacy alias — kept for any other callers */
++function parseCoachDeepLinks(content) {
++  return renderCoachMarkdown(content);
+ }
+ 
+ function navigateToLesson(lessonId) {
+   if (!lessonId) return;
+   const lesson = typeof getLessonById === "function" ? getLessonById(lessonId) : null;
+-  if (lesson && typeof switchMode === "function") {
+-    switchMode("theory");
+-    if (typeof highlightLesson === "function") highlightLesson(lessonId);
+-  } else {
+-    // Fallback: try switching to theory mode and scrolling to the lesson
+-    if (typeof switchMode === "function") switchMode("theory");
+-    console.log(`[DeepLink] Navigate to: ${lessonId}`);
++  setMode("theory");
++  if (lesson) {
++    // Derive category from lesson ID (format: "category:lesson-name")
++    const categoryKey = lessonId.split(":")[0];
++    if (categoryKey && window.THEORY_CURRICULUM?.[categoryKey]) {
++      theoryState.trackId = categoryKey;
++      if (el.theoryTrackSelect) el.theoryTrackSelect.value = categoryKey;
++    }
++    theoryState.lessonId = lessonId;
++    theoryState.isEditingLesson = false;
++    renderTheoryLessonList();
++    renderTheoryLessonDetail();
++    // Scroll the lesson button into view
++    const activeBtn = el.theoryLessonList?.querySelector(".theory-lesson-btn.is-active");
++    if (activeBtn) activeBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+   }
+ }
+ 
+@@ -8944,7 +9100,7 @@ function renderCoachMessages() {
+   if (!thread.messages.length) {
+     const placeholder = document.createElement("div");
+     placeholder.className = "coach-message assistant";
+-    placeholder.textContent = "Start a conversation. I will generate explanation and a playable lesson artifact.";
++    placeholder.innerHTML = renderCoachMarkdown("Hey there! 👋 Ask me about **chords**, **scales**, **cadences**, or anything music theory. I'll explain concepts and create playable practice cards for you.");
+     el.coachMessages.appendChild(placeholder);
+     return;
+   }
+@@ -8956,11 +9112,22 @@ function renderCoachMessages() {
+ 
+     const text = document.createElement("div");
+     text.className = "coach-message-text";
+-    text.innerHTML = parseCoachDeepLinks(msg.content || "");
++    if (msg.role === "user") {
++      // User messages: plain text only, no markdown
++      text.textContent = msg.content || "";
++    } else {
++      // Assistant messages: render markdown + deep links
++      text.innerHTML = renderCoachMarkdown(msg.content || "");
++    }
+     bubble.appendChild(text);
+ 
+-    if (msg.role === "assistant" && msg.artifact) {
+-      bubble.appendChild(buildCoachArtifactCardElement(msg.artifact));
++    if (msg.role === "assistant") {
++      const artifacts = Array.isArray(msg.artifacts) && msg.artifacts.length > 0
++        ? msg.artifacts
++        : (msg.artifact ? [msg.artifact] : []);
++      artifacts.forEach((art) => {
++        bubble.appendChild(buildCoachArtifactCardElement(art));
++      });
+     }
+ 
+     const meta = document.createElement("span");
+@@ -9010,6 +9177,9 @@ function updatePendingAssistantMessage(thread, messageId, patch = {}) {
+   if (Object.prototype.hasOwnProperty.call(patch, "artifact")) {
+     msg.artifact = patch.artifact || null;
+   }
++  if (Object.prototype.hasOwnProperty.call(patch, "artifacts")) {
++    msg.artifacts = Array.isArray(patch.artifacts) ? patch.artifacts : [];
++  }
+   if (Object.prototype.hasOwnProperty.call(patch, "pending")) {
+     msg.pending = Boolean(patch.pending);
+   }
+@@ -9046,15 +9216,17 @@ function normalizeCoachArtifact(artifact) {
+     bpm,
+     playbackPolicy: {
+       mode: useCircularPolicy ? "circular_row_sweep" : "fixed_sequence",
+-      circularResolve: useCircularPolicy,
+-      finalConfetti: useCircularPolicy
++      circularResolve: artifact?.playbackPolicy?.circularResolve ?? useCircularPolicy,
++      finalConfetti: artifact?.playbackPolicy?.finalConfetti ?? useCircularPolicy
+     },
+     sequence,
+     quiz: {
+       prompt: String(artifact?.quiz?.prompt || "").trim() || `Play ${title} in another key.`,
+       conceptId: String(artifact?.quiz?.conceptId || "").trim() || "core-harmony"
+     },
+-    actions: ["play", "try", "save_to_stack", "open_full_lesson"]
++    actions: Array.isArray(artifact?.actions) && artifact.actions.length > 0
++      ? artifact.actions
++      : ["play", "try", "save_to_stack", "open_full_lesson"]
+   };
+ }
+ 
+@@ -9329,44 +9501,54 @@ function buildCoachArtifactCardElement(artifact) {
+ 
+   const actions = document.createElement("div");
+   actions.className = "coach-artifact-actions";
++  const allowedActions = Array.isArray(normalized.actions) ? normalized.actions : ["play", "try", "save_to_stack", "open_full_lesson"];
++  let quizPanel = null;
+ 
+-  const playBtn = document.createElement("button");
+-  playBtn.type = "button";
+-  playBtn.textContent = "Play";
+-  playBtn.addEventListener("click", () => {
+-    void playCoachArtifact(normalized);
+-  });
+-  actions.appendChild(playBtn);
++  if (allowedActions.includes("play")) {
++    const playBtn = document.createElement("button");
++    playBtn.type = "button";
++    playBtn.textContent = "Play";
++    playBtn.addEventListener("click", () => {
++      void playCoachArtifact(normalized);
++    });
++    actions.appendChild(playBtn);
++  }
+ 
+-  const tryBtn = document.createElement("button");
+-  tryBtn.type = "button";
+-  tryBtn.textContent = "Try";
+-  const quizPanel = document.createElement("div");
+-  quizPanel.className = "coach-artifact-quiz";
+-  renderCoachArtifactQuizPanel(quizPanel, normalized);
+-  tryBtn.addEventListener("click", () => {
+-    startCoachArtifactTry(normalized, quizPanel);
+-  });
+-  actions.appendChild(tryBtn);
++  if (allowedActions.includes("try")) {
++    const tryBtn = document.createElement("button");
++    tryBtn.type = "button";
++    tryBtn.textContent = "Try";
++    quizPanel = document.createElement("div");
++    quizPanel.className = "coach-artifact-quiz";
++    renderCoachArtifactQuizPanel(quizPanel, normalized);
++    tryBtn.addEventListener("click", () => {
++      startCoachArtifactTry(normalized, quizPanel);
++    });
++    actions.appendChild(tryBtn);
++  }
+ 
+-  const saveBtn = document.createElement("button");
+-  saveBtn.type = "button";
+-  saveBtn.textContent = "Save to Stack";
+-  saveBtn.addEventListener("click", () => {
+-    saveCoachArtifactToStack(normalized);
+-  });
+-  actions.appendChild(saveBtn);
++  if (allowedActions.includes("save_to_stack")) {
++    const saveBtn = document.createElement("button");
++    saveBtn.type = "button";
++    saveBtn.textContent = "Save to Stack";
++    saveBtn.addEventListener("click", () => {
++      saveCoachArtifactToStack(normalized);
++    });
++    actions.appendChild(saveBtn);
++  }
+ 
+-  const openLessonBtn = document.createElement("button");
+-  openLessonBtn.type = "button";
+-  openLessonBtn.textContent = "Open Full Lesson";
+-  openLessonBtn.addEventListener("click", () => {
+-    openCoachArtifactFullLesson(normalized);
+-  });
+-  actions.appendChild(openLessonBtn);
++  if (allowedActions.includes("open_full_lesson")) {
++    const openLessonBtn = document.createElement("button");
++    openLessonBtn.type = "button";
++    openLessonBtn.textContent = "Open Full Lesson";
++    openLessonBtn.addEventListener("click", () => {
++      openCoachArtifactFullLesson(normalized);
++    });
++    actions.appendChild(openLessonBtn);
++  }
+ 
+   card.appendChild(actions);
+-  card.appendChild(quizPanel);
++  if (quizPanel) card.appendChild(quizPanel);
+   return card;
+ }
+ 
+@@ -9384,6 +9566,7 @@ async function playCoachArtifact(artifact) {
+   }));
+   const payload = { steps };
+   const useCircularPolicy = artifact?.playbackPolicy?.mode === "circular_row_sweep";
++  const wantsConfetti = Boolean(artifact?.playbackPolicy?.finalConfetti);
+   if (useCircularPolicy && steps[0]?.root && steps[0]?.quality) {
+     const startCell = findCoachArtifactStartCell(steps[0]);
+     let endTimeSec = scheduleHarmonicEventPlayback(payload, startTimeSec, token, null);
+@@ -9393,7 +9576,9 @@ async function playCoachArtifact(artifact) {
+     scheduleChordAtTime(resolvedMidi, endTimeSec, resolveHold, token);
+     if (startCell) {
+       scheduleHarmonicCellSelection(startCell, endTimeSec, resolveHold, token);
+-      scheduleCoachCircularResolveCelebration(startCell, endTimeSec, token);
++      if (wantsConfetti) {
++        scheduleCoachCircularResolveCelebration(startCell, endTimeSec, token);
++      }
+     }
+   } else {
+     scheduleHarmonicEventPlayback(payload, startTimeSec, token, null);
+@@ -9747,14 +9932,20 @@ async function askCoach() {
+       }
+     });
+ 
+-    const normalizedArtifact = normalizeCoachArtifact(finalDone?.artifact || null);
+-    const finalText = String(finalDone?.assistantText || finalDone?.answer || "").trim()
++    // Support both singular artifact and artifacts[] array from server
++    const rawArtifacts = Array.isArray(finalDone?.artifacts) && finalDone.artifacts.length > 0
++      ? finalDone.artifacts
++      : (finalDone?.artifact ? [finalDone.artifact] : []);
++    const normalizedArtifacts = rawArtifacts.map((a) => normalizeCoachArtifact(a)).filter(Boolean);
++    const normalizedArtifact = normalizedArtifacts[0] || null;
++    const finalText = String(finalDone?.assistantText || "").trim()
+       || buildClientCoachFallback(question);
+     updatePendingAssistantMessage(thread, assistantMessage.id, {
+       content: finalText,
+       mode: String(finalDone?.mode || "offline"),
+       warning: String(finalDone?.warning || "").trim(),
+       artifact: normalizedArtifact,
++      artifacts: normalizedArtifacts,
+       pending: false
+     });
+   } catch (err) {
+@@ -9763,6 +9954,7 @@ async function askCoach() {
+       mode: "offline",
+       warning: "",
+       artifact: null,
++      artifacts: [],
+       pending: false
+     });
+   } finally {
+@@ -9778,13 +9970,19 @@ async function askCoach() {
+ function buildClientCoachFallback(question) {
+   const cadenceName = getSelectedCadenceName();
+   const cadenceProfile = getCadenceProfile(cadenceName);
++  const key = el.keySelect?.value || appState.root || "C";
++  const prog = el.progressionSelect?.value || "I-vi-IV-V (Pop)";
+   return [
+-    "Coach fallback mode:",
+-    `Question: ${question}.`,
+-    `Key ${el.keySelect?.value || appState.root}, progression ${el.progressionSelect?.value || "I-vi-IV-V (Pop)"}, cadence ${cadenceName}.`,
+-    `Emotional rationale: ${cadenceProfile.emotion}`,
+-    "12-minute plan: 4 min progression shells (LH roots, RH 3rd/7th), 4 min smooth top-note voice-leading, 4 min motif improv over same changes."
+-  ].join(" ");
++    `I'm having trouble reaching the server right now, but here's what I can tell you locally:`,
++    ``,
++    `You're working in **${key}** with **${prog}** and a **${cadenceName}** cadence.`,
++    `${cadenceProfile.emotion}`,
++    ``,
++    `### Quick Practice Plan`,
++    `- **4 min:** Progression shells — LH roots, RH 3rd/7th`,
++    `- **4 min:** Smooth top-note voice-leading`,
++    `- **4 min:** Motif improv over the same changes`
++  ].join("\n");
+ }
+ 
+ function todayKey() {
+diff --git a/index.html b/index.html
+index 0cedc4b..9831f19 100644
+--- a/index.html
++++ b/index.html
+@@ -59,6 +59,50 @@
+       </div>
+     </header>
+ 
++    <!-- ── Top-Level Mode Navigation ─────────────────────── -->
++    <nav class="mode-nav" id="modeSwitch" role="tablist" aria-label="App mode">
++      <button class="mode-nav-pill active" data-mode-target="compose" role="tab" aria-selected="true">
++        <span class="mode-nav-icon" aria-hidden="true">
++          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
++            <rect x="2" y="8" width="20" height="12" rx="2"/><line x1="7" y1="8" x2="7" y2="20"/><line x1="12" y1="8" x2="12" y2="20"/><line x1="17" y1="8" x2="17" y2="20"/><path d="M7 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/>
++          </svg>
++        </span>
++        <span class="mode-nav-label">Compose</span>
++      </button>
++      <button class="mode-nav-pill" data-mode-target="practice" role="tab" aria-selected="false">
++        <span class="mode-nav-icon" aria-hidden="true">
++          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
++            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
++          </svg>
++        </span>
++        <span class="mode-nav-label">Practice</span>
++      </button>
++      <button class="mode-nav-pill" data-mode-target="coach" role="tab" aria-selected="false">
++        <span class="mode-nav-icon" aria-hidden="true">
++          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
++            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l.548 2.19a.5.5 0 01-.485.617H9.882a.5.5 0 01-.485-.617l.548-2.19z"/>
++          </svg>
++        </span>
++        <span class="mode-nav-label">Coach</span>
++      </button>
++      <button class="mode-nav-pill" data-mode-target="theory" role="tab" aria-selected="false">
++        <span class="mode-nav-icon" aria-hidden="true">
++          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
++            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
++          </svg>
++        </span>
++        <span class="mode-nav-label">Theory</span>
++      </button>
++      <button class="mode-nav-pill" data-mode-target="scanner" role="tab" aria-selected="false">
++        <span class="mode-nav-icon" aria-hidden="true">
++          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
++            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
++          </svg>
++        </span>
++        <span class="mode-nav-label">Scanner</span>
++      </button>
++    </nav>
++
+     <div id="gameOverlay" class="game-overlay is-hidden">
+       <div class="game-modal">
+         <h2 id="gameTitle">Cadence Challenge</h2>
+@@ -183,6 +227,11 @@
+       </div>
+     </section>
+     <div id="keyCenterDrawerBackdrop" class="drawer-backdrop" hidden></div>
++    <!-- Persistent drawer handle tab — always visible on screen edge -->
++    <button id="drawerHandleTab" class="drawer-handle-tab" type="button" aria-label="Toggle Key Center panel" title="Key Center">
++      <span class="drawer-handle-icon" aria-hidden="true">&#9835;</span>
++      <span class="drawer-handle-chevron" aria-hidden="true">&#8249;</span>
++    </button>
+     <aside id="keyCenterDrawer" class="key-center-drawer" aria-hidden="true">
+       <div class="key-center-drawer-head">
+         <h3>Key Center</h3>
+@@ -207,13 +256,6 @@
+               <option value="0.16666666666666666">Sixteenth Triplet</option>
+             </select>
+           </div>
+-          <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="workspace mode">
+-            <button class="mode-pill active" data-mode-target="compose" role="tab" aria-selected="true">Compose</button>
+-            <button class="mode-pill" data-mode-target="practice" role="tab" aria-selected="false">Practice</button>
+-            <button class="mode-pill" data-mode-target="coach" role="tab" aria-selected="false">Coach</button>
+-            <button class="mode-pill" data-mode-target="theory" role="tab" aria-selected="false">Theory</button>
+-            <button class="mode-pill" data-mode-target="scanner" role="tab" aria-selected="false">Scanner</button>
+-          </div>
+         </section>
+ 
+         <section class="drawer-section" data-mode="compose practice coach">
+diff --git a/server.js b/server.js
+index 6826b9e..b0510e4 100644
+--- a/server.js
++++ b/server.js
+@@ -71,7 +71,6 @@ async function handleCoach(req, res) {
+     const parsed = await readJsonBody(req);
+     const coachTurn = await generateCoachTurn(parsed);
+     sendJson(res, 200, {
+-      answer: coachTurn.assistantText,
+       assistantText: coachTurn.assistantText,
+       artifact: coachTurn.artifact || null,
+       artifacts: coachTurn.artifacts || [],
+@@ -81,7 +80,6 @@ async function handleCoach(req, res) {
+     });
+   } catch (err) {
+     sendJson(res, 200, {
+-      answer: buildOfflineCoachAnswer('Fallback request', {}),
+       assistantText: buildOfflineCoachAnswer('Fallback request', {}),
+       artifact: null,
+       mode: 'offline',
+@@ -117,7 +115,6 @@ async function handleCoachStream(req, res) {
+ 
+     res.write(`${JSON.stringify({
+       type: 'done',
+-      answer: coachTurn.assistantText,
+       assistantText: coachTurn.assistantText,
+       artifact: coachTurn.artifact || null,
+       artifacts: coachTurn.artifacts || [],
+@@ -133,7 +130,6 @@ async function handleCoachStream(req, res) {
+     });
+     res.write(`${JSON.stringify({
+       type: 'done',
+-      answer: buildOfflineCoachAnswer('Fallback request', {}),
+       assistantText: buildOfflineCoachAnswer('Fallback request', {}),
+       artifact: null,
+       mode: 'offline',
+@@ -304,46 +300,39 @@ function sanitizeCoachMessages(input) {
+ 
+ function buildCoachSystemPrompt() {
+   return [
+-    'You are an expert adult piano teacher and practice coach for the Baby Steps Piano app.',
+-    'You teach with clear pedagogy, musical context, and concrete drills.',
+-    'Use direct language and practical examples.',
+-    'Always include harmony explanation, why it works, and a 12-minute micro-session.',
++    'You are a friendly, expert adult piano teacher and practice coach for the Baby Steps Piano app.',
++    'Keep answers concise and conversational — a few short paragraphs at most.',
++    'Use markdown formatting: **bold** for emphasis, bullet lists, and headings (##) when helpful.',
+     '',
+-    '## RESPONSE FORMAT',
+-    'Return strict JSON with these top-level keys:',
+-    '{ "assistantText": string, "artifact": object|null, "artifacts": object[] }',
++    '## What to include',
++    '- A clear, encouraging explanation of the concept',
++    '- Why it works musically (just 1-2 sentences)',
++    '- A short practice suggestion the student can try right now',
+     '',
+-    '## ARTIFACT SCHEMAS',
+-    'Include relevant artifacts to make your response interactive. Each artifact needs a "type" field.',
++    '## Chord progressions',
++    'When you mention a chord progression or drill, write it on its own line using this exact format (no bold, no extra markdown):',
++    'CHORDS: C -> Am -> F -> G',
++    'CHORDS: Dm7 -> G7 -> Cmaj7',
++    'CHORDS "ii-V-I in C": Dm7 -> G7 -> Cmaj7',
++    'Important: use -> as the arrow separator. Do NOT wrap the CHORDS line in **bold** or other formatting.',
++    'The app will automatically turn these into playable, interactive cards.',
+     '',
+-    'CHORD_SEQUENCE: { type:"chord_sequence", title:string, key:string, bpm:number, playbackPolicy:{mode:"fixed_sequence"|"circular_row_sweep"}, sequence:[{chord:string, root:string, quality:string, beats:number}], quiz:{prompt:string, conceptId:string} }',
+-    'LESSON_CARD: { type:"lesson_card", lessonId:string, title:string, tier:number(1-4), description:string }',
+-    'PLAYABLE_SCORE: { type:"playable_score", title:string, abc:string(ABC notation), key:string, bpm:number }',
+-    'KANBAN_TASK: { type:"kanban_task", title:string, lane:"todo"|"doing"|"done", description:string, lessonId?:string }',
+-    'THEORY_CONCEPT: { type:"theory_concept", title:string, facts:string[], relatedLessons:string[] }',
+-    'QUIZ_CHALLENGE: { type:"quiz_challenge", question:string, options:string[], correctIndex:number, explanation:string }',
+-    'PRACTICE_DRILL: { type:"practice_drill", title:string, instructions:string, durationSec:number, lessonId?:string }',
++    '## Deep links',
++    'Link to app lessons using [[Label|route]] wiki syntax.',
++    'Example: "Try [[Major Scales|scales:major]] or [[Circle of Fifths|foundations:circle-of-fifths]]."',
+     '',
+-    '## DEEP LINKS',
+-    'In your assistantText, link to lessons using [[Label|route]] wiki syntax.',
+-    'Example: "Start with [[Major Scales|scales:major]] then try [[Circle of Fifths|foundations:circle-of-fifths]]."',
+-    'Available lesson route IDs follow the pattern category:lesson-name (e.g. scales:major, chords:triads, rhythm:time-signatures).',
+-    '',
+-    '## RULES',
+-    '- Always include at least one artifact when suggesting practice concepts',
+-    '- Use deep links [[label|route]] when referencing lessons in text',
+-    '- For chord drills, always include a chord_sequence artifact',
+-    '- For theory explanations, include a theory_concept artifact',
+-    '- For practice suggestions, include a practice_drill or kanban_task artifact'
++    '## Style',
++    '- Be warm but not wordy. Quality over quantity.',
++    '- Use short sentences and break up ideas with line breaks.',
++    '- If the student just says hi or asks a casual question, reply casually — no need for a full lesson every time.'
+   ].join('\n');
+ }
+ 
+ function extractStructuredCoachResponse(rawAnswer, { question, context }) {
++  // 1) Try legacy JSON path first (for Ollama/OpenAI that may still return JSON)
+   const parsed = tryParseJsonFromText(rawAnswer);
+   if (parsed && typeof parsed === 'object') {
+     const assistantText = String(parsed.assistantText || parsed.answer || '').trim();
+-
+-    // Support both singular artifact and artifacts array
+     let artifacts = [];
+     if (Array.isArray(parsed.artifacts) && parsed.artifacts.length) {
+       artifacts = parsed.artifacts
+@@ -354,7 +343,6 @@ function extractStructuredCoachResponse(rawAnswer, { question, context }) {
+     if (singleArtifact && !artifacts.length) {
+       artifacts = [singleArtifact];
+     }
+-
+     if (assistantText) {
+       const fallback = buildFallbackCoachArtifact(question, context);
+       return {
+@@ -364,14 +352,112 @@ function extractStructuredCoachResponse(rawAnswer, { question, context }) {
+       };
+     }
+   }
++
++  // 2) Natural language path — extract chord progressions from plain text
++  const text = String(rawAnswer || '').trim();
++  const { cleanedText, artifacts: extracted } = extractChordsFromText(text, context);
++  const assistantText = cleanedText || text;
++
++  if (extracted.length) {
++    return {
++      assistantText,
++      artifact: extracted[0],
++      artifacts: extracted
++    };
++  }
++
++  // 3) Fall back to keyword-based artifact
+   const fallback = buildFallbackCoachArtifact(question, context);
+   return {
+-    assistantText: String(rawAnswer || '').trim(),
++    assistantText,
+     artifact: fallback,
+     artifacts: fallback ? [fallback] : []
+   };
+ }
+ 
++/**
++ * Scan plain-text LLM output for lines like:
++ *   CHORDS: C -> Am -> F -> G
++ *   CHORDS "Title": Dm7 -> G7 -> Cmaj7
++ * and convert them into playable artifacts.
++ * Returns { cleanedText, artifacts[] }.
++ */
++function extractChordsFromText(text, context) {
++  const key = normalizeKeyName(context?.key || 'C');
++  const bpm = clampNumber(context?.tempo, 80, 30, 240);
++  const artifacts = [];
++
++  // Strip markdown bold markers for easier matching
++  let cleaned = text;
++
++  // Arrow separator: -> or → (Unicode) or – (en-dash with >)
++  const ARROW = '(?:->|→|-->|—>)';
++
++  // Pattern 1: Single-line — CHORDS "optional title": chord -> chord -> chord
++  // Handles optional ** bold **, leading whitespace, curly/smart quotes
++  const singleLineRe = new RegExp(
++    `^\\*{0,2}CHORDS\\s*(?:[\\u201c\\u201d"""]([^\\u201c\\u201d"""]*)[\\u201c\\u201d"""])?\\s*:?\\*{0,2}\\s*:\\s*(.+)$`,
++    'gim'
++  );
++
++  // Pattern 2: Multi-line — CHORDS header on one line, chords on next line
++  const multiLineRe = new RegExp(
++    `\\*{0,2}CHORDS\\s*(?:[\\u201c\\u201d"""]([^\\u201c\\u201d"""]*)[\\u201c\\u201d"""])?\\s*:?\\*{0,2}\\s*:?\\s*\\n+\\s*([A-G][^\\n]*${ARROW}[\\s\\S]*?)(?=\\n\\n|\\n[A-Z]|\\n\\*|\\n#|$)`,
++    'gim'
++  );
++
++  // Try multi-line first (more specific)
++  cleaned = cleaned.replace(multiLineRe, (match, title, chordStr) => {
++    return _processChordMatch(title, chordStr, artifacts, key, bpm, context) ? '' : match;
++  });
++
++  // Then single-line
++  cleaned = cleaned.replace(singleLineRe, (match, title, chordStr) => {
++    return _processChordMatch(title, chordStr, artifacts, key, bpm, context) ? '' : match;
++  });
++
++  // Also catch bare chord arrow lines that weren't preceded by CHORDS label
++  // e.g. just "G7 -> C" or "Dm7 → G7 → Cmaj7" on its own line
++  if (!artifacts.length) {
++    const bareChordRe = new RegExp(
++      `^([A-G][b#]?(?:m|maj|min|dim|dom|aug|sus|7|m7|M7|m7b5)*(?:\\d*)\\s*${ARROW}\\s*.+)$`,
++      'gim'
++    );
++    cleaned = cleaned.replace(bareChordRe, (match, chordStr) => {
++      return _processChordMatch(null, chordStr, artifacts, key, bpm, context) ? '' : match;
++    });
++  }
++
++  cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
++  return { cleanedText: cleaned, artifacts };
++}
++
++function _processChordMatch(title, chordStr, artifacts, key, bpm, context) {
++  const chords = String(chordStr || '').trim()
++    .split(/\s*(?:->|→|-->|—>)\s*/)
++    .map(s => s.replace(/[*_`]/g, '').trim())
++    .filter(Boolean);
++  if (chords.length < 2) return false;
++  const sequence = chords.map(chord => {
++    const root = parseRootFromChord(chord);
++    const quality = parseQualityFromChord(chord);
++    return { chord, root: root || 'C', quality: quality || 'major', beats: 2 };
++  });
++  const artTitle = (title || chords.join(' → ')).trim();
++  artifacts.push({
++    id: `coach-${Date.now()}-${artifacts.length}`,
++    title: artTitle,
++    type: 'chord_sequence',
++    key,
++    bpm,
++    playbackPolicy: { mode: 'fixed_sequence', circularResolve: false, finalConfetti: false },
++    sequence,
++    quiz: { prompt: `Play ${artTitle} in a new key.`, conceptId: inferConceptIdFromQuestion(artTitle, context) },
++    actions: ['play', 'try', 'save_to_stack', 'open_full_lesson']
++  });
++  return true;
++}
++
+ function tryParseJsonFromText(raw) {
+   const text = String(raw || '').trim();
+   if (!text) return null;
+@@ -789,9 +875,9 @@ async function requestOpenAiCoach(systemPrompt, conversationMessages) {
+           { role: 'system', content: systemPrompt },
+           ...(Array.isArray(conversationMessages) ? conversationMessages : [])
+         ],
+-        max_output_tokens: 500
++        max_output_tokens: 800
+       })
+-    }, 14000);
++    }, 30000);
+ 
+     const apiJson = await apiRes.json();
+     if (!apiRes.ok) {
+@@ -829,7 +915,7 @@ async function requestPollinationsCoach(systemPrompt, conversationMessages) {
+         ],
+         temperature: 0.3
+       })
+-    }, 14000);
++    }, 30000);
+ 
+     const raw = await response.text();
+     let payload;
+@@ -860,37 +946,45 @@ function buildOfflineCoachAnswer(question, context) {
+   const chord = String(context?.chord || `${key}`);
+   const tempo = Number(context?.tempo) || 90;
+   const intent = detectCoachIntent(question);
++
++  // Handle casual greetings simply
++  const q = String(question || '').toLowerCase().trim();
++  if (/^(hi|hello|hey|sup|yo|what's up|howdy)\b/.test(q)) {
++    return [
++      `Hey there! 👋 I'm your piano coach.`,
++      '',
++      `I can see you're working in **${key}** right now. Want to explore some chords, learn a new concept, or run a quick drill?`,
++      '',
++      `Just ask me anything about music theory, chord progressions, scales, or practice tips!`
++    ].join('\n');
++  }
++
+   const theory = buildLocalTheoryExplanation(intent, {
+-    key,
+-    progression,
+-    cadence,
+-    cadenceEmotion,
+-    chord
++    key, progression, cadence, cadenceEmotion, chord
+   });
+   const appDrill = buildLocalAppDrill(intent, {
+-    key,
+-    progression,
+-    cadence,
+-    chord
++    key, progression, cadence, chord
+   });
+   const transfer = buildLocalTransferPrompt(intent, {
+-    key,
+-    progression,
+-    cadence
++    key, progression, cadence
+   });
+ 
+   return [
+-    `Local Coach (${intent.label}).`,
+-    `Question focus: ${question}.`,
+-    `Why it works: ${theory}`,
+-    `Try it in the app now: ${appDrill}`,
+-    `12-minute micro-session @ ${tempo} BPM:`,
+-    `1) 4 min: play ${progression} in ${key} with steady pulse and clean releases.`,
+-    `2) 4 min: keep LH roots/shells; in RH, move only one guide tone at a time.`,
+-    `3) 4 min: create a 2-bar motif and loop it through the full progression.`,
+-    `Transfer to real piano: ${transfer}`,
+-    `Checkpoint: record one clean pass where the ${cadence} cadence still feels ${cadenceEmotion}.`
+-  ].join(' ');
++    `## ${intent.label}`,
++    '',
++    theory,
++    '',
++    `**Try it in the app:** ${appDrill}`,
++    '',
++    `### 12-Minute Micro-Session @ ${tempo} BPM`,
++    `- **4 min:** Play ${progression} in ${key} with a steady pulse and clean releases`,
++    `- **4 min:** Keep LH roots/shells — in RH, move only one guide tone at a time`,
++    `- **4 min:** Create a 2-bar motif and loop it through the full progression`,
++    '',
++    `**Transfer to real piano:** ${transfer}`,
++    '',
++    `**Checkpoint:** Record one clean pass where the ${cadence} cadence still feels ${cadenceEmotion}. ✅`
++  ].join('\n');
+ }
+ 
+ function detectCoachIntent(question) {
+diff --git a/styles.css b/styles.css
+index 5fef8b4..6ac0b2e 100644
+--- a/styles.css
++++ b/styles.css
+@@ -173,32 +173,76 @@ h2 {
+   margin-top: 0.14rem;
+ }
+ 
+-.mode-switch {
+-  display: inline-flex;
+-  gap: 0.28rem;
+-  border: 1px solid rgba(64, 86, 126, 0.22);
++/* ── Top-Level Mode Navigation Bar ──────────────────────
++   Always-visible mode switcher between header and console.
++   On mobile (≤720px), becomes a fixed bottom tab bar.
++   ──────────────────────────────────────────────────────── */
++
++.mode-nav {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  gap: 0.32rem;
++  padding: 0.28rem;
++  margin-bottom: 0.88rem;
++  background: rgba(255, 255, 255, 0.68);
++  border: 1px solid rgba(64, 86, 126, 0.16);
+   border-radius: 999px;
+-  padding: 0.2rem;
+-  background: rgba(255, 255, 255, 0.76);
+-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
++  backdrop-filter: blur(12px) saturate(1.15);
++  -webkit-backdrop-filter: blur(12px) saturate(1.15);
++  box-shadow: 0 4px 16px -8px rgba(8, 18, 38, 0.12);
++  animation: rise-in 380ms ease;
+ }
+ 
+-.mode-switch .mode-pill {
++.mode-nav-pill {
++  display: inline-flex;
++  align-items: center;
++  gap: 0.38rem;
+   border: 1px solid transparent;
+   border-radius: 999px;
+-  padding: 0.42rem 0.78rem;
+-  font-size: 0.78rem;
++  padding: 0.48rem 1rem;
++  font-family: inherit;
++  font-size: 0.82rem;
+   font-weight: 700;
+   color: #4f6080;
+   background: transparent;
+-  box-shadow: none;
++  cursor: pointer;
++  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
++  white-space: nowrap;
++  -webkit-tap-highlight-color: transparent;
++}
++
++.mode-nav-pill:hover {
++  background: rgba(33, 118, 255, 0.08);
++  color: #2a5db5;
+ }
+ 
+-.mode-switch .mode-pill.active {
++.mode-nav-pill.active {
+   color: #f4f8ff;
+   background: linear-gradient(180deg, #3f8dff, #1d6dee);
+   border-color: #1d64ce;
+-  box-shadow: 0 12px 20px -18px rgba(29, 109, 238, 0.9);
++  box-shadow: 0 8px 20px -10px rgba(29, 109, 238, 0.65);
++}
++
++.mode-nav-pill.active:hover {
++  background: linear-gradient(180deg, #4a96ff, #2878f0);
++}
++
++.mode-nav-pill.active .mode-nav-icon {
++  color: #f4f8ff;
++}
++
++.mode-nav-icon {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  flex-shrink: 0;
++  color: #5a7099;
++  transition: color 0.18s ease;
++}
++
++.mode-nav-label {
++  line-height: 1;
+ }
+ 
+ .moodboard {
+@@ -1429,7 +1473,6 @@ textarea:focus-visible {
+   border-radius: 16px;
+   padding: 0.5rem 0.7rem;
+   line-height: 1.45;
+-  white-space: pre-wrap;
+   word-wrap: break-word;
+   animation: chatBubbleIn 200ms ease;
+ }
+@@ -1496,6 +1539,49 @@ textarea:focus-visible {
+   opacity: 0.5;
+ }
+ 
++/* ── Coach Markdown Styles ── */
++.coach-message-text p {
++  margin: 0 0 0.4rem 0;
++}
++.coach-message-text p:last-child {
++  margin-bottom: 0;
++}
++.coach-heading {
++  margin: 0.5rem 0 0.25rem 0;
++  font-weight: 700;
++  color: #93c5fd;
++  line-height: 1.3;
++}
++h3.coach-heading { font-size: 0.95rem; }
++h4.coach-heading { font-size: 0.85rem; }
++.coach-message-text strong {
++  color: #a5c4f5;
++  font-weight: 700;
++}
++.coach-message-text em {
++  font-style: italic;
++  opacity: 0.9;
++}
++.coach-code {
++  background: rgba(255, 255, 255, 0.08);
++  padding: 0.1rem 0.3rem;
++  border-radius: 4px;
++  font-family: 'SF Mono', 'Fira Code', monospace;
++  font-size: 0.82em;
++}
++.coach-list {
++  margin: 0.3rem 0;
++  padding-left: 1.2rem;
++  list-style: disc;
++}
++.coach-list li {
++  margin-bottom: 0.2rem;
++  line-height: 1.4;
++}
++.coach-message.user .coach-message-text p {
++  margin: 0;
++}
++
+ /* Artifact cards inside messages */
+ .coach-artifact-card {
+   margin-top: 0.45rem;
+@@ -1917,6 +2003,93 @@ textarea:focus-visible {
+   transform: translateX(0);
+ }
+ 
++/* ── Drawer Handle Tab ─────────────────────────────────────
++   A persistent musical tab on the left edge of the drawer
++   that's always reachable regardless of scroll position.
++   ───────────────────────────────────────────────────────── */
++.drawer-handle-tab {
++  position: fixed;
++  top: 50%;
++  /* When drawer is closed: flush against right edge of screen */
++  right: 0;
++  z-index: 1001;
++
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  justify-content: center;
++  gap: 3px;
++
++  width: 30px;
++  height: 76px;
++  padding: 0;
++  border: 1px solid rgba(50, 90, 160, 0.35);
++  border-right: none;
++  border-radius: 12px 0 0 12px;
++  overflow: hidden;
++
++  background: linear-gradient(180deg, #3d72d4 0%, #2856b0 100%);
++  box-shadow: -3px 2px 12px -2px rgba(10, 24, 46, 0.35),
++              0 0 8px rgba(61, 114, 212, 0.2);
++  cursor: pointer;
++  /* GPU-promote the layer so repaints don't cause sub-pixel jitter */
++  transform: translateY(-50%);
++  will-change: right;
++  backface-visibility: hidden;
++  -webkit-backface-visibility: hidden;
++  /* Only transition right (drawer slide) — no background/shadow transitions */
++  transition: right 220ms ease;
++  -webkit-tap-highlight-color: transparent;
++}
++
++/* Hover highlight uses an overlay so the button's geometry never changes */
++.drawer-handle-tab::after {
++  content: '';
++  position: absolute;
++  inset: 0;
++  border-radius: inherit;
++  background: rgba(255, 255, 255, 0.12);
++  opacity: 0;
++  transition: opacity 150ms ease;
++  pointer-events: none;
++}
++
++.drawer-handle-tab:hover::after {
++  opacity: 1;
++}
++
++.drawer-handle-tab:active::after {
++  background: rgba(0, 0, 0, 0.12);
++  opacity: 1;
++}
++
++/* When drawer is open: slide tab to sit at the drawer's left edge */
++.drawer-handle-tab.is-drawer-open {
++  right: min(560px, 94vw);
++}
++
++.drawer-handle-icon {
++  font-size: 17px;
++  line-height: 1;
++  color: #e8f0ff;
++  pointer-events: none;
++  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
++}
++
++.drawer-handle-chevron {
++  font-size: 19px;
++  font-weight: 700;
++  line-height: 1;
++  color: rgba(232, 240, 255, 0.8);
++  /* No transition — flip is instant on state change, prevents hover jitter */
++  pointer-events: none;
++}
++
++/* Flip chevron when drawer is open (‹ becomes ›) */
++.drawer-handle-tab.is-drawer-open .drawer-handle-chevron {
++  transform: scaleX(-1);
++}
++
+ .key-center-drawer-head {
+   display: flex;
+   align-items: center;
+@@ -2004,18 +2177,7 @@ textarea:focus-visible {
+   flex: 1 1 180px;
+ }
+ 
+-.drawer-global-controls .mode-switch {
+-  margin-top: 0.56rem;
+-  width: 100%;
+-  display: grid;
+-  grid-template-columns: repeat(4, minmax(0, 1fr));
+-  border-radius: 12px;
+-}
+-
+-.drawer-global-controls .mode-switch .mode-pill {
+-  border-radius: 10px;
+-  justify-content: center;
+-}
++/* (Old .drawer-global-controls .mode-switch styles removed — pills moved to top nav) */
+ 
+ .exercise-section .exercise-instruction {
+   min-height: 1.45rem;
+@@ -2521,6 +2683,12 @@ body[data-active-mode="theory"] .console #progressionOutput {
+   box-shadow: inset 0 0 0 1px rgba(10, 161, 100, 0.32);
+ }
+ 
++.theory-lesson-btn.is-locked {
++  opacity: 0.55;
++  border-style: dashed;
++  cursor: help;
++}
++
+ .theory-main {
+   border: 1px solid rgba(73, 97, 138, 0.2);
+   border-radius: 14px;
+@@ -2705,6 +2873,15 @@ body[data-active-mode="theory"] .console #progressionOutput {
+ }
+ 
+ @media (max-width: 1100px) {
++  .mode-nav {
++    gap: 0.24rem;
++  }
++
++  .mode-nav-pill {
++    padding: 0.4rem 0.72rem;
++    font-size: 0.76rem;
++  }
++
+   .btn-group-12 {
+     grid-template-columns: repeat(6, 1fr);
+   }
+@@ -2733,6 +2910,51 @@ body[data-active-mode="theory"] .console #progressionOutput {
+ @media (max-width: 720px) {
+   .app-shell {
+     padding: 0.84rem 0.68rem 1.22rem;
++    /* Extra bottom padding so content isn't hidden behind the fixed bottom tab bar */
++    padding-bottom: calc(4.4rem + env(safe-area-inset-bottom, 0px));
++  }
++
++  /* ── Mobile bottom tab bar ── */
++  .mode-nav {
++    position: fixed;
++    bottom: 0;
++    left: 0;
++    right: 0;
++    z-index: 999;
++    margin: 0;
++    border-radius: 0;
++    border: none;
++    border-top: 1px solid rgba(64, 86, 126, 0.18);
++    background: rgba(245, 249, 255, 0.96);
++    backdrop-filter: blur(16px) saturate(1.3);
++    -webkit-backdrop-filter: blur(16px) saturate(1.3);
++    padding: 0.36rem 0.5rem calc(0.36rem + env(safe-area-inset-bottom, 0px));
++    box-shadow: 0 -4px 20px -6px rgba(8, 18, 38, 0.12);
++    justify-content: space-around;
++    animation: none;
++  }
++
++  .mode-nav-pill {
++    flex-direction: column;
++    gap: 0.18rem;
++    padding: 0.32rem 0.5rem;
++    font-size: 0.62rem;
++    font-weight: 600;
++    border-radius: 10px;
++    min-width: 0;
++    flex: 1;
++    justify-content: center;
++    text-align: center;
++  }
++
++  .mode-nav-pill.active {
++    background: linear-gradient(180deg, #3f8dff, #1d6dee);
++    box-shadow: 0 4px 12px -4px rgba(29, 109, 238, 0.5);
++  }
++
++  .mode-nav-icon svg {
++    width: 20px;
++    height: 20px;
+   }
+ 
+   .studio-nav {
+@@ -2760,15 +2982,6 @@ body[data-active-mode="theory"] .console #progressionOutput {
+     height: 48px;
+   }
+ 
+-  .mode-switch {
+-    width: 100%;
+-  }
+-
+-  .mode-switch .mode-pill {
+-    flex: 1;
+-    text-align: center;
+-  }
+-
+   .palette-tab-switch {
+     width: 100%;
+     margin-left: 0;
+@@ -2797,8 +3010,9 @@ body[data-active-mode="theory"] .console #progressionOutput {
+     border-left: 0;
+   }
+ 
+-  .drawer-global-controls .mode-switch {
+-    grid-template-columns: repeat(2, minmax(0, 1fr));
++  /* Hide handle tab on mobile — full-width drawer doesn't need an edge tab */
++  .drawer-handle-tab {
++    display: none;
+   }
+ 
+   button {
