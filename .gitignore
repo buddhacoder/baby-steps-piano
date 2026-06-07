@@ -10,6 +10,7 @@ server.log
 
 # build/render outputs
 out/
+output/
 
 # downloaded external datasets and archives
 external/

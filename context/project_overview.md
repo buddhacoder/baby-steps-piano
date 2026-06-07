@@ -3,6 +3,16 @@
 ## Product Goal
 Baby Steps Piano Lab is an adult-focused music theory learning lab. It helps learners connect harmony, scales, cadences, repertoire, and guided theory lessons to immediate visual and audio feedback.
 
+## Product Value Thesis
+- Baby Steps should protect first contact with music: sound, hand, curiosity, and willingness to return matter before terminology, evaluation, or correctness pressure.
+- The smallest learning unit is a Baby Step: a tiny playable musical action that introduces at most one new element, produces audible meaning, can be returned to safely, defers theory labels until after contact, and has a defined transfer destination.
+- Sequence learning as Touch, Move, Feel, Notice, Name, Transfer. Theory is not avoided; it is revealed as recognition after the learner has felt and heard the idea.
+- Design for adult beginner and re-entering learners, including people with attentional variability or prior discouraging learning experiences. Keep the tone serious, warm, non-clinical, and non-childish.
+- Progress should use Practiced, Confident, and Mastered states rather than harsh pass/fail framing. Mastery requires delayed retrieval and transfer, not just one comfortable in-session run.
+- The flagship pedagogical path is Left-Hand Chord Freedom: make the left hand feel like a reliable harmonic anchor so learners can experience musical freedom earlier.
+- Treat the pedagogy as evidence-informed and testable, not proven. Avoid clinical, therapeutic, diagnostic, or comparative-superiority claims until the staged validation roadmap earns them.
+- Durable source context for this thesis lives in `docs/product-context/`; do not load the PDFs by default during ordinary coding.
+
 ## Primary Users
 Adult piano learners, especially users who benefit from ADHD-friendly study surfaces, compact controls, and concrete musical examples. Secondary users include instructors or agents creating guided lessons, theory drills, and playable concept artifacts.
 

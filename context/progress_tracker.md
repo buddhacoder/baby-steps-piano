@@ -260,3 +260,14 @@ In progress.
 - Technical decisions:
   - Created `codex/baby-steps-combined-merge-ready` from current `main`, then merged `codex/generative-ui-merge-ready` and `codex/baby-steps-hallmark-journey` with normal merge commits and no textual conflicts.
   - Left untracked white-paper and PDF artifacts untouched so the combined feature branch stays reviewable without absorbing unrelated local files.
+
+## Session Completion - 2026-06-07
+
+- Milestone: Product-context paper organization
+- Status: Completed
+- Clean check: `pdftotext sampled all three source PDFs; context_guard validate; npm run check; git diff --check`
+- Files touched: .gitignore, context/project_overview.md, context/progress_tracker.md, docs/product-context/README.md, docs/product-context/*.pdf, docs/product-context/content-manager.md, scripts/build_baby_steps_white_paper.py
+- Technical decisions:
+  - Stored durable pedagogy and validation papers under `docs/product-context/` as source context, not always-loaded `context/` files.
+  - Added a concise product value thesis to `context/project_overview.md` so ordinary coding runs inherit the mindset without loading PDFs by default.
+  - Ignored generated `output/` artifacts while keeping the white-paper builder script as source.
