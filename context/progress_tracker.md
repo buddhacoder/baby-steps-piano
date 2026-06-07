@@ -250,3 +250,13 @@ In progress.
   - Replayed the old `feature/generative-ui` work onto a fresh `codex/generative-ui-merge-ready` branch from current `main`, then hardened the frontend artifact system instead of changing backend APIs or adding a new model/provider.
   - Kept AI output as bounded structured artifact recipes: max three rendered artifacts per response, normalized text lengths, DOM-safe artifact IDs, validated quiz indexes, and one display-time normalization checkpoint before rendering.
   - Preserved the current deep-link `navigateToLesson` helper, saved/loaded `artifacts[]` alongside the legacy single `artifact`, routed generated board items through the existing lesson-stack board, and made non-chord artifacts safe to continue from the board.
+
+## Session Completion - 2026-06-07
+
+- Milestone: Combined generative UI and Body Beat merge branch
+- Status: Completed
+- Clean check: `npm run check; git diff --check main..HEAD; context_guard validate; Playwright smoke at http://localhost:3000 verified generated coach artifacts, chord-sequence quiz behavior, playable score rendering, Body Beat simulator ready/armed states, simulator pulse lock while metronome runs, clean stop back to ready, and no page/console errors`
+- Files touched: context/progress_tracker.md
+- Technical decisions:
+  - Created `codex/baby-steps-combined-merge-ready` from current `main`, then merged `codex/generative-ui-merge-ready` and `codex/baby-steps-hallmark-journey` with normal merge commits and no textual conflicts.
+  - Left untracked white-paper and PDF artifacts untouched so the combined feature branch stays reviewable without absorbing unrelated local files.
